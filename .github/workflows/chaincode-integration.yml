@@ -1,0 +1,181 @@
+name: Chaincode Integration Test
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaincode-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Versiones fijadas para evitar que el pipeline cambie inesperadamente.
+  FABRIC_VERSION: "2.5.16"
+  FABRIC_CA_VERSION: "1.5.17"
+
+  CHANNEL_NAME: "mychannel"
+  CHAINCODE_NAME: "snt"
+  CHAINCODE_LANGUAGE: "go"
+  CHAINCODE_VERSION: "1.0"
+  CHAINCODE_SEQUENCE: "1"
+  #TODO: Descomentar y generar flow en base a ccodes
+  # CREATE_PAYLOAD: >-
+  # {"function":"RegisterProduct","Args":["07795369000001","SERIAL-CI-001","LOT-2026-001","2027-12-31","LAB-001"]}
+
+  # READ_PAYLOAD: >-
+  #   {"function":"ReadProduct","Args":["07795369000001","SERIAL-CI-001"]}
+
+  # UPDATE_PAYLOAD: >-
+  #   {"function":"TransferCustody","Args":["07795369000001","SERIAL-CI-001","DROGUERIA-001"]}
+
+  # EXPECTED_INITIAL_JQ: >-
+  #   .gtin == "07795369000001"
+  #   and .serialNumber == "SERIAL-CI-001"
+  #   and .custodian == "LAB-001"
+
+  # EXPECTED_UPDATED_JQ: >-
+  #   .gtin == "07795369000001"
+  #   and .serialNumber == "SERIAL-CI-001"
+  #   and .custodian == "DROGUERIA-001"
+
+jobs:
+  integration-test:
+    name: Fabric network integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: chaincode/go.mod
+          cache: true
+          cache-dependency-path: chaincode/go.sum
+
+      - name: Install operating system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes jq
+
+      - name: Verify Docker
+        run: |
+          docker version
+          docker compose version
+
+      - name: Download Fabric samples, binaries and images
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          FABRIC_DIR="${RUNNER_TEMP}/fabric"
+          mkdir -p "${FABRIC_DIR}"
+          cd "${FABRIC_DIR}"
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --location \
+            --output install-fabric.sh \
+            "https://raw.githubusercontent.com/hyperledger/fabric/v${FABRIC_VERSION}/scripts/install-fabric.sh"
+
+          chmod +x install-fabric.sh
+
+          ./install-fabric.sh \
+            --fabric-version "${FABRIC_VERSION}" \
+            --ca-version "${FABRIC_CA_VERSION}" \
+            samples binary docker
+
+          test -x fabric-samples/test-network/network.sh
+          test -x fabric-samples/bin/peer
+
+      - name: Start Fabric network and create channel
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          TEST_NETWORK_DIR="${RUNNER_TEMP}/fabric/fabric-samples/test-network"
+
+          cd "${TEST_NETWORK_DIR}"
+
+          # Asegura un ambiente limpio ante cualquier estado residual.
+          ./network.sh down
+
+          ./network.sh up createChannel \
+            -c "${CHANNEL_NAME}"
+
+      - name: Deploy chaincode
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          TEST_NETWORK_DIR="${RUNNER_TEMP}/fabric/fabric-samples/test-network"
+          CHAINCODE_PATH="${GITHUB_WORKSPACE}/chaincode"
+
+          test -f "${CHAINCODE_PATH}/go.mod"
+
+          cd "${TEST_NETWORK_DIR}"
+
+          ./network.sh deployCC \
+            -c "${CHANNEL_NAME}" \
+            -ccn "${CHAINCODE_NAME}" \
+            -ccp "${CHAINCODE_PATH}" \
+            -ccl "${CHAINCODE_LANGUAGE}" \
+            -ccv "${CHAINCODE_VERSION}" \
+            -ccs "${CHAINCODE_SEQUENCE}"
+
+      - name: Run end-to-end chaincode scenario
+        shell: bash
+        env:
+          TEST_NETWORK_DIR: ${{ runner.temp }}/fabric/fabric-samples/test-network
+        run: |
+          chmod +x test/integration/chaincode-e2e.sh
+          ./test/integration/chaincode-e2e.sh
+
+      - name: Show diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          echo "=============================="
+          echo "Docker containers"
+          echo "=============================="
+          docker ps --all || true
+
+          echo "=============================="
+          echo "Container logs"
+          echo "=============================="
+
+          while read -r container_id; do
+            if [[ -n "${container_id}" ]]; then
+              echo
+              echo "----- ${container_id} -----"
+              docker logs "${container_id}" || true
+            fi
+          done < <(docker ps --all --quiet)
+
+      - name: Shut down Fabric network
+        if: always()
+        shell: bash
+        run: |
+          TEST_NETWORK_DIR="${RUNNER_TEMP}/fabric/fabric-samples/test-network"
+
+          if [[ -d "${TEST_NETWORK_DIR}" ]]; then
+            cd "${TEST_NETWORK_DIR}"
+            ./network.sh down || true
+          fi
