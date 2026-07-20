@@ -1,0 +1,104 @@
+name: Chaincode CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaincode-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build chaincode
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: chaincode/go.mod
+          cache: true
+          cache-dependency-path: chaincode/go.sum
+
+      - name: Download dependencies
+        working-directory: chaincode
+        run: go mod download
+
+      - name: Verify dependencies
+        working-directory: chaincode
+        run: go mod verify
+
+      - name: Build chaincode
+        working-directory: chaincode
+        run: go build -v ./...
+
+  lint:
+    name: Lint chaincode
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: chaincode/go.mod
+          cache: true
+          cache-dependency-path: chaincode/go.sum
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+          working-directory: chaincode
+          args: --timeout=5m
+
+  test:
+    name: Test chaincode
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: chaincode/go.mod
+          cache: true
+          cache-dependency-path: chaincode/go.sum
+
+      - name: Download dependencies
+        working-directory: chaincode
+        run: go mod download
+
+      - name: Run unit tests
+        working-directory: chaincode
+        run: |
+          go test \
+            -v \
+            -race \
+            -covermode=atomic \
+            -coverprofile=coverage.out \
+            ./...
+
+      - name: Show coverage summary
+        working-directory: chaincode
+        run: go tool cover -func=coverage.out
