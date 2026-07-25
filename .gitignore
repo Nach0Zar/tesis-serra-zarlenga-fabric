@@ -1,0 +1,51 @@
+# Claude Code guidance (local only)
+CLAUDE.md
+
+# Knowledge base (PDFs and derived files — do not commit)
+*.pdf
+.knowledge/
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+/vendor/
+
+# Go workspace
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Hyperledger Fabric network artifacts (generated at runtime)
+network/crypto-config/
+network/channel-artifacts/
+network/system-genesis-block/
+network/*.tx
+network/*.block
+network/organizations/
+
+# Fabric test network downloaded by CI (local runs)
+fabric-samples/
+
+# Docker overrides
+docker-compose.override.yml
+
+# Environment files
+.env
+.env.local
+.env.*.local
