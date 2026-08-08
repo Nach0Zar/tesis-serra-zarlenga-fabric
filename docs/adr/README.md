@@ -1,21 +1,15 @@
-# Documentación
+# Architecture Decision Records
 
-Este directorio agrupa documentos de diseño, decisiones de arquitectura y protocolos que guían la implementación del prototipo.
-
-La carpeta `docs/` concentra documentacion tecnica y academica del prototipo. Los archivos de este directorio deben registrar decisiones, protocolos y material de apoyo que orientan la implementacion, validacion y evaluacion del sistema.
-
-## Contenido
-
-| Ruta | Contenido |
-|---|---|
-| `adr/` | Architecture Decision Records aceptados o en revisión. |
+Este directorio contiene las decisiones de arquitectura que guían el diseño y la implementación del prototipo.
 
 ## Archivos
 
-| Archivo | Descripción |
-|---|---|
-| [`000-template.md`](000-template.md) | Plantilla base para nuevos ADRs. |
-| [`002-topologia-canales.md`](002-topologia-canales.md) | ADR-002: decisión de topología de canales. |
+| Archivo | Estado | Descripción |
+|---|---|---|
+| [`000-template.md`](000-template.md) | Plantilla | Estructura base para nuevos ADRs. |
+| [`001-maquina-estados-medicamento.md`](001-maquina-estados-medicamento.md) | Propuesto | ADR-001: máquina de estados del medicamento, eventos, actores lógicos, precondiciones y estados terminales. |
+| [`002-topologia-canales.md`](002-topologia-canales.md) | Aceptado (revisión 3) | ADR-002: topología de canales y uso de Private Data Collections. |
+| [`003-establishment-identity-gln-cufe.md`](003-establishment-identity-gln-cufe.md) | Aceptado (revisión 2) | ADR-003: identidad de establecimientos mediante GLN/CUFE y organización Fabric por establecimiento. |
 
 ## Convenciones
 
@@ -23,3 +17,4 @@ La carpeta `docs/` concentra documentacion tecnica y academica del prototipo. Lo
 - La documentación se redacta en español.
 - Los nombres de archivo se mantienen en inglés.
 - Las fuentes técnicas o regulatorias externas se incluyen en anexos del documento correspondiente.
+- No listar ADRs futuros como archivos existentes hasta que su issue produzca el documento correspondiente.
