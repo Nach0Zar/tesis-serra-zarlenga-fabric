@@ -10,7 +10,8 @@ Este directorio agrupa documentos de diseño, decisiones de arquitectura y proto
 
 ## Decisiones de arquitectura
 
-- [ADR-003: Identidad de establecimientos mediante GLN/CUFE](adr/003-establishment-identity-gln-cufe.md): define cómo representar establecimientos físicos dentro de organizaciones Fabric usando atributos X.509 y un registro mínimo en ledger.
+- [ADR-002: Topología de canales en la red Hyperledger Fabric](adr/002-topologia-canales.md): define canal único con estado mínimo de trazabilidad público y Private Data Collections para información comercial, conciliando auditoría regulatoria de ANMAT, confidencialidad comercial y validación independiente por futuros destinatarios.
+- [ADR-003: Identidad de establecimientos mediante GLN/CUFE](adr/003-establishment-identity-gln-cufe.md): define una organización Fabric por establecimiento, con un registro en ledger que traduce cada organización a su identificador canónico GLN/CUFE.
 
 ## Convenciones
 
