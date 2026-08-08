@@ -7,6 +7,7 @@ Este directorio agrupa documentos de diseño, decisiones de arquitectura y proto
 | Ruta | Contenido |
 |---|---|
 | [`measurement-protocol.md`](measurement-protocol.md) | Protocolo de medicion para comparar Hyperledger Fabric y la baseline centralizada bajo condiciones equivalentes. |
+| [`modelo-datos.md`](modelo-datos.md) | Clave compuesta y struct de estado publico del activo de trazabilidad, y justificacion de datos excluidos por Ley 25.326. |
 | `adr/` | Architecture Decision Records aceptados o en revisión. |
 
 ## Decisiones de arquitectura
