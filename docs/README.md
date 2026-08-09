@@ -6,6 +6,7 @@ Este directorio agrupa documentos de diseño, decisiones de arquitectura y proto
 
 | Ruta | Contenido |
 |---|---|
+| [`organizations-roles-endorsement.md`](organizations-roles-endorsement.md) | Diseno DES-6 de organizaciones Fabric, MSP, roles, ABAC y politicas de endoso. |
 | [`measurement-protocol.md`](measurement-protocol.md) | Protocolo de medición para comparar Hyperledger Fabric y la baseline centralizada bajo condiciones equivalentes. |
 | [`adr/README.md`](adr/README.md) | Índice de Architecture Decision Records aceptados o en revisión. |
 
