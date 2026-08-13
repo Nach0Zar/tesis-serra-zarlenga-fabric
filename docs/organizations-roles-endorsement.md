@@ -138,7 +138,8 @@ La politica de diseno es:
 | Registro inicial de unidades | Organizacion activa con `agentType=LABORATORY` y rol `operator` | Laboratorio invocante. No hay contraparte previa capaz de verificar custodia; la integridad multiorganizacion se ejerce desde las transferencias posteriores. |
 | Transferencia ordinaria de custodia | Custodio actual activo, destino activo y par permitido por DES-3 | Origen y destino de la transferencia. Si DES-9 separa despacho y recepcion, la transaccion que confirma el cambio de custodia debe quedar cubierta por ambas partes. |
 | Dispensacion | Custodio actual con `agentType=PHARMACY` o `HEALTHCARE_FACILITY` y rol `operator` | Organizacion dispensadora. Validacion por financiador queda fuera de DES-6 y depende de DES-10. |
-| Evento extraordinario informado por custodio | Custodio actual activo y evento admitido por ADR-001 | Custodio actual y `AnmatMSP` cuando el evento requiera conocimiento o intervencion regulatoria. |
+| Evento extraordinario informado por custodio | Custodio actual activo y evento admitido por ADR-001. Incluye `RETIRAR_MERCADO` desde `EN_LABORATORIO` cuando el laboratorio todavia es custodio actual. | Custodio actual. `AnmatMSP` solo se agrega cuando la operacion sea iniciada por ANMAT o requiera autorizacion regulatoria previa. |
+| Retiro, recupero o disposicion final iniciado por laboratorio no custodio | Laboratorio activo con `agentType=LABORATORY` y rol `operator`, vinculado como titular, elaborador o importador de la unidad o lote segun el modelo y contrato vigentes. Cubre las transiciones ADR-001 donde `LABORATORY` actua sobre unidades fuera de su custodia; no habilita `PROHIBIR_PRODUCTO`. | Laboratorio invocante y `AnmatMSP`. El coendoso de ANMAT se exige solo en este caso puntual para validar la legitimidad del reclamo antes de mutar un asset bajo custodia ajena. |
 | Evento regulatorio iniciado por ANMAT | `AnmatMSP` con `snt.role=regulatory-admin` | `AnmatMSP` y, cuando la operacion afecte custodia o datos privados de un establecimiento, la organizacion custodia involucrada. |
 | Lecturas y auditoria | Segun MSP, rol y visibilidad ADR-002 | No generan endoso de escritura; se gobiernan por politicas de lectura del canal, PDC y contrato DES-5. |
 
@@ -150,6 +151,8 @@ debe preservar estas propiedades:
 
 - no usar una unica MSP de categoria para representar establecimientos distintos;
 - no exigir `AnmatMSP` como coendosante de toda escritura ordinaria;
+- exigir `AnmatMSP` como coendosante cuando un laboratorio no custodio inicia un
+  retiro, recupero o disposicion final sobre una unidad bajo custodia ajena;
 - no permitir que una transferencia ordinaria cambie custodia solo con endoso del
   origen;
 - no exponer datos privados a organizaciones no participantes, en linea con
