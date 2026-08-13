@@ -1,5 +1,7 @@
 # Claude Code guidance (local only)
 CLAUDE.md
+AGENTS.md
+/context
 
 # Knowledge base (PDFs and derived files — do not commit)
 *.pdf
