@@ -43,13 +43,14 @@ El formato persistido esperado de `GTIN` y `NumeroSerie` es el que fija GS1: dí
 // de medicamento. No incluye datos comerciales/documentales (ver ADR-002)
 // ni informacion personal o clinica (ver seccion 4).
 type MedicationUnit struct {
-    GTIN                string `json:"gtin"`
-    NumeroSerie         string `json:"numeroSerie"`
-    Lote                string `json:"lote"`
-    FechaVencimiento    string `json:"fechaVencimiento"`
-    CustodioActual      string `json:"custodioActual"`
-    Estado              string `json:"estado"`
-    UltimaActualizacion string `json:"ultimaActualizacion"`
+    GTIN                  string `json:"gtin"`
+    NumeroSerie           string `json:"numeroSerie"`
+    Lote                  string `json:"lote"`
+    FechaVencimiento      string `json:"fechaVencimiento"`
+    CustodioActual        string `json:"custodioActual"`
+    DestinatarioPendiente string `json:"destinatarioPendiente"`
+    Estado                string `json:"estado"`
+    UltimaActualizacion   string `json:"ultimaActualizacion"`
 }
 ```
 
@@ -69,7 +70,7 @@ Decisión que este documento sí fija: el valor persistido de `FechaVencimiento`
 
 Se persiste el identificador canónico `GLN:<13 dígitos>` o `CUFE:<13 dígitos>` resuelto por el chaincode desde el registro de organización-establecimiento, tal como lo fija ADR-003. Nunca `mspId`, nunca un atributo de certificado. El campo es de solo-lectura para el cliente en las operaciones donde el invocador actúa como custodio (el chaincode lo resuelve internamente vía `cid.GetMSPID()` + registro); solo es un parámetro de entrada legítimo cuando identifica al **destinatario** de una transferencia, y ahí también se valida contra el registro antes de aceptarse.
 
-**Dependencia abierta con DES-9 (ADR-004)**: este documento asume implícitamente que `CustodioActual` tiene siempre un único valor bien definido. Si DES-9 decide modelar la transferencia en dos fases (despacho → `EN_TRANSITO` → recepción, en vez de una transacción atómica), la semántica de `CustodioActual` durante la ventana de tránsito queda sin resolver acá: ¿sigue siendo el emisor hasta que el receptor confirma, o hace falta un campo adicional (p. ej. `DestinatarioPendiente`) para distinguir "quién tiene la custodia legal" de "quién fue declarado como destino de un despacho aún no confirmado"? Este documento no prejuzga esa decisión; si DES-9 adopta el modelo de dos fases, este struct debe revisarse antes de darse por cerrado.
+**Decisión resuelta por ADR-004**: `CustodioActual` permanece como el emisor durante el tránsito. El receptor declarado se registra en el campo `DestinatarioPendiente` (sección 3.6). Cuando el receptor confirma la recepción (T04 de ADR-001), el chaincode mueve el valor de `DestinatarioPendiente` a `CustodioActual` y limpia `DestinatarioPendiente`.
 
 ### 3.4 `Estado`
 
@@ -78,6 +79,27 @@ Campo de tipo string sobre un catálogo cerrado, no un enum de Go embebido en es
 ### 3.5 `UltimaActualizacion`
 
 Decisión importante y no obvia: este timestamp **debe** obtenerse de `ctx.GetStub().GetTxTimestamp()`, nunca de `time.Now()` del lado del chaincode. El modelo de endoso de Fabric exige que la ejecución del chaincode sea determinística: la misma propuesta, ejecutada por distintos peers endosantes de distintas organizaciones, tiene que producir exactamente el mismo write-set para que el endoso sea válido. `time.Now()` da un valor distinto en cada peer según cuándo ejecuta; `GetTxTimestamp()` devuelve el timestamp que el cliente fijó al armar la propuesta, idéntico para todos los peers que la procesan. Usar reloj local acá no es un detalle de estilo: rompe la propiedad de determinismo que justifica usar múltiples organizaciones endosando en primer lugar (ver fundamentos de smart contracts/consenso en el marco teórico del proyecto).
+
+### 3.6 `DestinatarioPendiente`
+
+Campo con significado exclusivo cuando `Estado == EN_TRANSITO`. En todos los demás estados su valor es la cadena vacía `""`.
+
+Contiene el identificador canónico `GLN:<13 dígitos>` o `CUFE:<13 dígitos>` del receptor declarado por el emisor al invocar el despacho (T02 o T03 de ADR-001). El formato sigue la misma convención que `CustodioActual` (ADR-003): nunca `mspId`, nunca un atributo de certificado.
+
+Ciclo de vida del campo:
+
+| Transición (ADR-001) | Efecto |
+|---|---|
+| T02 / T03 (despacho) | `DestinatarioPendiente` se escribe con el destinatario declarado por el emisor; `CustodioActual` no cambia. |
+| T04 (recepción confirmada) | `CustodioActual` toma el valor que tenía `DestinatarioPendiente` (el receptor) y `DestinatarioPendiente` se limpia a `""`. |
+| T05 (rechazo/devolución en tránsito) | La unidad pasa a `DEVUELTO`, `CustodioActual` se mantiene en el emisor (la unidad rechazada vuelve al remitente) y `DestinatarioPendiente` se limpia a `""`. |
+| T09, T13–T16 (eventos extraordinarios en tránsito) | `DestinatarioPendiente` no se modifica; se conserva para auditoría de a quién iba destinada la unidad. |
+
+El chaincode debe validar en el despacho que el destinatario declarado exista en el registro de organización-establecimiento (ADR-003), esté activo, y tenga un `agentType` compatible con el par origen-destino según la matriz de DES-3. En la recepción (T04), el chaincode valida que el `mspId` del invocador corresponda al establecimiento cuyo identificador canónico figura en `DestinatarioPendiente`.
+
+Su ubicación en el estado público del canal (en lugar de una colección privada) es una decisión de ADR-002/ADR-004: el campo no expone información comercial que la cadena de custodia pública no revele igual tras la recepción, y la validación de recepción necesita leerlo desde el peer endosante del receptor. El detalle del argumento está en la sección "Visibilidad de DestinatarioPendiente" de ADR-004.
+
+Este campo no reemplaza los datos documentales de la operación (factura, remito, cantidades): esos van a Private Data Collections según ADR-002 y ADR-004. `DestinatarioPendiente` es solo el identificador regulatorio mínimo que el chaincode necesita en el estado público para validar quién tiene derecho a confirmar la recepción.
 
 ## 4. Qué NO se almacena en este activo, y por qué
 
@@ -94,7 +116,7 @@ Decisión importante y no obvia: este timestamp **debe** obtenerse de `ctx.GetSt
 ## 5. Abierto / fuera de este documento
 
 - Catálogo cerrado de valores de `Estado` y su matriz de transición válida por evento/agente detonante — **DES-1 / ADR-001 (issue #7)**.
-- Si `CustodioActual` necesita un campo adicional para representar tránsito no confirmado — depende de **DES-9 / ADR-004 (issue #57)**.
+- ~~Si `CustodioActual` necesita un campo adicional para representar tránsito no confirmado~~ — resuelto por **ADR-004**: se agrega `DestinatarioPendiente` (sección 3.6).
 - Struct de datos privados (PDC) para información comercial/documental, y el mecanismo de generación de membresía de colección a partir del registro de organización-establecimiento (pendiente de NET-5 según ADR-002).
 - Punto de aplicación de la validación de formato de entrada (dígito verificador GTIN, longitud/prefijo de número de serie, parseo AAMMDD→ISO 8601): este documento fija el formato persistido esperado (secciones 2.2 y 3.2) pero no si la validación corre en el chaincode, en una capa de adaptación/cliente previa, o en ambos — es una decisión de **DES-5 (issue #11, contrato de interfaz del chaincode)** y de la implementación del chaincode. Si conviene validar el GTIN contra un catálogo/Vademécum real o asumirlo válido es además una decisión de alcance de **DES-11 (issue #59)**.
 - Campo discriminador de tipo de documento (`DocType`) para desambiguar el namespace del world state si en el futuro conviven otros tipos de activo (p. ej. el registro de organización-establecimiento de ADR-003) en el mismo canal y hace falta filtrarlos en consultas ricas (CouchDB `GetQueryResult`). No lo pide la issue #8 y por eso no forma parte del struct de la sección 3 — si se necesita, es una decisión de una issue futura de consultas/índices, no de este documento.
