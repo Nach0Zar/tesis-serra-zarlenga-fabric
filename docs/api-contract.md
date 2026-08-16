@@ -1,7 +1,7 @@
 # Contrato de interfaz del chaincode `snt`
 
-- **Versión del contrato**: `2.0.0`
-- **Estado**: Congelado. Los cambios se rigen por la política de versionado (última sección): un cambio incompatible exige un PR etiquetado `breaking-change` y aprobación explícita de B.
+- **Versión del contrato**: `2.0.1`
+- **Estado**: Congelado. Los cambios se rigen por la política de versionado (última sección): un cambio incompatible exige un PR etiquetado `breaking-change` y aprobación explícita de B (el integrante responsable de cliente y baseline, conforme la issue #11 / DES-5).
 - **Fecha**: 2026-08-13
 - **Autores**: Serra, Zarlenga
 
@@ -18,8 +18,8 @@ No define: la implementación interna del chaincode, el `configtx.yaml`, el mate
 | [ADR-001](adr/001-maquina-estados-medicamento.md) | Estados y transiciones (T01–T33). Cada operación de escritura corresponde a una o más transiciones; el chaincode rechaza cualquier transición no declarada. |
 | [ADR-002](adr/002-topologia-canales.md) | Separación estado público / datos comerciales. Los datos comerciales y documentales viajan por el campo `transient` y van a PDC, nunca como argumentos públicos. |
 | [ADR-003](adr/003-establishment-identity-gln-cufe.md) | Identidad por `cid.GetMSPID()` resuelta contra el registro. El custodio no viaja como parámetro cuando el invocador actúa como custodio; el destino de una transferencia sí. |
-| [ADR-004](adr/004-transfer-dispatch-reception.md) | La transferencia son dos operaciones: `DispatchTransfer` y `ReceiveTransfer`, más `RejectTransfer`. El destinatario declarado viaja por `transient` y se valida contra PDC, nunca como argumento público ni campo de `MedicationUnitView`. **Dependencia de merge**: ADR-004 (DES-9) todavía no está en `develop`; este contrato lo asume decidido. |
-| [ADR-005](adr/005-rol-organismo-financiador.md) | El organismo financiador solo invoca operaciones de lectura. **Dependencia de merge**: ADR-005 (DES-10) todavía no está en `develop`. |
+| [ADR-004](adr/004-transfer-dispatch-reception.md) | La transferencia son dos operaciones: `DispatchTransfer` y `ReceiveTransfer`, más `RejectTransfer`. El destinatario declarado viaja por `transient` y se valida contra PDC, nunca como argumento público ni campo de `MedicationUnitView`. **Dependencia de merge**: ADR-004 (DES-9) se integra vía PR #78; este contrato lo asume decidido. |
+| [ADR-005](adr/005-rol-organismo-financiador.md) | El organismo financiador solo invoca operaciones de lectura. **Dependencia de merge**: ADR-005 (DES-10) se integra vía PR #79. |
 | [modelo-datos.md](modelo-datos.md) | Struct `MedicationUnit`, clave compuesta GTIN+serie, `fechaVencimiento` en ISO 8601, `ultimaActualizacion` por `GetTxTimestamp()`. |
 | [organizations-roles-endorsement.md (DES-6)](organizations-roles-endorsement.md) | Autorización por `agentType`, `active` y `snt.role`, y política de endoso por operación. |
 | [domain/authorized-transfers.json (DES-3)](../domain/authorized-transfers.json) | Matriz origen → destino que valida `DispatchTransfer`. |
@@ -44,6 +44,7 @@ No define: la implementación interna del chaincode, el `configtx.yaml`, el mate
 - La información comercial y documental (número de remito, número de factura, cantidades, condiciones) **nunca** viaja como argumento público. Se envía por el campo `transient` de la propuesta, bajo la clave `commercial`, con un objeto JSON.
 - El identificador del destinatario declarado en una transferencia (`DispatchTransfer`) **tampoco** viaja como argumento público, por la misma razón: revela una relación emisor→receptor no consumada (ADR-004). Se envía por `transient`, bajo la clave `destinatario`, con un objeto JSON `{ "destino": "GLN:..." }`.
 - El contrato fija que esos datos van a PDC; el nombre y la política de la(s) colección(es) los define NET-5, con membresía emisor + receptor declarado + `AnmatMSP` para la operación de transferencia (ADR-004). El estado público nunca contiene datos comerciales ni el destinatario declarado.
+- El campo `motivo` de `UnitEventRequest` es un argumento **público** del canal: no debe incluir datos personales, clínicos ni información comercial (precios, cantidades, referencias de facturación) — para eso existe el `transient` `commercial`. `motivo` documenta la causa regulatoria del evento en texto breve y neutro.
 
 ### Vista pública de la unidad (`MedicationUnitView`)
 
@@ -51,7 +52,7 @@ Es el response de todas las operaciones de escritura sobre una unidad y de `Read
 
 ```json
 {
-  "gtin": "07791234567890",
+  "gtin": "07791234567898",
   "numeroSerie": "SN-0001-ABCD",
   "lote": "L2026-014",
   "fechaVencimiento": "2027-12-31",
@@ -112,7 +113,7 @@ func (c *SNTContract) RegisterUnit(ctx contractapi.TransactionContextInterface, 
 
 ```json
 {
-  "gtin": "07791234567890",
+  "gtin": "07791234567898",
   "numeroSerie": "SN-0001-ABCD",
   "lote": "L2026-014",
   "fechaVencimiento": "2027-12-31"
@@ -135,7 +136,7 @@ func (c *SNTContract) DispatchTransfer(ctx contractapi.TransactionContextInterfa
 
 ```json
 {
-  "gtin": "07791234567890",
+  "gtin": "07791234567898",
   "numeroSerie": "SN-0001-ABCD"
 }
 ```
@@ -159,7 +160,7 @@ func (c *SNTContract) DispatchTransfer(ctx contractapi.TransactionContextInterfa
 ```
 
 - **Response**: `MedicationUnitView` con `estado=EN_TRANSITO` y `custodioActual` sin cambios (el emisor). El destino declarado no se refleja en la vista pública (ADR-004); el cliente que lo declaró ya lo conoce.
-- **Errores**: `INVALID_REQUEST`, `UNIT_NOT_FOUND`, `UNAUTHORIZED_CUSTODIAN`, `UNAUTHORIZED_ROLE`, `INVALID_STATE_TRANSITION`, `TRANSFER_NOT_AUTHORIZED`, `INVALID_DESTINATION`.
+- **Errores**: `INVALID_REQUEST`, `UNIT_NOT_FOUND`, `UNAUTHORIZED_CUSTODIAN`, `UNAUTHORIZED_ROLE`, `ORG_NOT_REGISTERED`, `ORG_INACTIVE`, `INVALID_STATE_TRANSITION`, `TRANSFER_NOT_AUTHORIZED`, `INVALID_DESTINATION`.
 
 ### `ReceiveTransfer`
 
@@ -172,7 +173,7 @@ func (c *SNTContract) ReceiveTransfer(ctx contractapi.TransactionContextInterfac
 - **Endoso**: origen y destino (DES-6).
 - **Request**: `UnitRefRequest` (`gtin`, `numeroSerie`). Puede acompañarse de `transient` clave `commercial` con la confirmación documental de recepción.
 - **Response**: `MedicationUnitView` con `custodioActual` = el receptor y `estado=EN_CUSTODIA`.
-- **Errores**: `UNIT_NOT_FOUND`, `NOT_IN_TRANSIT`, `RECEIVER_MISMATCH`, `UNAUTHORIZED_ROLE`.
+- **Errores**: `INVALID_REQUEST`, `UNIT_NOT_FOUND`, `NOT_IN_TRANSIT`, `RECEIVER_MISMATCH`, `UNAUTHORIZED_ROLE`, `ORG_NOT_REGISTERED`, `ORG_INACTIVE`.
 
 ### `RejectTransfer`
 
@@ -185,7 +186,7 @@ func (c *SNTContract) RejectTransfer(ctx contractapi.TransactionContextInterface
 - **Endoso**: origen y destino (DES-6).
 - **Request**: `UnitEventRequest` (`gtin`, `numeroSerie`, `motivo`).
 - **Response**: `MedicationUnitView` con `estado=DEVUELTO` y `custodioActual` = el emisor (la unidad rechazada vuelve al remitente).
-- **Errores**: `UNIT_NOT_FOUND`, `NOT_IN_TRANSIT`, `UNAUTHORIZED_ROLE`, `INVALID_REQUEST`.
+- **Errores**: `UNIT_NOT_FOUND`, `NOT_IN_TRANSIT`, `RECEIVER_MISMATCH` (el invocador no es ni el destinatario declarado ni el emisor), `UNAUTHORIZED_ROLE`, `INVALID_REQUEST`.
 
 ### `Dispense`
 
@@ -198,7 +199,7 @@ func (c *SNTContract) Dispense(ctx contractapi.TransactionContextInterface, req 
 - **Endoso**: organización dispensadora (DES-6).
 - **Request**: `UnitRefRequest` (`gtin`, `numeroSerie`). **No** se envían datos del paciente (Ley 25.326; ADR-005; CC-4).
 - **Response**: `MedicationUnitView` con `estado=DISPENSADO`.
-- **Errores**: `UNIT_NOT_FOUND`, `UNAUTHORIZED_CUSTODIAN`, `UNAUTHORIZED_AGENT_TYPE`, `INVALID_STATE_TRANSITION`.
+- **Errores**: `INVALID_REQUEST`, `UNIT_NOT_FOUND`, `UNAUTHORIZED_CUSTODIAN`, `UNAUTHORIZED_AGENT_TYPE`, `UNAUTHORIZED_ROLE`, `INVALID_STATE_TRANSITION`.
 
 ## Operaciones de eventos extraordinarios y de resolución
 
@@ -211,7 +212,7 @@ func (c *SNTContract) <Nombre>(ctx contractapi.TransactionContextInterface, req 
 ```json
 // UnitEventRequest
 {
-  "gtin": "07791234567890",
+  "gtin": "07791234567898",
   "numeroSerie": "SN-0001-ABCD",
   "motivo": "Texto libre que documenta la causa del evento."
 }
@@ -352,7 +353,7 @@ func (c *SNTContract) QueryUnitsByGTIN(ctx contractapi.TransactionContextInterfa
   - **MINOR**: agregados compatibles (nueva operación, nuevo campo opcional en un request, nuevo `code`).
   - **MAJOR**: cambio incompatible (renombrar o quitar una función o campo, cambiar un tipo, cambiar la semántica de un `code`). Exige un PR etiquetado `breaking-change`.
 - Todo cambio a este documento requiere aprobación explícita de B antes del merge, según la story DES-5.
-- Dependencias de merge pendientes: este contrato asume ADR-004 (transferencia en dos operaciones, destinatario declarado en PDC) y ADR-005 (financiador de solo lectura), cuyos PRs aún no están en `develop`. Si alguna de esas decisiones cambiara antes de integrarse, las operaciones de transferencia o la nota del financiador deben revisarse aquí.
+- Dependencias de merge: este contrato asume ADR-004 (transferencia en dos operaciones, destinatario declarado en PDC; PR #78) y ADR-005 (financiador de solo lectura; PR #79). Si alguna de esas decisiones cambiara antes de integrarse, las operaciones de transferencia o la nota del financiador deben revisarse aquí.
 - **Historial de cambios incompatibles**: `2.0.0` — el destino de `DispatchTransfer` pasa de argumento público a `transient` (clave `destinatario`), y `destinatarioPendiente` se elimina de `MedicationUnitView`, para alinear el contrato con la revisión de ADR-004 que clasifica el destinatario declarado como dato privado (PDC), no público.
-```
+- **Historial de cambios compatibles**: `2.0.1` — corrige el dígito verificador GS1 del GTIN de los ejemplos (`07791234567890` → `07791234567898`; el valor anterior habría sido rechazado por la propia validación de `INVALID_REQUEST`), completa las listas de errores por operación para que toda condición de autorización declarada tenga su código (`DispatchTransfer`/`ReceiveTransfer`: `ORG_NOT_REGISTERED`/`ORG_INACTIVE`; `RejectTransfer`: `RECEIVER_MISMATCH`; `Dispense`: `UNAUTHORIZED_ROLE`), agrega el lineamiento sobre `motivo` y aclara quién es B. Sin cambios de firmas, `code`s del catálogo ni esquemas.
 
