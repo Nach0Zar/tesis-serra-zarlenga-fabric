@@ -18,10 +18,10 @@ El modelo de datos de DES-2 tiene una dependencia abierta hacia esta decisión: 
 
 **A. Dos transacciones de chaincode: despacho y recepción**
 
-- El emisor invoca `DispatchTransfer` (o equivalente según DES-5), que transiciona la unidad de `EN_LABORATORIO` o `EN_CUSTODIA` a `EN_TRANSITO`. En ese momento el chaincode registra el identificador canónico del destinatario declarado en un campo separado del asset.
-- El receptor invoca `ReceiveTransfer`, que transiciona de `EN_TRANSITO` a `EN_CUSTODIA` y actualiza `CustodioActual` al identificador del receptor. Solo puede invocar esta transacción la organización que figura como destinatario declarado.
-- Si el receptor rechaza, invoca `ReturnProduct` (T05 de ADR-001), que transiciona a `DEVUELTO`.
-- Dos actores distintos firman y endosan dos transacciones distintas, lo que mantiene la auditabilidad del hecho "el emisor declaró enviar" separada del hecho "el receptor aceptó recibir".
+- El emisor invoca la operación de despacho (evento T02 o T03 de ADR-001; nombre concreto de función a definir por DES-5), que transiciona la unidad de `EN_LABORATORIO` o `EN_CUSTODIA` a `EN_TRANSITO`. En ese momento el chaincode registra el identificador canónico del destinatario declarado.
+- El receptor invoca la operación de recepción (evento T04 de ADR-001; nombre concreto a definir por DES-5), que transiciona de `EN_TRANSITO` a `EN_CUSTODIA` y actualiza `CustodioActual` al identificador del receptor. Solo puede invocar esta transacción la organización que figura como destinatario declarado.
+- Si el receptor rechaza, invoca la operación de rechazo (T05 de ADR-001; nombre concreto a definir por DES-5), que transiciona a `DEVUELTO`.
+- El emisor y el receptor son quienes *invocan* cada transacción (cliente de la propuesta), lo que mantiene la auditabilidad del hecho "el emisor declaró enviar" separada del hecho "el receptor aceptó recibir". Quién debe *endosar* (firmar como peer requerido por la política) cada transacción es una decisión distinta, gobernada por DES-6 y no por esta ADR — ver "Endoso" más abajo.
 - Introduce complejidad: la ventana de tiempo entre despacho y recepción expone un estado `EN_TRANSITO` que el chaincode debe manejar correctamente ante eventos extraordinarios (T09, T13, T14, T15, T16 de ADR-001).
 - Se adopta.
 
@@ -38,7 +38,11 @@ El modelo de datos de DES-2 tiene una dependencia abierta hacia esta decisión: 
 
 Se adopta la **alternativa A**: la transferencia se modela como dos transacciones de chaincode separadas, una invocada por el emisor (despacho, genera `EN_TRANSITO`) y otra invocada por el receptor (recepción, genera `EN_CUSTODIA` o `DEVUELTO`).
 
-`CustodioActual` permanece como el emisor durante el tránsito. Se agrega el campo `DestinatarioPendiente` al asset para registrar el identificador canónico del receptor declarado, con significado solo cuando `Estado == EN_TRANSITO`.
+`CustodioActual` permanece como el emisor durante el tránsito y no se modifica hasta que la recepción se confirma. El identificador canónico del receptor declarado (`DestinatarioPendiente`) **no se persiste en el estado público del canal**: se escribe en la colección privada (PDC) de la operación, con membresía emisor + receptor declarado + `AnmatMSP` (la misma colección que ya recibe factura/remito, ver "Referencias documentales de la operación"). La sección "Endoso" fija quién debe firmar cada transacción y la sección "Por qué DestinatarioPendiente no es estado público" explica por qué se descarta el estado público para este campo.
+
+## Endoso
+
+Esta ADR fija quién *invoca* cada transacción (sección "Alternativas"). Quién debe *endosar* cada una es responsabilidad de DES-6 (`docs/organizations-roles-endorsement.md`), no de esta ADR. Por consistencia con la necesidad técnica de que el peer del receptor pueda validar el destinatario declarado desde la PDC antes de confirmar recepción, la transacción de recepción (T04) requiere endoso conjunto de la organización emisora y la organización receptora — ambas son miembros de la PDC de la operación y ambas tienen interés directo en que el cambio de custodia quede correctamente registrado. La transacción de despacho (T02/T03) requiere, como mínimo, el endoso de la organización emisora, conforme a la política general de DES-6 para eventos iniciados por el custodio actual.
 
 ## Justificación
 
@@ -50,28 +54,32 @@ La alternativa A también preserva el valor de la evaluación comparativa: la ba
 
 ## Semántica de CustodioActual y DestinatarioPendiente durante el tránsito
 
-| Campo | Significado durante EN_TRANSITO | Significado fuera de EN_TRANSITO |
-|---|---|---|
-| `CustodioActual` | Identificador canónico del emisor (quien despachó y sigue siendo responsable legal). | Custodio actual de la unidad. |
-| `DestinatarioPendiente` | Identificador canónico del receptor declarado por el emisor. El chaincode valida que quien invoca `ReceiveTransfer` coincida con este valor. | Campo vacío (`""`). |
+| Campo | Ubicación | Significado durante EN_TRANSITO | Significado fuera de EN_TRANSITO |
+|---|---|---|---|
+| `CustodioActual` | Estado público del canal | Identificador canónico del emisor: custodio registrado en el ledger por convención de diseño de esta ADR mientras dura el tránsito. No es una calificación de responsabilidad legal — las fuentes normativas relevadas (Disposición 3683/2011, art. 8) distinguen despacho físico de llegada/aceptación, pero no asignan expresamente una responsabilidad jurídica intermedia; ver "Justificación". | Custodio actual de la unidad. |
+| `DestinatarioPendiente` | PDC de la operación (emisor + receptor declarado + `AnmatMSP`) | Identificador canónico del receptor declarado por el emisor. El chaincode valida, a partir de la PDC, que quien invoca la recepción coincida con este valor. | No aplica — el campo solo existe en la PDC de una operación en curso; no hay entrada de PDC fuera de una transferencia activa. |
 
-Reglas de modificación de estos campos:
-- **T02 / T03 (despacho)**: chaincode escribe `DestinatarioPendiente` con el destino declarado por el emisor; `CustodioActual` no cambia.
-- **T04 (recepción)**: chaincode mueve el valor de `DestinatarioPendiente` a `CustodioActual`; `DestinatarioPendiente` se limpia a `""`.
-- **T05 (rechazo/devolución en tránsito)**: chaincode transiciona a `DEVUELTO`; `CustodioActual` se mantiene en el emisor (la unidad rechazada vuelve al remitente); `DestinatarioPendiente` se limpia a `""`.
+Reglas de modificación:
+- **T02 / T03 (despacho)**: el emisor escribe en la PDC de la operación el destinatario declarado; `CustodioActual` (público) no cambia.
+- **T04 (recepción)**: el chaincode valida contra la PDC que el invocador coincida con el destinatario declarado, y actualiza `CustodioActual` (público) al receptor. La entrada de la PDC se conserva como registro histórico de la operación, igual que factura/remito.
+- **T05 (rechazo/devolución en tránsito)**: el chaincode transiciona a `DEVUELTO`; `CustodioActual` (público) se mantiene en el emisor. La entrada de la PDC se conserva.
+- **T09, T13–T16 (eventos extraordinarios en tránsito)**: `CustodioActual` (público) no cambia respecto del emisor. La entrada de la PDC se conserva sin modificar, incluyendo en `EN_CUARENTENA` (T09), donde ADR-001 exige explícitamente conservar la relación con la transferencia pendiente.
 
-El campo `DestinatarioPendiente` es de solo-lectura para el cliente en todas las operaciones excepto el despacho, donde el cliente lo proporciona como parámetro. El chaincode valida que el destinatario declarado exista en el registro de organización-establecimiento (ADR-003), esté activo y tenga un `agentType` compatible con el par de transferencia según la matriz de DES-3, antes de aceptar el despacho.
+El destinatario declarado es de solo-escritura para el cliente en la operación de despacho (el emisor lo provee como parámetro) y de solo-lectura para el chaincode en el resto de las operaciones. El chaincode valida que el destinatario declarado exista en el registro de organización-establecimiento (ADR-003), esté activo y tenga un `agentType` compatible con el par de transferencia según la matriz de DES-3, antes de aceptar el despacho.
 
-## Visibilidad de DestinatarioPendiente
+## Por qué DestinatarioPendiente no es estado público
 
-ADR-002 enumeró un conjunto cerrado de campos de estado público del canal (identificador, lote, vencimiento, custodio actual, estado del producto) y clasificó como privado "cualquier dato que permita inferir relaciones o volúmenes comerciales entre partes específicas". `DestinatarioPendiente` es un campo nuevo respecto de esa enumeración y expone, durante la ventana de tránsito, que el emisor despacha hacia un receptor determinado. Por eso su ubicación en estado público —en lugar de una colección privada compartida por emisor, receptor y `AnmatMSP`— requiere justificación explícita y no debe leerse como una extensión silenciosa de la clasificación de ADR-002.
+ADR-002 enumeró un conjunto cerrado de campos de estado público del canal (identificador, lote, vencimiento, custodio actual, estado del producto) y clasificó como privado "cualquier dato que permita inferir relaciones o volúmenes comerciales entre partes específicas". El identificador del receptor declarado durante el tránsito cae directamente en esa clasificación: revela una relación emisor → destinatario antes de que la operación se concrete.
 
-Se decide mantener `DestinatarioPendiente` en el estado público del canal por dos razones:
+Una versión anterior de esta ADR proponía mantener este dato en estado público, con el argumento de que "no agrega información que no sea ya pública" porque, si la recepción se confirma, el receptor pasa a ser `CustodioActual` público de todos modos. Ese argumento no cubre los casos en que la recepción **no** se confirma: rechazo (T05), robo/extravío/deterioro/vencimiento en tránsito (T13–T16) o cuarentena (T09). En esos casos el destinatario declarado nunca llega a ser `CustodioActual`, y aun así, si el campo fuera público, el historial del canal (`GetHistoryForKey`) conservaría indefinidamente el destino intentado de una operación que no se concretó — exactamente el tipo de relación no consumada que ADR-002 protege, y en tensión con el artículo 9(f) de la Disposición ANMAT 3683/2011, que restringe el acceso a información de transacciones ajenas.
 
-1. **No agrega información comercial que no sea ya pública.** ADR-002 ya fijó que `CustodioActual`, y por lo tanto la secuencia histórica de custodios (consultable con `GetHistoryForKey`), es pública. Cuando la recepción se confirma, el receptor pasa a ser `CustodioActual` público de todos modos. `DestinatarioPendiente` solo adelanta durante el tránsito una relación custodio → siguiente-custodio que el historial público revela igual una vez completada la recepción. No expone precio, cantidades ni condiciones comerciales: esos datos van a PDC.
-2. **La validación de recepción lo necesita legible por el peer endosante del receptor.** La transición T04 exige que el chaincode compruebe que el invocador coincide con el destinatario declarado. Mantener el campo en el estado público evita hacer depender de una colección privada una comprobación que es de control de acceso, no de confidencialidad comercial.
+No hay necesidad técnica que justifique la excepción: el peer endosante del receptor puede leer datos privados de una PDC de la que su organización es miembro para ejecutar la validación de T04, igual que ya lo hace para leer/escribir factura y remito. Por eso se decide:
 
-Lo que sí permanece privado es el contexto documental y comercial de la operación (factura, remito, cantidades), conforme a la clasificación de ADR-002 (ver la sección siguiente). Esta decisión debe documentarse en la tesis como una interpretación consciente de la frontera de confidencialidad, coherente con la advertencia que ADR-002 ya hace sobre la lectura del artículo 9 de la Disposición 3683/2011.
+- `DestinatarioPendiente` se escribe y se lee desde la PDC de la operación (emisor + receptor declarado + `AnmatMSP`), nunca desde el estado público del canal.
+- El estado público del canal solo revela, durante el tránsito, que la unidad está en `EN_TRANSITO` y que `CustodioActual` sigue siendo el emisor — consistente con lo que ADR-002 ya clasificó como público — sin identificar al destinatario intentado.
+- `AnmatMSP` conserva visibilidad completa del destinatario declarado por ser miembro de la PDC de toda operación, preservando la auditabilidad regulatoria que motivó adoptar la alternativa A.
+
+Esta decisión no requiere modificar la clasificación de ADR-002: el destinatario declarado queda comprendido, desde el inicio, en la categoría de "dato que permite inferir relaciones... entre partes específicas" que ADR-002 ya asigna a PDC — no es una excepción a esa regla, sino una aplicación directa de ella que una versión anterior de este documento había pasado por alto.
 
 ## Referencias documentales de la operación
 
@@ -79,8 +87,8 @@ La Disposición ANMAT 3683/2011 exige que la documentación comercial respaldato
 
 ADR-002 los clasifica explícitamente como privados: "número de factura o remito" forma parte de la "información comercial y documental" que se almacena en Private Data Collections, no en el estado público del canal.
 
-Esta ADR confirma esa clasificación para ambas operaciones:
-- **Despacho**: el emisor escribe en la PDC de la operación el número de remito/factura, cantidades despachadas y demás datos documentales exigidos. La membresía de la colección incluye al emisor, al receptor declarado y a `AnmatMSP`.
+Esta ADR confirma esa clasificación para ambas operaciones, y agrega el destinatario declarado (`DestinatarioPendiente`, ver "Por qué DestinatarioPendiente no es estado público") al mismo contexto privado:
+- **Despacho**: el emisor escribe en la PDC de la operación el identificador canónico del destinatario declarado, el número de remito/factura, cantidades despachadas y demás datos documentales exigidos. La membresía de la colección incluye al emisor, al receptor declarado y a `AnmatMSP`.
 - **Recepción**: el receptor puede agregar al mismo contexto privado la confirmación de los datos documentales, o crear una entrada diferenciada si la normativa exige registro separado de la recepción.
 
 El diseño concreto de las colecciones (nombres, política de membresía, persistencia del hash en el ledger compartido) queda para NET-5, tal como establece ADR-002.
@@ -89,18 +97,19 @@ El diseño concreto de las colecciones (nombres, política de membresía, persis
 
 El rechazo en recepción es la transición T05 de ADR-001: `EN_TRANSITO → DEVUELTO`, invocada por `DESTINATION_AGENT` o `CURRENT_CUSTODIAN`. El chaincode valida que quien invoca sea la organización declarada como destinatario o el emisor, y que la causa de rechazo esté documentada.
 
-`DEVUELTO` es un estado no terminal de ADR-001 con las siguientes transiciones disponibles: `REINGRESAR_STOCK` (T25), `RETIRAR_MERCADO` (T19), `PROHIBIR_PRODUCTO` (T20), `DISPONER_FINAL` (T33), `INFORMAR_ROBO` (T14), `INFORMAR_EXTRAVIO` (T15), `INFORMAR_DETERIORO` (T16). La issue EXT-4 (devolución entre actores ya en custodia confirmada) cubre el mismo estado destino pero a partir de T21/T22/T23/T24 — los estados `DEVUELTO` generados por T05 y por EXT-4 son semánticamente equivalentes y comparten las mismas transiciones de resolución.
+`DEVUELTO` es un estado no terminal de ADR-001 con las siguientes transiciones disponibles: `REINGRESAR_STOCK` (T25), `RETIRAR_MERCADO` (T19), `PROHIBIR_PRODUCTO` (T20), `DISPONER_FINAL` (T33), `INFORMAR_ROBO` (T14), `INFORMAR_EXTRAVIO` (T15), `INFORMAR_DETERIORO` (T16). La issue EXT-4 (devolución entre actores ya en custodia confirmada) cubre el mismo estado destino pero a partir de T21/T22/T23/T24. Esta ADR no define si ambos orígenes de `DEVUELTO` deben tratarse como semánticamente equivalentes en el chaincode: distinguir un rechazo en tránsito (nunca hubo cambio de custodia confirmado) de una devolución tras custodia confirmada es una decisión que corresponde a EXT-4, que aún debe modelar entrega, recepción y reversión de custodia. Esta ADR solo deja constancia de que ambos caminos comparten el mismo estado destino y, por lo tanto, las mismas transiciones de resolución listadas arriba.
 
 ## Consecuencias
 
 - **Para ADR-001**: no se requieren cambios. La alternativa A confirma la existencia de `EN_TRANSITO` y las transiciones T02–T05, que ADR-001 ya define. Esta ADR resuelve la única pregunta que ADR-001 dejó abierta (dos transacciones vs. atómica); el cambio de estado de ADR-001 queda a criterio del proceso de aprobación del equipo.
-- **Para DES-2 / modelo-datos.md**: el struct `MedicationUnit` debe agregar el campo `DestinatarioPendiente string` con valor `""` fuera de `EN_TRANSITO`. La sección 5 de modelo-datos.md puede cerrar la dependencia abierta hacia DES-9.
-- **Para DES-5 (issue #11)**: el contrato público del chaincode debe exponer dos operaciones distintas para la transferencia: una de despacho (invocable por el emisor) y otra de recepción (invocable solo por el destinatario declarado). Las firmas exactas, parámetros, errores y payloads quedan para DES-5.
-- **Para CC-3 y BASE-2**: la implementación del chaincode y del baseline debe respetar el modelo de dos transacciones para que la comparación cuantitativa de DES-7 mida los mismos procesos en ambos prototipos.
-- **Para NET-5 / ADR-002**: las colecciones privadas deben cubrir tanto el evento de despacho como el de recepción, con el mismo esquema de membresía (partes de la operación + `AnmatMSP`).
-- **Se gana**: fidelidad normativa, auditabilidad del hecho separado de cada parte, soporte de rechazo en recepción sin mecanismos externos.
-- **Se pierde / costo**: mayor complejidad de implementación; la ventana de tiempo en `EN_TRANSITO` debe manejarse correctamente ante eventos extraordinarios (T09, T13–T16 de ADR-001).
-- **Queda pendiente**: el mecanismo de idempotencia para el caso en que el receptor invoque `ReceiveTransfer` más de una vez, y el comportamiento esperado si el despacho queda en `EN_TRANSITO` de forma indefinida sin que el receptor confirme ni rechace (queda fuera del alcance del prototipo salvo que una issue específica lo incorpore).
+- **Para DES-2 / modelo-datos.md**: el struct público `MedicationUnit` **no** agrega un campo `DestinatarioPendiente`. El identificador del destinatario declarado se persiste en la PDC de la operación (ver "Por qué DestinatarioPendiente no es estado público"), no en el estado público del canal. La sección 5 de modelo-datos.md puede cerrar la dependencia abierta hacia DES-9 con esta aclaración.
+- **Para DES-5 (issue #11)**: el contrato público del chaincode debe exponer dos operaciones distintas para la transferencia: una de despacho (invocable por el emisor) y otra de recepción (invocable solo por el destinatario declarado, validado contra la PDC de la operación). Las firmas exactas, parámetros, errores y payloads quedan para DES-5.
+- **Para DES-6 / docs/organizations-roles-endorsement.md**: la transacción de recepción (T04) requiere endoso conjunto de la organización emisora y la receptora, conforme a "Endoso" más arriba; DES-6 debe reflejar esto en su tabla de políticas por clase de operación si aún no cubre el caso de confirmación de custodia entre dos organizaciones no-ANMAT.
+- **Para CC-3 (issue #16) y BASE-2 (issue #38)**: la implementación del chaincode y del baseline debe respetar el modelo de dos transacciones para que la comparación cuantitativa de DES-7 mida los mismos procesos en ambos prototipos. Esta ADR deja registrada la dependencia; actualizar los criterios de aceptación de CC-3 y BASE-2 para que mencionen explícitamente despacho/recepción como dos transacciones es un pendiente de la issue #57 y no queda resuelto por este documento.
+- **Para NET-5 / ADR-002**: las colecciones privadas deben cubrir despacho y recepción, con el mismo esquema de membresía (emisor + receptor declarado + `AnmatMSP`), e incluir ahora también el identificador del destinatario declarado, no solo los datos documentales.
+- **Se gana**: fidelidad normativa, auditabilidad del hecho separado de cada parte, soporte de rechazo en recepción sin mecanismos externos, sin exponer en estado público relaciones emisor-destinatario no consumadas.
+- **Se pierde / costo**: mayor complejidad de implementación; la ventana de tiempo en `EN_TRANSITO` debe manejarse correctamente ante eventos extraordinarios (T09, T13–T16 de ADR-001); la validación de recepción depende de acceso a PDC en vez de estado público, lo que ata su disponibilidad al diseño concreto de NET-5.
+- **Queda pendiente**: el mecanismo de idempotencia para el caso en que el receptor invoque la operación de recepción más de una vez, y el comportamiento esperado si el despacho queda en `EN_TRANSITO` de forma indefinida sin que el receptor confirme ni rechace (queda fuera del alcance del prototipo salvo que una issue específica lo incorpore).
 
 ## Contexto utilizado
 
@@ -108,6 +117,7 @@ El rechazo en recepción es la transición T05 de ADR-001: `EN_TRANSITO → DEVU
 - [ADR-001: Máquina de estados del medicamento](001-maquina-estados-medicamento.md): fuente de los estados `EN_TRANSITO`, `DEVUELTO` y las transiciones T02–T05, T09, T13–T16.
 - [ADR-002: Topología de canales](002-topologia-canales.md): clasificación de factura/remito como datos privados de PDC.
 - [ADR-003: Identidad de establecimientos mediante GLN/CUFE](003-establishment-identity-gln-cufe.md): base para validar existencia y habilitación del destinatario declarado.
-- [DES-2 / docs/modelo-datos.md](../modelo-datos.md): dependencia abierta resuelta por esta ADR mediante el campo `DestinatarioPendiente`.
+- [DES-2 / docs/modelo-datos.md](../modelo-datos.md): dependencia abierta resuelta por esta ADR — el destinatario declarado se persiste en PDC, no en el struct público.
+- [DES-6 / docs/organizations-roles-endorsement.md](../organizations-roles-endorsement.md): base de la política de endoso citada en "Endoso"; esta ADR fija quién invoca cada transacción, DES-6 fija quién la endosa.
 - Disposición ANMAT 3683/2011, artículo 8: enumera distribución al siguiente eslabón y recepción en establecimiento como movimientos logísticos separados con agentes detonantes distintos. URL: https://www.argentina.gob.ar/normativa/nacional/disposici%C3%B3n-3683-2011-182665/actualizacion
 - Resolución MS 435/2011, artículo 1: exige que cada agente implemente un sistema de trazabilidad que permita el control y seguimiento de las unidades. URL: https://www.argentina.gob.ar/normativa/nacional/resoluci%C3%B3n-435-2011-180934/texto
