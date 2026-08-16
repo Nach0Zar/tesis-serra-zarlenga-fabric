@@ -1,6 +1,6 @@
 # ADR-001: Máquina de estados del medicamento
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-08-07
 - **Autores**: Serra, Zarlenga
 
@@ -107,6 +107,8 @@ Los actores de esta ADR son roles lógicos de dominio. No representan MSP compar
 | `DEVUELTO` | Bloqueante no terminal | Unidad entregada/recibida en carácter de devolución y pendiente de verificación o resolución. | Reingresar a stock, retirar/prohibir si corresponde o disponer final. |
 | `DISPENSADO` | Terminal | Unidad entregada al paciente dentro del alcance del SNT. | Ninguna transición de negocio posterior en el prototipo. |
 | `DISPUESTO_FINAL` | Terminal | Unidad destruida, descartada o sometida a disposición final autorizada. | Ninguna transición de negocio posterior. |
+
+La columna "Operaciones ordinarias permitidas" es un resumen descriptivo no exhaustivo: omite algunas transiciones extraordinarias que sí están declaradas (por ejemplo, desde `EN_CUARENTENA` también proceden `REINGRESAR_STOCK`, `INFORMAR_VENCIMIENTO`, `INFORMAR_ROBO`, `INFORMAR_EXTRAVIO` e `INFORMAR_DETERIORO`, y desde `DEVUELTO` también los tres últimos). La fuente de verdad de las transiciones es exclusivamente la tabla de la sección "Transiciones".
 
 ## Transiciones
 

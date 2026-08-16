@@ -47,6 +47,8 @@ Se adopta el **modelo B: una organización Fabric (MSP) por establecimiento**, i
 3. El ledger mantiene un registro liviano que traduce el identificador interno de organización (`mspId`) al identificador canónico de dominio (GLN o CUFE), junto con su categoría normativa (`agentType`) y su estado de habilitación (`active`).
 4. El custodio persistido en los assets es el identificador canónico `GLN:<13 dígitos>` o `CUFE:<13 dígitos>`, resuelto a partir del `mspId` del invocador mediante el registro. El `mspId` no se persiste como custodio.
 
+**Nota de simplificación sobre CUFE**: el relevamiento normativo del proyecto acota el CUFE a los laboratorios de producción pública (los agentes laboratorio, distribuidora, operador logístico y droguería se registran con GLN de GS1 Argentina). El prototipo acepta `CUFE:` como identificador canónico para cualquier `agentType` como simplificación consciente; una implementación productiva debería validar que `idType=CUFE` solo acompañe establecimientos habilitados para usarlo. Esta simplificación debe listarse entre las limitaciones del prototipo.
+
 Se decide no acoplar el identificador de dominio (GLN/CUFE) al nombre interno de la MSP en la configuración de red. El nombre de la MSP es un detalle de configuración de Fabric; el registro en el ledger es la única fuente de verdad que vincula ese nombre con el identificador regulatorio. Esto permite operar renombrados o migraciones de configuración de red sin alterar el identificador de dominio que ya quedó persistido en el historial de custodia.
 
 ## Registro de organización-establecimiento

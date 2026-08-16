@@ -1,6 +1,6 @@
 # DES-6: Organizaciones, MSP, roles, ABAC y politicas de endoso
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-08-09
 - **Autores**: Serra, Zarlenga
 
@@ -45,9 +45,10 @@ Se adopta el siguiente modelo:
 3. `AnmatMSP` es una organizacion regulatoria diferenciada. No representa un
    custodio ordinario de medicamentos; su alcance es auditoria, administracion
    regulatoria del prototipo y eventos extraordinarios.
-4. `FinanciadorMSP` es una organizacion no custodial. Su comportamiento concreto
-   queda reservado para DES-10 y CC-8; DES-6 solo fija que no participa en la
-   matriz de transferencias ordinarias ni puede actuar como custodio.
+4. `FinanciadorMSP` es una organizacion no custodial. Su comportamiento quedo
+   definido por ADR-005: verificador de trazabilidad de solo lectura, posterior
+   a la dispensa, sin escrituras ni custodia; no participa en la matriz de
+   transferencias ordinarias.
 5. La identidad de establecimiento se obtiene desde `cid.GetMSPID()` y se
    resuelve contra el registro organizacion-establecimiento de ADR-003. DES-6 no
    usa atributos X.509 para resolver GLN/CUFE.
@@ -89,7 +90,7 @@ Las organizaciones no custodiales no deben resolverse como custodios de assets:
 | MSP | Tipo | Alcance DES-6 |
 |---|---|---|
 | `AnmatMSP` | Autoridad regulatoria | Auditoria, administracion regulatoria y eventos extraordinarios. |
-| `FinanciadorMSP` | Organismo financiador | Reserva de lectura/verificacion futura para DES-10/CC-8; sin transferencia ni custodia. |
+| `FinanciadorMSP` | Organismo financiador | Lectura/verificacion de trazabilidad conforme ADR-005; sin transferencia ni custodia. |
 
 DES-6 no define una forma permanente de nombrar MSP productivas. El nombre MSP es
 un identificador tecnico de Fabric; el identificador persistido en assets y
@@ -117,8 +118,10 @@ Reglas de autorizacion:
   para operar.
 - `AnmatMSP` puede auditar y ejecutar operaciones regulatorias, pero no se
   convierte por eso en custodio ordinario.
-- `FinanciadorMSP` no puede invocar operaciones de transferencia, dispensacion o
-  eventos extraordinarios hasta que DES-10/CC-8 definan su comportamiento.
+- `FinanciadorMSP` no puede invocar operaciones de transferencia, dispensacion
+  ni eventos extraordinarios; conforme ADR-005 opera exclusivamente con
+  operaciones de lectura sobre el estado publico y el historial (implementacion
+  en CC-8).
 - DES-6 no define nombres de funciones, requests, responses ni errores. Esas
   decisiones pertenecen a DES-5.
 

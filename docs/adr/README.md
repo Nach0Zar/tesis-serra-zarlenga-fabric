@@ -7,7 +7,7 @@ Este directorio contiene las decisiones de arquitectura que guían el diseño y 
 | Archivo | Estado | Descripción |
 |---|---|---|
 | [`000-template.md`](000-template.md) | Plantilla | Estructura base para nuevos ADRs. |
-| [`001-maquina-estados-medicamento.md`](001-maquina-estados-medicamento.md) | Propuesto | ADR-001: máquina de estados del medicamento, eventos, actores lógicos, precondiciones y estados terminales. |
+| [`001-maquina-estados-medicamento.md`](001-maquina-estados-medicamento.md) | Aceptado | ADR-001: máquina de estados del medicamento, eventos, actores lógicos, precondiciones y estados terminales. |
 | [`002-topologia-canales.md`](002-topologia-canales.md) | Aceptado (revisión 3) | ADR-002: topología de canales y uso de Private Data Collections. |
 | [`003-establishment-identity-gln-cufe.md`](003-establishment-identity-gln-cufe.md) | Aceptado (revisión 2) | ADR-003: identidad de establecimientos mediante GLN/CUFE y organización Fabric por establecimiento. |
 | [`004-transfer-dispatch-reception.md`](004-transfer-dispatch-reception.md) | Aceptado | ADR-004: transferencia como dos transacciones separadas (despacho/recepción); semántica de `DestinatarioPendiente`. |
