@@ -1,7 +1,9 @@
 # Contrato de interfaz del chaincode `snt`
 
-- **Versión del contrato**: `1.0.0`
+- **Versión del contrato**: `2.0.0` (breaking change respecto de `1.0.0` — ver "Política de versionado y congelamiento" y la nota de conflicto con ADR-004 al final de esta sección)
 - **Estado**: Congelado. Los cambios se rigen por la política de versionado (última sección): un cambio incompatible exige un PR etiquetado `breaking-change` y aprobación explícita de B.
+
+> **Nota de este cambio (pendiente de aprobación explícita de B, no mergeado)**: la versión `1.0.0` de este contrato definía `destino` como argumento público de `DispatchTransfer` y `destinatarioPendiente` como campo público de `MedicationUnitView`. ADR-004 (revisión posterior a la primera versión de este contrato) decidió que el destinatario declarado durante el tránsito es un dato privado que debe viajar por `transient` y persistirse en PDC, no en estado público. Esta versión `2.0.0` alinea el contrato con esa decisión. Al tratarse de un cambio incompatible sobre un documento marcado "Congelado", requiere el mismo PR `breaking-change` y aprobación de B que exige cualquier otro cambio de firma — no se considera aprobado por el solo hecho de estar escrito acá.
 - **Fecha**: 2026-08-13
 - **Autores**: Serra, Zarlenga
 
@@ -18,7 +20,7 @@ No define: la implementación interna del chaincode, el `configtx.yaml`, el mate
 | [ADR-001](adr/001-maquina-estados-medicamento.md) | Estados y transiciones (T01–T33). Cada operación de escritura corresponde a una o más transiciones; el chaincode rechaza cualquier transición no declarada. |
 | [ADR-002](adr/002-topologia-canales.md) | Separación estado público / datos comerciales. Los datos comerciales y documentales viajan por el campo `transient` y van a PDC, nunca como argumentos públicos. |
 | [ADR-003](adr/003-establishment-identity-gln-cufe.md) | Identidad por `cid.GetMSPID()` resuelta contra el registro. El custodio no viaja como parámetro cuando el invocador actúa como custodio; el destino de una transferencia sí. |
-| [ADR-004](adr/004-transfer-dispatch-reception.md) | La transferencia son dos operaciones: `DispatchTransfer` y `ReceiveTransfer`, más `RejectTransfer`. **Dependencia de merge**: ADR-004 (DES-9) todavía no está en `develop`; este contrato lo asume decidido. |
+| [ADR-004](adr/004-transfer-dispatch-reception.md) | La transferencia son dos operaciones: `DispatchTransfer` y `ReceiveTransfer`, más `RejectTransfer`. El destinatario declarado viaja por `transient` y se valida contra PDC, nunca como argumento público ni campo de `MedicationUnitView`. **Dependencia de merge**: ADR-004 (DES-9) todavía no está en `develop`; este contrato lo asume decidido. |
 | [ADR-005](adr/005-rol-organismo-financiador.md) | El organismo financiador solo invoca operaciones de lectura. **Dependencia de merge**: ADR-005 (DES-10) todavía no está en `develop`. |
 | [modelo-datos.md](modelo-datos.md) | Struct `MedicationUnit`, clave compuesta GTIN+serie, `fechaVencimiento` en ISO 8601, `ultimaActualizacion` por `GetTxTimestamp()`. |
 | [organizations-roles-endorsement.md (DES-6)](organizations-roles-endorsement.md) | Autorización por `agentType`, `active` y `snt.role`, y política de endoso por operación. |
@@ -39,14 +41,15 @@ No define: la implementación interna del chaincode, el `configtx.yaml`, el mate
 - El identificador canónico persistido es `GLN:<13 dígitos>` o `CUFE:<13 dígitos>`.
 - El timestamp de toda escritura se obtiene de `ctx.GetStub().GetTxTimestamp()`, nunca de `time.Now()` (determinismo de endoso — `modelo-datos.md` §3.5).
 
-### Datos privados (ADR-002)
+### Datos privados (ADR-002, ADR-004)
 
 - La información comercial y documental (número de remito, número de factura, cantidades, condiciones) **nunca** viaja como argumento público. Se envía por el campo `transient` de la propuesta, bajo la clave `commercial`, con un objeto JSON.
-- El contrato fija que ese dato va a una PDC; el nombre y la política de la colección los define NET-5. El estado público nunca contiene datos comerciales.
+- El identificador del destinatario declarado en una transferencia (`DispatchTransfer`) **tampoco** viaja como argumento público, por la misma razón: revela una relación emisor→receptor no consumada (ADR-004). Se envía por `transient`, bajo la clave `destinatario`, con un objeto JSON `{ "destino": "GLN:..." }`.
+- El contrato fija que esos datos van a PDC; el nombre y la política de la(s) colección(es) los define NET-5, con membresía emisor + receptor declarado + `AnmatMSP` para la operación de transferencia (ADR-004). El estado público nunca contiene datos comerciales ni el destinatario declarado.
 
 ### Vista pública de la unidad (`MedicationUnitView`)
 
-Es el response de todas las operaciones de escritura sobre una unidad y de `ReadUnit`. Refleja el estado público del canal (`modelo-datos.md` §3, incluyendo `destinatarioPendiente` de ADR-004):
+Es el response de todas las operaciones de escritura sobre una unidad y de `ReadUnit`. Refleja el estado público del canal (`modelo-datos.md` §3). **No incluye** el destinatario declarado durante una transferencia en curso: ADR-004 decidió que ese dato es privado y vive en PDC, no en el struct público — ver "Datos privados (ADR-002, ADR-004)".
 
 ```json
 {
@@ -55,7 +58,6 @@ Es el response de todas las operaciones de escritura sobre una unidad y de `Read
   "lote": "L2026-014",
   "fechaVencimiento": "2027-12-31",
   "custodioActual": "GLN:7791234500017",
-  "destinatarioPendiente": "",
   "estado": "EN_CUSTODIA",
   "ultimaActualizacion": "2026-08-13T14:32:10Z"
 }
@@ -93,7 +95,7 @@ Toda operación que falla devuelve un `error` cuyo mensaje es un objeto JSON con
 | `TRANSFER_NOT_AUTHORIZED` | El par origen → destino no está permitido por la matriz de DES-3. |
 | `INVALID_DESTINATION` | El destino declarado no existe, está inactivo o su `agentType` es incompatible. |
 | `NOT_IN_TRANSIT` | Se intentó recibir o rechazar una unidad que no está en `EN_TRANSITO`. |
-| `RECEIVER_MISMATCH` | El invocador de la recepción no coincide con `destinatarioPendiente`. |
+| `RECEIVER_MISMATCH` | El invocador de la recepción/rechazo no coincide con el destinatario declarado en la PDC de la operación (ADR-004). |
 | `REGULATORY_ONLY` | La operación exige `AnmatMSP` (o coendoso regulatorio) y el invocador no lo satisface. |
 | `INTERNAL_ERROR` | Error no clasificable atribuible al chaincode o a la plataforma. |
 
@@ -131,12 +133,19 @@ func (c *SNTContract) DispatchTransfer(ctx contractapi.TransactionContextInterfa
 - **Transición**: T02 (desde `EN_LABORATORIO`) o T03 (desde `EN_CUSTODIA`). Estado resultante: `EN_TRANSITO`.
 - **Autorización**: invocador = custodio actual, `active=true`, `snt.role=operator`; par origen → destino permitido por DES-3.
 - **Endoso**: origen y destino de la transferencia (DES-6).
-- **Request** (público): el destino se identifica por su identificador canónico o su `mspId`.
+- **Request** (público): solo referencia la unidad. El destino **no** viaja acá — ver `transient` abajo (ADR-004).
 
 ```json
 {
   "gtin": "07791234567890",
-  "numeroSerie": "SN-0001-ABCD",
+  "numeroSerie": "SN-0001-ABCD"
+}
+```
+
+- **Transient** (privado → PDC), clave `destinatario`: el destino se identifica por su identificador canónico o su `mspId`.
+
+```json
+{
   "destino": "GLN:7791234500017"
 }
 ```
@@ -151,7 +160,7 @@ func (c *SNTContract) DispatchTransfer(ctx contractapi.TransactionContextInterfa
 }
 ```
 
-- **Response**: `MedicationUnitView` con `estado=EN_TRANSITO`, `custodioActual` sin cambios (el emisor) y `destinatarioPendiente` igual al destino.
+- **Response**: `MedicationUnitView` con `estado=EN_TRANSITO` y `custodioActual` sin cambios (el emisor). El destino declarado no se refleja en la vista pública (ADR-004); el cliente que lo declaró ya lo conoce.
 - **Errores**: `INVALID_REQUEST`, `UNIT_NOT_FOUND`, `UNAUTHORIZED_CUSTODIAN`, `UNAUTHORIZED_ROLE`, `INVALID_STATE_TRANSITION`, `TRANSFER_NOT_AUTHORIZED`, `INVALID_DESTINATION`.
 
 ### `ReceiveTransfer`
@@ -161,10 +170,10 @@ func (c *SNTContract) ReceiveTransfer(ctx contractapi.TransactionContextInterfac
 ```
 
 - **Transición**: T04. Estado resultante: `EN_CUSTODIA`.
-- **Autorización**: invocador = `destinatarioPendiente`, `active=true`, `snt.role=operator`.
+- **Autorización**: invocador = destinatario declarado en la PDC de la operación (ADR-004), `active=true`, `snt.role=operator`.
 - **Endoso**: origen y destino (DES-6).
 - **Request**: `UnitRefRequest` (`gtin`, `numeroSerie`). Puede acompañarse de `transient` clave `commercial` con la confirmación documental de recepción.
-- **Response**: `MedicationUnitView` con `custodioActual` = el receptor, `destinatarioPendiente` vacío y `estado=EN_CUSTODIA`.
+- **Response**: `MedicationUnitView` con `custodioActual` = el receptor y `estado=EN_CUSTODIA`.
 - **Errores**: `UNIT_NOT_FOUND`, `NOT_IN_TRANSIT`, `RECEIVER_MISMATCH`, `UNAUTHORIZED_ROLE`.
 
 ### `RejectTransfer`
@@ -174,10 +183,10 @@ func (c *SNTContract) RejectTransfer(ctx contractapi.TransactionContextInterface
 ```
 
 - **Transición**: T05. Estado resultante: `DEVUELTO`.
-- **Autorización**: invocador = `destinatarioPendiente` (destino) o custodio actual (emisor), `snt.role=operator`.
+- **Autorización**: invocador = destinatario declarado en la PDC de la operación (ADR-004) o custodio actual (emisor), `snt.role=operator`.
 - **Endoso**: origen y destino (DES-6).
 - **Request**: `UnitEventRequest` (`gtin`, `numeroSerie`, `motivo`).
-- **Response**: `MedicationUnitView` con `estado=DEVUELTO`, `custodioActual` = el emisor (la unidad rechazada vuelve al remitente) y `destinatarioPendiente` vacío.
+- **Response**: `MedicationUnitView` con `estado=DEVUELTO` y `custodioActual` = el emisor (la unidad rechazada vuelve al remitente).
 - **Errores**: `UNIT_NOT_FOUND`, `NOT_IN_TRANSIT`, `UNAUTHORIZED_ROLE`, `INVALID_REQUEST`.
 
 ### `Dispense`
@@ -327,8 +336,11 @@ func (c *SNTContract) QueryUnitsByGTIN(ctx contractapi.TransactionContextInterfa
 // UnitEventRequest
 { "gtin": "string", "numeroSerie": "string", "motivo": "string" }
 
-// DispatchTransferRequest
-{ "gtin": "string", "numeroSerie": "string", "destino": "string (GLN:/CUFE:/mspId)" }
+// DispatchTransferRequest (público — no incluye destino, ver transient clave "destinatario")
+{ "gtin": "string", "numeroSerie": "string" }
+
+// DispatchTransferTransientDestinatario (transient, clave "destinatario")
+{ "destino": "string (GLN:/CUFE:/mspId)" }
 
 // RegisterUnitRequest
 { "gtin": "string", "numeroSerie": "string", "lote": "string", "fechaVencimiento": "string (ISO 8601)" }
@@ -342,6 +354,7 @@ func (c *SNTContract) QueryUnitsByGTIN(ctx contractapi.TransactionContextInterfa
   - **MINOR**: agregados compatibles (nueva operación, nuevo campo opcional en un request, nuevo `code`).
   - **MAJOR**: cambio incompatible (renombrar o quitar una función o campo, cambiar un tipo, cambiar la semántica de un `code`). Exige un PR etiquetado `breaking-change`.
 - Todo cambio a este documento requiere aprobación explícita de B antes del merge, según la story DES-5.
-- Dependencias de merge pendientes: este contrato asume ADR-004 (transferencia en dos operaciones) y ADR-005 (financiador de solo lectura), cuyos PRs aún no están en `develop`. Si alguna de esas decisiones cambiara antes de integrarse, las operaciones de transferencia o la nota del financiador deben revisarse aquí.
+- Dependencias de merge pendientes: este contrato asume ADR-004 (transferencia en dos operaciones, destinatario declarado en PDC) y ADR-005 (financiador de solo lectura), cuyos PRs aún no están en `develop`. Si alguna de esas decisiones cambiara antes de integrarse, las operaciones de transferencia o la nota del financiador deben revisarse aquí.
+- **Historial de cambios incompatibles**: `2.0.0` — el destino de `DispatchTransfer` pasa de argumento público a `transient` (clave `destinatario`), y `destinatarioPendiente` se elimina de `MedicationUnitView`, para alinear el contrato con la revisión de ADR-004 que clasifica el destinatario declarado como dato privado (PDC), no público. Pendiente de aprobación explícita de B antes de mergear, conforme a esta misma política.
 ```
 
