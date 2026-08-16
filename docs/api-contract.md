@@ -1,9 +1,7 @@
 # Contrato de interfaz del chaincode `snt`
 
-- **Versión del contrato**: `2.0.0` (breaking change respecto de `1.0.0` — ver "Política de versionado y congelamiento" y la nota de conflicto con ADR-004 al final de esta sección)
+- **Versión del contrato**: `2.0.0`
 - **Estado**: Congelado. Los cambios se rigen por la política de versionado (última sección): un cambio incompatible exige un PR etiquetado `breaking-change` y aprobación explícita de B.
-
-> **Nota de este cambio (pendiente de aprobación explícita de B, no mergeado)**: la versión `1.0.0` de este contrato definía `destino` como argumento público de `DispatchTransfer` y `destinatarioPendiente` como campo público de `MedicationUnitView`. ADR-004 (revisión posterior a la primera versión de este contrato) decidió que el destinatario declarado durante el tránsito es un dato privado que debe viajar por `transient` y persistirse en PDC, no en estado público. Esta versión `2.0.0` alinea el contrato con esa decisión. Al tratarse de un cambio incompatible sobre un documento marcado "Congelado", requiere el mismo PR `breaking-change` y aprobación de B que exige cualquier otro cambio de firma — no se considera aprobado por el solo hecho de estar escrito acá.
 - **Fecha**: 2026-08-13
 - **Autores**: Serra, Zarlenga
 
@@ -355,6 +353,6 @@ func (c *SNTContract) QueryUnitsByGTIN(ctx contractapi.TransactionContextInterfa
   - **MAJOR**: cambio incompatible (renombrar o quitar una función o campo, cambiar un tipo, cambiar la semántica de un `code`). Exige un PR etiquetado `breaking-change`.
 - Todo cambio a este documento requiere aprobación explícita de B antes del merge, según la story DES-5.
 - Dependencias de merge pendientes: este contrato asume ADR-004 (transferencia en dos operaciones, destinatario declarado en PDC) y ADR-005 (financiador de solo lectura), cuyos PRs aún no están en `develop`. Si alguna de esas decisiones cambiara antes de integrarse, las operaciones de transferencia o la nota del financiador deben revisarse aquí.
-- **Historial de cambios incompatibles**: `2.0.0` — el destino de `DispatchTransfer` pasa de argumento público a `transient` (clave `destinatario`), y `destinatarioPendiente` se elimina de `MedicationUnitView`, para alinear el contrato con la revisión de ADR-004 que clasifica el destinatario declarado como dato privado (PDC), no público. Pendiente de aprobación explícita de B antes de mergear, conforme a esta misma política.
+- **Historial de cambios incompatibles**: `2.0.0` — el destino de `DispatchTransfer` pasa de argumento público a `transient` (clave `destinatario`), y `destinatarioPendiente` se elimina de `MedicationUnitView`, para alinear el contrato con la revisión de ADR-004 que clasifica el destinatario declarado como dato privado (PDC), no público.
 ```
 
