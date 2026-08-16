@@ -30,12 +30,15 @@ Para que cualquier agente ubique rápido qué existe y qué falta:
 | DES-9 | `adr/004-transfer-dispatch-reception.md` | Existe |
 | DES-10 | `adr/005-rol-organismo-financiador.md` | Existe |
 | DES-11 | Validación contra Vademécum/REM | Resuelto como exclusión en `alcance-prototipo.md` |
-| NET-5 | Diseño de colecciones privadas | **Falta → D1** |
-| NET-2/4/6 | Topología física de red, canal, endoso materializado | **Falta → D2** |
-| EXT-4 | Devolución entre actores | **Falta → D4** |
-| CC-8 | Verificación de traza del financiador | Prerequisito conceptual **falta → D6** |
-| BASE-* | Baseline centralizada | Diseño **falta → D7** |
-| CC-*/BENCH | Implementación chaincode / benchmarks | Bloqueados por D1–D3, D8 |
+| DES-12 | ADR-006: Diseño de colecciones privadas | **D1 → issue #81** |
+| DES-13 | ADR-007: Topología física de la red | **D2 → issue #82** |
+| DES-14 | ADR-008: Matriz DES-3 en chaincode/baseline | **D3 → issue #83** |
+| DES-15 | ADR-009: Devolución y custodia en DEVUELTO | **D4 → issue #84** (desbloquea EXT-4 #30) |
+| DES-16 | ADR-010: Identidad de no custodiales | **D5 → issue #85** |
+| DES-17 | ADR-011: Verificación de traza del financiador | **D6 → issue #86** (desbloquea CC-8 #62) |
+| DES-18 | ADR-012: Diseño de la baseline | **D7 → issue #87** |
+| NET-5 (#24), NET-2 (#21), EXT-4 (#30), CC-8 (#62) | Issues de implementación | Actualizadas el 2026-08-16 con sus dependencias de decisión |
+| — | D8 (medición bifásica) y D9 (exclusiones de alcance) | **Resueltas el 2026-08-16** en `measurement-protocol.md` §3.4 y `alcance-prototipo.md` |
 
 ---
 

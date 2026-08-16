@@ -1,5 +1,11 @@
 # Revisión de congruencia del proyecto — 2026-08-16
 
+> **Estado de remediación (actualizado 2026-08-16, branch `fix/consistency-review`)**
+>
+> - **Resueltos en el repo**: C1 (template real), C2+E8a (CI con filtro de paths, actions v7, payloads alineados al contrato), C3/C4/C6/C9/C10 (api-contract 2.0.1, vía PR #80), C7 (ADR-001 y DES-6 Aceptados), C8 (nota en tabla de estados), C11 (READMEs reales), E1+D9 (exclusiones en alcance-prototipo), E3/D8 (measurement-protocol §3.4), E4 (DES-6 post-ADR-005), E6 (nota CUFE en ADR-003), E7-repo (lineamiento `motivo` en el contrato). Los pendientes de PR #78 (ciclo de vida de DestinatarioPendiente, invariante transient, aclaración de PDC lógica) quedaron resueltos en ADR-004.
+> - **Derivados a decisión (issues #81–#87)**: C5 → DES-15 (#84); E5 → DES-16 (#85); E8b documentado como exclusión de alcance.
+> - **Requieren edición manual del trabajo escrito**: A1–A5, B1–B7, E2, E6/E7 (parte tesis) — instrucciones paso a paso en [`paper-update-instructions.md`](paper-update-instructions.md).
+
 Revisión estricta de congruencia entre el trabajo escrito (paper de congreso y avance de tesis, ambos en `docs/papers/`) y todos los artefactos del repositorio (ADRs, modelo de datos, DES-3, DES-6, contrato de API, protocolo de medición, CI). Cada hallazgo indica: **dónde está**, **qué está mal**, **por qué importa** y **cómo arreglarlo**, con el detalle suficiente para que pueda resolverlo un agente sin contexto previo.
 
 Convención de nombres usada acá (solo para poder señalar el lugar exacto del problema; en la documentación del repo se sigue citando "el paper del proyecto" de forma unificada):
