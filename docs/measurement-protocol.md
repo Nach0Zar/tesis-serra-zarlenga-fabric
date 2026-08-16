@@ -21,7 +21,7 @@ Operaciones core a medir:
 | Grupo | Operacion conceptual | Tipo | Observaciones |
 |---|---|---|---|
 | Registro | Registro de lote o unidades | Write | Debe representar el alta inicial por laboratorio. |
-| Transferencia | Transferencia de custodia | Write | Debe usar pares validos e invalidos derivados de la matriz regulatoria aprobada. |
+| Transferencia | Transferencia de custodia | Write | Debe usar pares validos e invalidos derivados de la matriz regulatoria aprobada. Conforme ADR-004, una transferencia son DOS transacciones: despacho y recepcion (ver seccion 3.4). |
 | Dispensacion | Dispensacion | Write | Debe cerrar el ciclo de una unidad dispensada sin persistir datos personales sensibles. |
 | Consulta puntual | Consulta de unidad | Read | Debe leer el estado actual de una unidad por identificador. |
 | Consulta de historial | Consulta de traza o historial | Read | Debe recuperar evidencia de trazabilidad/auditoria segun el contrato vigente. |
@@ -87,6 +87,16 @@ Para cada escenario de falla se debe reportar:
 - logs que expliquen la condicion de falla.
 
 **Tiempo de recuperacion**: intervalo entre la inyeccion de la falla y el primer tramo estable de 30 segundos en el que la tasa de exito vuelve al menos al 95% de la tasa previa a la falla.
+
+### 3.4 Unidad de medida de la transferencia (ADR-004)
+
+Conforme ADR-004, la transferencia de custodia se implementa como dos transacciones encadenadas: despacho (invocado por el emisor) y recepcion (invocada por el receptor). Para la medicion:
+
+- Cada transaccion se mide por separado, con su propia latencia write (confirmacion de commit) y su contribucion propia al throughput.
+- Se reporta ademas la metrica derivada **latencia end-to-end del par**: tiempo desde el envio del despacho hasta la confirmacion de commit de la recepcion correspondiente, ejecutando la recepcion inmediatamente despues de confirmado el despacho (sin espera artificial).
+- En los perfiles de carga, "1 operacion de transferencia" = 1 par completo despacho+recepcion = 2 transacciones write. Las tasas objetivo de transferencia se expresan en pares por segundo y la tasa efectiva de transacciones es el doble.
+- La baseline debe exponer y medir los mismos dos pasos con la misma semantica (BASE-2); de lo contrario la comparacion no mide los mismos procesos.
+- Los rechazos en recepcion (transicion T05) pertenecen a las rondas de rechazo esperado (seccion 6.5), no al camino feliz.
 
 ## 4. Dataset compartido
 
@@ -179,6 +189,8 @@ Objetivo: medir registro, transferencia y dispensacion por separado.
 
 Cada ronda debe usar `txDuration: 120`. La tasa efectiva observada debe registrarse junto con la tasa objetivo.
 
+Para la fila Transferencia valida, la tasa objetivo se expresa en pares despacho+recepcion por segundo; la tasa efectiva de transacciones write es aproximadamente el doble (seccion 3.4).
+
 ### 6.3 Lecturas
 
 Objetivo: medir consulta puntual e historial/traza.
@@ -206,6 +218,8 @@ Objetivo: medir un flujo representativo con operaciones combinadas.
 | Consulta | 25% |
 
 La mezcla exacta debe implementarse de forma deterministica a partir de la seed y del indice de worker para que Fabric y baseline reciban la misma secuencia conceptual.
+
+El 55% de transferencia valida se cuenta en pares completos despacho+recepcion (seccion 3.4).
 
 ### 6.5 Rechazos esperados
 
@@ -383,3 +397,4 @@ Antes de medir:
 - Hyperledger Caliper workload modules: <https://caliper-doc-trial.readthedocs.io/en/latest/overview/workload-module/>.
 - Hyperledger Caliper rate controllers: <https://caliper-doc-trial.readthedocs.io/en/latest/references/rate-controllers/>.
 - Hyperledger Fabric ordering service, release 2.5: <https://hyperledger-fabric.readthedocs.io/en/release-2.5/orderer/ordering_service.html>.
+- ADR-004 (docs/adr/004-transfer-dispatch-reception.md): modelo de dos transacciones que fija la unidad de medida de la transferencia.
