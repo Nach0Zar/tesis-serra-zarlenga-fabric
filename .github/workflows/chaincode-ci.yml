@@ -9,6 +9,9 @@ on:
       - synchronize
       - reopened
       - ready_for_review
+    paths:
+      - "chaincode/**"
+      - ".github/workflows/chaincode-ci.yml"
 
 permissions:
   contents: read
@@ -25,10 +28,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: chaincode/go.mod
           cache: true
@@ -53,10 +56,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: chaincode/go.mod
           cache: true
@@ -76,10 +79,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: chaincode/go.mod
           cache: true

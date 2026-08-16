@@ -9,6 +9,9 @@ on:
       - synchronize
       - reopened
       - ready_for_review
+    paths:
+      - "chaincode/**"
+      - ".github/workflows/chaincode-integration.yml"
 
   workflow_dispatch:
 
@@ -29,25 +32,24 @@ env:
   CHAINCODE_LANGUAGE: "go"
   CHAINCODE_VERSION: "1.0"
   CHAINCODE_SEQUENCE: "1"
-  #TODO: Descomentar y generar flow en base a ccodes
+  #TODO: Descomentar cuando exista test/integration/chaincode-e2e.sh (issue CC-3).
+  # Payloads alineados al contrato congelado docs/api-contract.md (v2.0.1):
+  # - Las escrituras reciben un único argumento JSON (`req`); el custodio NO viaja
+  #   como argumento: se resuelve del MSP del invocador (ADR-003).
+  # - La transferencia requiere dos pasos: `DispatchTransfer` con el destinatario
+  #   por el campo `transient` (clave `destinatario`, nunca como argumento público)
+  #   más `ReceiveTransfer` invocado por la organización destino (ADR-004). Ese
+  #   escenario E2E debe diseñarse cuando exista el chaincode (issue CC-3).
   # CREATE_PAYLOAD: >-
-  # {"function":"RegisterProduct","Args":["07795369000001","SERIAL-CI-001","LOT-2026-001","2027-12-31","LAB-001"]}
+  #   {"function":"RegisterUnit","Args":["{\"gtin\":\"07791234567898\",\"numeroSerie\":\"SERIAL-CI-001\",\"lote\":\"LOT-2026-001\",\"fechaVencimiento\":\"2027-12-31\"}"]}
 
   # READ_PAYLOAD: >-
-  #   {"function":"ReadProduct","Args":["07795369000001","SERIAL-CI-001"]}
-
-  # UPDATE_PAYLOAD: >-
-  #   {"function":"TransferCustody","Args":["07795369000001","SERIAL-CI-001","DROGUERIA-001"]}
+  #   {"function":"ReadUnit","Args":["07791234567898","SERIAL-CI-001"]}
 
   # EXPECTED_INITIAL_JQ: >-
-  #   .gtin == "07795369000001"
-  #   and .serialNumber == "SERIAL-CI-001"
-  #   and .custodian == "LAB-001"
-
-  # EXPECTED_UPDATED_JQ: >-
-  #   .gtin == "07795369000001"
-  #   and .serialNumber == "SERIAL-CI-001"
-  #   and .custodian == "DROGUERIA-001"
+  #   .gtin == "07791234567898"
+  #   and .numeroSerie == "SERIAL-CI-001"
+  #   and .estado == "EN_LABORATORIO"
 
 jobs:
   integration-test:
