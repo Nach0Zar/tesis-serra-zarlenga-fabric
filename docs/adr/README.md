@@ -11,6 +11,7 @@ Este directorio contiene las decisiones de arquitectura que guían el diseño y 
 | [`002-topologia-canales.md`](002-topologia-canales.md) | Aceptado (revisión 3) | ADR-002: topología de canales y uso de Private Data Collections. |
 | [`003-establishment-identity-gln-cufe.md`](003-establishment-identity-gln-cufe.md) | Aceptado (revisión 2) | ADR-003: identidad de establecimientos mediante GLN/CUFE y organización Fabric por establecimiento. |
 | [`004-transfer-dispatch-reception.md`](004-transfer-dispatch-reception.md) | Aceptado | ADR-004: transferencia como dos transacciones separadas (despacho/recepción); semántica de `DestinatarioPendiente`. |
+| [`005-rol-organismo-financiador.md`](005-rol-organismo-financiador.md) | Aceptado | ADR-005: rol del organismo financiador como verificador de trazabilidad de solo lectura, posterior a la dispensa. |
 
 ## Convenciones
 
