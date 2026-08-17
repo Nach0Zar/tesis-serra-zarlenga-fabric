@@ -12,6 +12,13 @@ Este directorio contiene las decisiones de arquitectura que guían el diseño y 
 | [`003-establishment-identity-gln-cufe.md`](003-establishment-identity-gln-cufe.md) | Aceptado (revisión 2) | ADR-003: identidad de establecimientos mediante GLN/CUFE y organización Fabric por establecimiento. |
 | [`004-transfer-dispatch-reception.md`](004-transfer-dispatch-reception.md) | Aceptado | ADR-004: transferencia como dos transacciones separadas (despacho/recepción); semántica de `DestinatarioPendiente`. |
 | [`005-rol-organismo-financiador.md`](005-rol-organismo-financiador.md) | Aceptado | ADR-005: rol del organismo financiador como verificador de trazabilidad de solo lectura, posterior a la dispensa. |
+| [`006-private-data-collections.md`](006-private-data-collections.md) | Propuesto | ADR-006: colecciones privadas explícitas por par de organizaciones, generadas programáticamente; claves y ciclo de vida del registro de operación. |
+| [`007-network-topology.md`](007-network-topology.md) | Propuesto | ADR-007: topología física — Raft de 3 orderers en 3 organizaciones, LevelDB, Fabric CA única, canal `snt-channel`, bootstrap y endoso por state-based endorsement. |
+| [`008-transfer-matrix-distribution.md`](008-transfer-matrix-distribution.md) | Propuesto | ADR-008: matriz DES-3 distribuida por `go:embed` y paquete Go compartido con la baseline; `ruleId` y versión persistidos por despacho. |
+| [`009-return-and-recovery-semantics.md`](009-return-and-recovery-semantics.md) | Propuesto | ADR-009: devolución como evento único sin cambio de custodia; `RECOVERY_OR_DISPOSAL_AGENT` resuelto como custodio actual. |
+| [`010-non-custodial-identity.md`](010-non-custodial-identity.md) | Propuesto | ADR-010: identidad de ANMAT y financiadores mediante `agentType` no custodiales en el registro; bootstrap regulatorio en la init del chaincode. |
+| [`011-financier-trace-verification.md`](011-financier-trace-verification.md) | Propuesto | ADR-011: checklist determinística de cinco comprobaciones y veredicto estructurado para la verificación de traza del financiador. |
+| [`012-baseline-design.md`](012-baseline-design.md) | Propuesto | ADR-012: baseline centralizada en Go + PostgreSQL con paquete compartido; checklist normativo de paridad funcional. |
 
 ## Convenciones
 

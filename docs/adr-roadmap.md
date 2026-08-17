@@ -1,7 +1,9 @@
 # Plan de decisiones de arquitectura pendientes (ADR roadmap)
 
-- **Fecha**: 2026-08-16
-- **Insumo**: revisión de congruencia completa del proyecto ([`consistency-review.md`](consistency-review.md)), los 5 ADRs vigentes, DES-2/3/5/6/7 y el trabajo escrito.
+- **Fecha**: 2026-08-16 (actualizado el 2026-08-17)
+- **Insumo**: revisión de congruencia completa del proyecto ([`consistency-review.md`](consistency-review.md)), los 5 ADRs vigentes al momento del relevamiento, DES-2/3/5/6/7 y el trabajo escrito.
+
+> **Estado: plan ejecutado.** Las siete decisiones D1–D7 quedaron registradas como ADR-006 a ADR-012 (estado *Propuesto*, pendientes de aprobación del equipo) y las dos decisiones documentales D8–D9 se aplicaron sobre `measurement-protocol.md` y `alcance-prototipo.md`. Este documento se conserva como registro del razonamiento que originó cada decisión y como checklist de sincronización con el trabajo escrito.
 
 Este documento lista las decisiones de diseño que **todavía no están tomadas** y que son necesarias para que el prototipo pueda implementarse y evaluarse sin improvisar, y para que la tesis final pueda defenderse sin huecos. No son correcciones (esas están en `consistency-review.md`): son decisiones nuevas, cada una referenciada como pendiente por algún documento ya aceptado.
 
@@ -19,24 +21,24 @@ Para que cualquier agente ubique rápido qué existe y qué falta:
 
 | Story | Artefacto | Estado |
 |---|---|---|
-| DES-1 | `adr/001-maquina-estados-medicamento.md` | Existe (formalizar aceptación — hallazgo C7) |
+| DES-1 | `adr/001-maquina-estados-medicamento.md` | Existe (Aceptado) |
 | DES-2 | `modelo-datos.md` | Existe |
 | DES-3 | `domain/authorized-transfers.json` + schema | Existe |
 | DES-4 | `adr/002-topologia-canales.md` | Existe |
-| DES-5 | `api-contract.md` | Existe (congelado 2.0.0) |
-| DES-6 | `organizations-roles-endorsement.md` | Existe (actualizar post-ADR-005 — hallazgo E4) |
-| DES-7 | `measurement-protocol.md` | Existe (actualizar post-ADR-004 — hallazgo E3 / decisión D8) |
+| DES-5 | `api-contract.md` | Existe (congelado 2.0.2) |
+| DES-6 | `organizations-roles-endorsement.md` | Existe (Aceptado, actualizado post-ADR-005) |
+| DES-7 | `measurement-protocol.md` | Existe (actualizado post-ADR-004, §3.4) |
 | DES-8 | `adr/003-establishment-identity-gln-cufe.md` | Existe |
 | DES-9 | `adr/004-transfer-dispatch-reception.md` | Existe |
 | DES-10 | `adr/005-rol-organismo-financiador.md` | Existe |
 | DES-11 | Validación contra Vademécum/REM | Resuelto como exclusión en `alcance-prototipo.md` |
-| DES-12 | ADR-006: Diseño de colecciones privadas | **D1 → issue #81** |
-| DES-13 | ADR-007: Topología física de la red | **D2 → issue #82** |
-| DES-14 | ADR-008: Matriz DES-3 en chaincode/baseline | **D3 → issue #83** |
-| DES-15 | ADR-009: Devolución y custodia en DEVUELTO | **D4 → issue #84** (desbloquea EXT-4 #30) |
-| DES-16 | ADR-010: Identidad de no custodiales | **D5 → issue #85** |
-| DES-17 | ADR-011: Verificación de traza del financiador | **D6 → issue #86** (desbloquea CC-8 #62) |
-| DES-18 | ADR-012: Diseño de la baseline | **D7 → issue #87** |
+| DES-12 | ADR-006: Diseño de colecciones privadas | **Resuelta** → [`adr/006-private-data-collections.md`](adr/006-private-data-collections.md) (issue #81) |
+| DES-13 | ADR-007: Topología física de la red | **Resuelta** → [`adr/007-network-topology.md`](adr/007-network-topology.md) (issue #82) |
+| DES-14 | ADR-008: Matriz DES-3 en chaincode/baseline | **Resuelta** → [`adr/008-transfer-matrix-distribution.md`](adr/008-transfer-matrix-distribution.md) (issue #83) |
+| DES-15 | ADR-009: Devolución y custodia en DEVUELTO | **Resuelta** → [`adr/009-return-and-recovery-semantics.md`](adr/009-return-and-recovery-semantics.md) (issue #84; desbloquea EXT-4 #30) |
+| DES-16 | ADR-010: Identidad de no custodiales | **Resuelta** → [`adr/010-non-custodial-identity.md`](adr/010-non-custodial-identity.md) (issue #85) |
+| DES-17 | ADR-011: Verificación de traza del financiador | **Resuelta** → [`adr/011-financier-trace-verification.md`](adr/011-financier-trace-verification.md) (issue #86; desbloquea CC-8 #62) |
+| DES-18 | ADR-012: Diseño de la baseline | **Resuelta** → [`adr/012-baseline-design.md`](adr/012-baseline-design.md) (issue #87) |
 | NET-5 (#24), NET-2 (#21), EXT-4 (#30), CC-8 (#62) | Issues de implementación | Actualizadas el 2026-08-16 con sus dependencias de decisión |
 | — | D8 (medición bifásica) y D9 (exclusiones de alcance) | **Resueltas el 2026-08-16** en `measurement-protocol.md` §3.4 y `alcance-prototipo.md` |
 
@@ -113,9 +115,9 @@ Tres decisiones de alcance que hoy están tomadas de facto pero no registradas, 
 
 ---
 
-## Orden de ejecución sugerido
+## Orden de ejecución (ejecutado el 2026-08-17)
 
-Las flechas son dependencias duras (no conviene abrir la ADR destino sin la de origen decidida):
+Las flechas eran dependencias duras entre decisiones. Se conserva el grafo como registro del orden en que se tomaron:
 
 ```text
 D5 (identidad no custodiales) ──┐
@@ -126,20 +128,22 @@ D7 (baseline) ◄── D3, D8 ──────────► BASE-*, benchma
 D8, D9: inmediatas (solo documentación), sin dependencias
 ```
 
-Sugerencia de arranque: **D8 y D9 esta semana** (son texto, cierran hallazgos abiertos), luego **D1 → D2** (son las que bloquean toda la implementación de red y chaincode), con **D4 y D5** en paralelo porque no dependen de D1/D2.
+Las nueve decisiones quedaron resueltas: D8 y D9 sobre los documentos existentes, D1–D7 como ADR-006 a ADR-012 (estado *Propuesto*). El trabajo pendiente ya no es de decisión sino de implementación: las issues de las áreas CC-*, NET-*, EXT-*, BASE-* y EVAL-* fueron actualizadas con las dependencias que cada ADR resuelve.
 
 ## Checklist de sincronización con el trabajo escrito
 
-Al cerrar cada decisión, verificar contra esta lista qué afirmación del trabajo escrito queda implementada (✔) o divergente (→ documentar en la ADR y en la próxima iteración de la tesis):
+Cada afirmación arquitectónica del trabajo escrito quedó mapeada a la decisión que la implementa. La columna de resultado indica si la decisión la cumple (✔) o se aparta de ella (→ divergencia documentada en el ADR y pendiente de reflejar en el documento, ver [`paper-update-instructions.md`](paper-update-instructions.md)):
 
-| Afirmación del trabajo escrito | Decisión que la resuelve |
-|---|---|
-| Hash de datos privados en el ledger común, confidencialidad comercial | D1 |
-| Distintas organizaciones contribuyen nodos de ordenamiento; sin administrador único | D2 (**riesgo principal de divergencia**) |
-| Raft 3 nodos tolera 1 caída; prueba de disponibilidad | D2 + DES-7 |
-| Validación normativa trasladada al chaincode, rechazo determinístico | D3 |
-| Casos devolución y reingreso a stock con sus validaciones | D4 |
-| Financiadores (en plural: PAMI, obras sociales) con acceso de verificación | D5, D6 |
-| Validación de trazabilidad como condición de pago | D6 |
-| Comparación contra prototipo centralizado equivalente, idénticas condiciones | D7, D8 |
-| Droguería como posible eslabón de origen de la trazabilidad | D9.1 |
+| Afirmación del trabajo escrito | Decisión | Resultado |
+|---|---|---|
+| Hash de datos privados en el ledger común, confidencialidad comercial | D1 · ADR-006 | ✔ cumple (hash del registro de operación en el read-write set del canal) |
+| Distintas organizaciones contribuyen nodos de ordenamiento; sin administrador único | D2 · ADR-007 | ✔ cumple — se eligió deliberadamente la opción fiel (3 orderers en 3 organizaciones) en lugar de simplificar |
+| Raft 3 nodos tolera 1 caída; prueba de disponibilidad | D2 · ADR-007 + DES-7 | ✔ cumple, y gana significado: cada caída es la de una organización distinta |
+| Validación normativa trasladada al chaincode, rechazo determinístico | D3 · ADR-008 | ✔ cumple (matriz embebida en el binario aprobado por las organizaciones) |
+| Casos devolución y reingreso a stock con sus validaciones | D4 · ADR-009 | → **divergencia**: el reingreso aplica la validación del trabajo escrito, pero la devolución se simplifica a evento único (el texto la describe entre dos actores) |
+| Financiadores (en plural: PAMI, obras sociales) con acceso de verificación | D5 · ADR-010, D6 · ADR-011 | ✔ cumple (múltiples financiadores soportados de forma nativa) |
+| Validación de trazabilidad como condición de pago | D6 · ADR-011 | ✔ cumple (veredicto estructurado como condición evaluable), con límites declarados |
+| Comparación contra prototipo centralizado equivalente, idénticas condiciones | D7 · ADR-012, D8 | ✔ cumple, con la precisión de que la baseline es un análogo del modelo centralizado y no el SNT real |
+| Droguería como posible eslabón de origen de la trazabilidad | D9.1 | → **exclusión consciente** registrada en `alcance-prototipo.md` |
+| CUFE acotado a laboratorios de producción pública | — (nota en ADR-003) | → **simplificación consciente**: el prototipo lo admite para cualquier `agentType` |
+| Una CA por organización (modelo de confianza distribuido) | D2 · ADR-007 | → **simplificación consciente**: CA única en el prototipo, límite declarado |
