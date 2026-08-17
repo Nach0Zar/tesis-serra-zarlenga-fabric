@@ -1,6 +1,6 @@
 # Contrato de interfaz del chaincode `snt`
 
-- **Versión del contrato**: `2.0.1`
+- **Versión del contrato**: `2.0.2`
 - **Estado**: Congelado. Los cambios se rigen por la política de versionado (última sección): un cambio incompatible exige un PR etiquetado `breaking-change` y aprobación explícita de B (el integrante responsable de cliente y baseline, conforme la issue #11 / DES-5).
 - **Fecha**: 2026-08-13
 - **Autores**: Serra, Zarlenga
@@ -18,8 +18,8 @@ No define: la implementación interna del chaincode, el `configtx.yaml`, el mate
 | [ADR-001](adr/001-maquina-estados-medicamento.md) | Estados y transiciones (T01–T33). Cada operación de escritura corresponde a una o más transiciones; el chaincode rechaza cualquier transición no declarada. |
 | [ADR-002](adr/002-topologia-canales.md) | Separación estado público / datos comerciales. Los datos comerciales y documentales viajan por el campo `transient` y van a PDC, nunca como argumentos públicos. |
 | [ADR-003](adr/003-establishment-identity-gln-cufe.md) | Identidad por `cid.GetMSPID()` resuelta contra el registro. El custodio no viaja como parámetro cuando el invocador actúa como custodio; el destino de una transferencia sí. |
-| [ADR-004](adr/004-transfer-dispatch-reception.md) | La transferencia son dos operaciones: `DispatchTransfer` y `ReceiveTransfer`, más `RejectTransfer`. El destinatario declarado viaja por `transient` y se valida contra PDC, nunca como argumento público ni campo de `MedicationUnitView`. **Dependencia de merge**: ADR-004 (DES-9) se integra vía PR #78; este contrato lo asume decidido. |
-| [ADR-005](adr/005-rol-organismo-financiador.md) | El organismo financiador solo invoca operaciones de lectura. **Dependencia de merge**: ADR-005 (DES-10) se integra vía PR #79. |
+| [ADR-004](adr/004-transfer-dispatch-reception.md) | Decisión vigente (integrada en `develop`). La transferencia son dos operaciones: `DispatchTransfer` y `ReceiveTransfer`, más `RejectTransfer`. El destinatario declarado viaja por `transient` y se valida contra el registro de la operación activa en PDC, nunca como argumento público ni campo de `MedicationUnitView`. |
+| [ADR-005](adr/005-rol-organismo-financiador.md) | Decisión vigente (integrada en `develop`). El organismo financiador solo invoca operaciones de lectura. |
 | [modelo-datos.md](modelo-datos.md) | Struct `MedicationUnit`, clave compuesta GTIN+serie, `fechaVencimiento` en ISO 8601, `ultimaActualizacion` por `GetTxTimestamp()`. |
 | [organizations-roles-endorsement.md (DES-6)](organizations-roles-endorsement.md) | Autorización por `agentType`, `active` y `snt.role`, y política de endoso por operación. |
 | [domain/authorized-transfers.json (DES-3)](../domain/authorized-transfers.json) | Matriz origen → destino que valida `DispatchTransfer`. |
@@ -94,7 +94,7 @@ Toda operación que falla devuelve un `error` cuyo mensaje es un objeto JSON con
 | `TRANSFER_NOT_AUTHORIZED` | El par origen → destino no está permitido por la matriz de DES-3. |
 | `INVALID_DESTINATION` | El destino declarado no existe, está inactivo o su `agentType` es incompatible. |
 | `NOT_IN_TRANSIT` | Se intentó recibir o rechazar una unidad que no está en `EN_TRANSITO`. |
-| `RECEIVER_MISMATCH` | El invocador de la recepción/rechazo no coincide con el destinatario declarado en la PDC de la operación (ADR-004). |
+| `RECEIVER_MISMATCH` | El invocador de la recepción/rechazo no coincide con el destinatario declarado en el registro de la operación **activa** — la creada por el último despacho, mientras la unidad permanece en `EN_TRANSITO`; nunca se valida contra registros de operaciones cerradas (ADR-004, "Ciclo de vida del registro de operación"). |
 | `REGULATORY_ONLY` | La operación exige `AnmatMSP` (o coendoso regulatorio) y el invocador no lo satisface. |
 | `INTERNAL_ERROR` | Error no clasificable atribuible al chaincode o a la plataforma. |
 
@@ -169,7 +169,7 @@ func (c *SNTContract) ReceiveTransfer(ctx contractapi.TransactionContextInterfac
 ```
 
 - **Transición**: T04. Estado resultante: `EN_CUSTODIA`.
-- **Autorización**: invocador = destinatario declarado en la PDC de la operación (ADR-004), `active=true`, `snt.role=operator`.
+- **Autorización**: invocador = destinatario declarado en el registro de la operación **activa** (ADR-004, "Ciclo de vida del registro de operación"; nunca contra operaciones cerradas), `active=true`, `snt.role=operator`.
 - **Endoso**: origen y destino (DES-6).
 - **Request**: `UnitRefRequest` (`gtin`, `numeroSerie`). Puede acompañarse de `transient` clave `commercial` con la confirmación documental de recepción.
 - **Response**: `MedicationUnitView` con `custodioActual` = el receptor y `estado=EN_CUSTODIA`.
@@ -182,10 +182,10 @@ func (c *SNTContract) RejectTransfer(ctx contractapi.TransactionContextInterface
 ```
 
 - **Transición**: T05. Estado resultante: `DEVUELTO`.
-- **Autorización**: invocador = destinatario declarado en la PDC de la operación (ADR-004) o custodio actual (emisor), `snt.role=operator`.
+- **Autorización**: invocador = destinatario declarado en el registro de la operación **activa** (ADR-004; nunca contra operaciones cerradas) o custodio actual (emisor), `snt.role=operator`.
 - **Endoso**: origen y destino (DES-6).
 - **Request**: `UnitEventRequest` (`gtin`, `numeroSerie`, `motivo`).
-- **Response**: `MedicationUnitView` con `estado=DEVUELTO` y `custodioActual` = el emisor (la unidad rechazada vuelve al remitente).
+- **Response**: `MedicationUnitView` con `estado=DEVUELTO` y `custodioActual` = el emisor, que permanece sin cambios por convención de ADR-004; T05 no registra que el retorno físico al remitente haya ocurrido (la resolución posterior de `DEVUELTO` se rige por ADR-001 y EXT-4).
 - **Errores**: `UNIT_NOT_FOUND`, `NOT_IN_TRANSIT`, `RECEIVER_MISMATCH` (el invocador no es ni el destinatario declarado ni el emisor), `UNAUTHORIZED_ROLE`, `INVALID_REQUEST`.
 
 ### `Dispense`
@@ -284,7 +284,7 @@ func (c *SNTContract) SetOrganizationActive(ctx contractapi.TransactionContextIn
 
 ## Operaciones de lectura
 
-No mutan estado, no generan endoso de escritura y se rigen por las políticas de visibilidad de lectura del canal y de las PDC (ADR-002). El organismo financiador (ADR-005) opera exclusivamente con estas operaciones sobre el estado público.
+No mutan estado, no generan endoso de escritura y se rigen por las políticas de visibilidad de lectura del canal y de las PDC (ADR-002). El organismo financiador (ADR-005) opera exclusivamente con operaciones de lectura; su flujo de verificación claim-driven por serial usa `ReadUnit` y `GetUnitHistory`. `QueryUnitsByGTIN` no forma parte de ese flujo, aunque le resulta técnicamente accesible: ADR-005 reconoce que el acceso de lectura al estado público del canal no puede restringirse por chaincode (supuesto de confianza del prototipo).
 
 ### `ReadUnit`
 
@@ -353,7 +353,7 @@ func (c *SNTContract) QueryUnitsByGTIN(ctx contractapi.TransactionContextInterfa
   - **MINOR**: agregados compatibles (nueva operación, nuevo campo opcional en un request, nuevo `code`).
   - **MAJOR**: cambio incompatible (renombrar o quitar una función o campo, cambiar un tipo, cambiar la semántica de un `code`). Exige un PR etiquetado `breaking-change`.
 - Todo cambio a este documento requiere aprobación explícita de B antes del merge, según la story DES-5.
-- Dependencias de merge: este contrato asume ADR-004 (transferencia en dos operaciones, destinatario declarado en PDC; PR #78) y ADR-005 (financiador de solo lectura; PR #79). Si alguna de esas decisiones cambiara antes de integrarse, las operaciones de transferencia o la nota del financiador deben revisarse aquí.
+- Este contrato implementa ADR-004 (transferencia en dos operaciones, destinatario declarado en PDC) y ADR-005 (financiador de solo lectura), ambas decisiones vigentes integradas en `develop`. Si alguna se revisara mediante un ADR posterior, las operaciones de transferencia o la nota del financiador deben revisarse aquí.
 - **Historial de cambios incompatibles**: `2.0.0` — el destino de `DispatchTransfer` pasa de argumento público a `transient` (clave `destinatario`), y `destinatarioPendiente` se elimina de `MedicationUnitView`, para alinear el contrato con la revisión de ADR-004 que clasifica el destinatario declarado como dato privado (PDC), no público.
-- **Historial de cambios compatibles**: `2.0.1` — corrige el dígito verificador GS1 del GTIN de los ejemplos (`07791234567890` → `07791234567898`; el valor anterior habría sido rechazado por la propia validación de `INVALID_REQUEST`), completa las listas de errores por operación para que toda condición de autorización declarada tenga su código (`DispatchTransfer`/`ReceiveTransfer`: `ORG_NOT_REGISTERED`/`ORG_INACTIVE`; `RejectTransfer`: `RECEIVER_MISMATCH`; `Dispense`: `UNAUTHORIZED_ROLE`), agrega el lineamiento sobre `motivo` y aclara quién es B. Sin cambios de firmas, `code`s del catálogo ni esquemas.
+- **Historial de cambios compatibles**: `2.0.1` — corrige el dígito verificador GS1 del GTIN de los ejemplos (`07791234567890` → `07791234567898`; el valor anterior habría sido rechazado por la propia validación de `INVALID_REQUEST`), completa las listas de errores por operación para que toda condición de autorización declarada tenga su código (`DispatchTransfer`/`ReceiveTransfer`: `ORG_NOT_REGISTERED`/`ORG_INACTIVE`; `RejectTransfer`: `RECEIVER_MISMATCH`; `Dispense`: `UNAUTHORIZED_ROLE`), agrega el lineamiento sobre `motivo` y aclara quién es B. Sin cambios de firmas, `code`s del catálogo ni esquemas. `2.0.2` — la autorización de `ReceiveTransfer`/`RejectTransfer` y el error `RECEIVER_MISMATCH` validan contra el registro de la operación **activa** (nunca contra operaciones cerradas, conforme el ciclo de vida de ADR-004); la respuesta de `RejectTransfer` deja de afirmar un retorno físico consumado; se precisa que el flujo del financiador usa `ReadUnit`/`GetUnitHistory`; las notas de dependencia de merge pasan a describir ADR-004/ADR-005 como decisiones vigentes en `develop`. Sin cambios de firmas, `code`s ni esquemas.
 
