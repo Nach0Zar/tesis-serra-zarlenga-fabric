@@ -131,7 +131,9 @@ Cambios en orden de aparición dentro del documento.
 - **Problema**: DES-6 define para el registro inicial de una unidad (`RegisterUnit`) el endoso del laboratorio invocante **solamente**, porque en ese momento no existe contraparte previa. La afirmación general del paper deja esa excepción sin explicar, y conviene que la explicación llegue antes de que el jurado encuentre la excepción.
 - **Cambio requerido** — agregar a continuación de esa afirmación:
 
-  > La única excepción a este esquema de endoso multiorganizacional es el registro inicial de cada unidad, endosado únicamente por la organización del laboratorio que la produce, dado que en ese momento no existe una contraparte previa en la cadena; la integridad multiorganizacional del alta se ejerce de forma retrospectiva en la primera transferencia, cuando la organización receptora valida de forma independiente el estado registrado antes de aceptar la custodia.
+  > La única excepción a este esquema de endoso multiorganizacional es el registro inicial de cada unidad, dado que en ese momento no existe una contraparte previa en la cadena capaz de verificar la custodia. En esa operación la plataforma garantiza que quien la origina es una identidad de un laboratorio habilitado y que no puede registrarse dos veces la misma unidad, pero no puede exigir que el nodo validador sea el del propio laboratorio: la política de validación que la operación establece sobre cada unidad rige a partir de la transacción siguiente. La integridad multiorganizacional del alta se ejerce, por lo tanto, de forma retrospectiva en la primera transferencia, cuando la organización receptora valida de forma independiente el estado registrado antes de aceptar la custodia.
+
+- **Precisión agregada tras la cuarta ronda de review**: la redacción original ("endosado únicamente por la organización del laboratorio") afirmaba una exclusividad que la plataforma no impone. En Hyperledger Fabric, la primera escritura de una clave inexistente se valida contra la política de endoso del chaincode, y la política por clave que esa transacción fija rige recién desde la siguiente. El detalle y la alternativa descartada están en ADR-007, punto 6.g, y en `docs/alcance-prototipo.md`.
 
 ### 1.8 — §3.2, "Caso reingreso a stock": condición de custodia con la negación invertida
 
@@ -157,6 +159,18 @@ Cambios en orden de aparición dentro del documento.
   > Esta protección alcanza al contenido de cada operación, no al hecho de que dos organizaciones hayan operado entre sí. La materialización elegida —una colección de datos privados por par de organizaciones autorizadas— hace que el identificador de la colección utilizada quede registrado en claro en el conjunto de lectura-escritura de cada transacción, de modo que un observador con acceso al canal puede inferir que dos establecimientos registraron una operación, sin poder determinar su contenido, su valor ni la unidad involucrada. Cerrar también ese canal de metadatos exigiría una colección única con contenido cifrado extremo a extremo, alternativa descartada para el prototipo porque traslada la garantía de confidencialidad desde la plataforma hacia la gestión de claves y compromete la visibilidad regulatoria.
 
 - **Nota**: si el equipo prefiere no extender §3.4 en el paper de congreso por límite de espacio, la salvedad **debe** aparecer al menos en el capítulo de limitaciones de la tesis. Lo que no puede quedar es la afirmación de aislamiento sin la acotación.
+
+### 1.10 — §3.4: enunciar la propiedad de que ninguna organización, tampoco ANMAT, escribe en solitario
+
+- [ ] Aplicado
+- **Hallazgo de origen**: detectado en la cuarta ronda de review del PR #88 sobre ADR-007. **Esta entrada agrega una afirmación, no corrige un error**: es un resultado del diseño que el trabajo escrito todavía no aprovecha.
+- **Ubicación exacta**: §3.4, en el desarrollo sobre políticas de endoso.
+- **Contexto**: al materializar las políticas de endoso se detectó que Hyperledger Fabric evalúa la política de validación de cada dato escrito **sin saber qué operación la produjo**. Una excepción concedida a la autoridad de aplicación para habilitar sus facultades regulatorias habilitaba, con la misma fuerza, que esa autoridad avalara en solitario cualquier operación ordinaria — una dispensación, una recepción de mercadería. El diseño eliminó esa excepción: ANMAT ejerce sus facultades como **iniciadora** de la transacción, con validación a cargo del nodo del custodio.
+- **Cambio requerido** — agregar al desarrollo de políticas de endoso:
+
+  > De este esquema se desprende una propiedad que conviene enunciar de forma explícita: ninguna organización de la red, incluida la autoridad de aplicación, puede modificar por sí sola el estado registrado de una unidad. El custodio no puede transferir sin que el destinatario valide; el destinatario no puede aceptar sin que el remitente valide; la autoridad regulatoria no puede intervenir sobre una unidad sin que valide el nodo de su custodio actual; y un laboratorio no puede retirar del mercado una unidad bajo custodia ajena sin la validación conjunta de la autoridad regulatoria y del custodio. El precio de esta garantía es de disponibilidad —una intervención regulatoria depende de que el nodo del custodio esté operativo— y se asume de forma consciente.
+
+- **Nota**: es probablemente el resultado más citable del capítulo de diseño; conviene que aparezca también en las conclusiones, ligado a la hipótesis sobre integridad y ausencia de un administrador único.
 
 ---
 
@@ -355,6 +369,7 @@ Prioridad derivada de la severidad del hallazgo en `consistency-review.md`: 🔴
 | 1.7 | Paper §3.4 — excepción de endoso en el registro inicial | E7 | Baja |
 | 1.8 | Paper §3.2 — condición de custodia en reingreso a stock (negación invertida) | review PR #88 | Alta |
 | 1.9 | Paper §3.4 + limitaciones de tesis — metadatos de relación no cubiertos por el aislamiento | review PR #88 | Media |
+| 1.10 | Paper §3.4 + conclusiones — enunciar que ninguna organización, tampoco ANMAT, escribe en solitario | review PR #88 | Alta |
 | 2.1 | Tesis §2.1.2.1 + bibliografía — Resolución 435/2011 | B3 | Media |
 | 2.2 | Tesis §2.1.3 — Disp. 7439/1999 y Dec. 1299/1997 | E2 | Media |
 | 2.3 | Tesis §2.1.3.1 — acceso de auditoría de PAMI | B7 | Baja |
