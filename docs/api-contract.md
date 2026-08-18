@@ -266,10 +266,10 @@ Notas:
 
 - **`ReturnProduct` admite un `transient` opcional** con la clave `devolucion`, para declarar el receptor de la devolución (ADR-009). Como todo identificador de contraparte, **no** viaja como argumento público: revela una relación no consumada. Se persiste en la PDC del par junto al resto del registro de la operación (ADR-006) y **no** modifica `custodioActual`, que permanece en el custodio declarante.
 
-```json
-// transient, clave "devolucion"
-{ "receptor": "GLN:7791234500017" }
-```
+  ```json
+  // transient, clave "devolucion"
+  { "receptor": "GLN:7791234500017" }
+  ```
 
   Cuando el `transient` viene, el chaincode valida el receptor **antes** de resolver el nombre de la colección (ADR-009, punto 2), en este orden:
 
@@ -290,7 +290,7 @@ Notas:
 
 - El chaincode valida internamente que el estado de origen de la unidad admita la transición pedida; si no, devuelve `INVALID_STATE_TRANSITION`. La misma función cubre varios estados de origen (por ejemplo `ReportStolen` aplica a `EN_LABORATORIO`, `EN_TRANSITO`, `EN_CUSTODIA`, `EN_CUARENTENA` o `DEVUELTO`).
 - Las operaciones que exigen ANMAT devuelven `REGULATORY_ONLY` si el invocador no satisface el rol o coendoso regulatorio.
-- Errores comunes a todas: `INVALID_REQUEST`, `UNIT_NOT_FOUND`, `INVALID_STATE_TRANSITION`, `UNAUTHORIZED_CUSTODIAN`/`REGULATORY_ONLY`, `UNAUTHORIZED_ROLE`.
+- Errores comunes a todas: `INVALID_REQUEST`, `UNIT_NOT_FOUND`, `INVALID_STATE_TRANSITION`, `UNAUTHORIZED_CUSTODIAN`/`REGULATORY_ONLY`, `UNAUTHORIZED_ROLE`. En `WithdrawFromMarket`, `Restock` y `FinalDisposition` invocadas por un laboratorio no custodio, además `LAB_INTERVENTION_REQUIRED`; en `ReturnProduct` con `transient`, los seis códigos de la tabla de validación.
 
 ### `AuthorizeLabIntervention`
 
