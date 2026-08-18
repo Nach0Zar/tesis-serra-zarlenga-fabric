@@ -133,6 +133,19 @@ Cambios en orden de aparición dentro del documento.
 
   > La única excepción a este esquema de endoso multiorganizacional es el registro inicial de cada unidad, endosado únicamente por la organización del laboratorio que la produce, dado que en ese momento no existe una contraparte previa en la cadena; la integridad multiorganizacional del alta se ejerce de forma retrospectiva en la primera transferencia, cuando la organización receptora valida de forma independiente el estado registrado antes de aceptar la custodia.
 
+### 1.8 — §3.2, "Caso reingreso a stock": condición de custodia con la negación invertida
+
+- [ ] Aplicado
+- **Hallazgo de origen**: detectado en la review del PR #88 al redactar ADR-009.
+- **Ubicación exacta**: §3.2, párrafo "Caso reingreso a stock".
+- **Texto actual** (literal): "Ejemplos de esto puede ser que el medicamento no se encuentre vencido, que el actor que intenta reingresar a stock el medicamento **no sea** el actual custodio de este o que el medicamento no se haya registrado como destruido o finalmente dispuesto."
+- **Problema**: la enumeración mezcla dos formas. El primer y el tercer ejemplo describen condiciones cuya verificación protege la operación (que no esté vencido, que no esté destruido), pero el segundo, leído literalmente, exigiría validar que quien reingresa **no** sea el custodio actual — lo contrario de lo razonable: quien reincorpora una unidad al stock es precisamente quien la tiene bajo su custodia registrada. El prototipo adopta la lectura corregida (ADR-009 resuelve el actor de recupero como el custodio actual registrado) y la declara como interpretación, no como cita literal. Mientras la fuente no se corrija, el ADR y el trabajo escrito dicen cosas distintas.
+- **Cambio requerido** — reformular la enumeración para que las tres condiciones tengan la misma orientación. Redacción sugerida:
+
+  > Ejemplos de estas validaciones son que el medicamento no se encuentre vencido, que el actor que intenta reingresarlo a stock sea su actual custodio, y que el medicamento no haya sido registrado como destruido o finalmente dispuesto.
+
+  Si el equipo considera que la redacción original era intencional y que efectivamente debe validarse lo contrario, entonces el cambio va del otro lado: hay que revisar ADR-009, porque el prototipo estaría implementando una regla distinta de la relevada.
+
 ---
 
 ## 2. Avance de tesis
@@ -328,6 +341,7 @@ Prioridad derivada de la severidad del hallazgo en `consistency-review.md`: 🔴
 | 1.5 | Paper §3.3/§3.4/Referencias — referencia [15] | B1 | Alta |
 | 1.6 | Paper §3.4 — alcance del aislamiento de información | A3 | Alta |
 | 1.7 | Paper §3.4 — excepción de endoso en el registro inicial | E7 | Baja |
+| 1.8 | Paper §3.2 — condición de custodia en reingreso a stock (negación invertida) | review PR #88 | Alta |
 | 2.1 | Tesis §2.1.2.1 + bibliografía — Resolución 435/2011 | B3 | Media |
 | 2.2 | Tesis §2.1.3 — Disp. 7439/1999 y Dec. 1299/1997 | E2 | Media |
 | 2.3 | Tesis §2.1.3.1 — acceso de auditoría de PAMI | B7 | Baja |
