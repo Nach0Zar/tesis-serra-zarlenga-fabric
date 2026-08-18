@@ -1,6 +1,6 @@
 # Chaincode `snt` (pendiente de implementación)
 
-Este directorio contendrá el smart contract `snt` del prototipo: un contrato Go implementado con `contractapi`, cuya interfaz pública está congelada en [`docs/api-contract.md`](../docs/api-contract.md) (v2.0.1).
+Este directorio contendrá el smart contract `snt` del prototipo: un contrato Go implementado con `contractapi`, cuya interfaz pública está congelada en [`docs/api-contract.md`](../docs/api-contract.md) (v2.1.0).
 
 La lógica debe respetar:
 

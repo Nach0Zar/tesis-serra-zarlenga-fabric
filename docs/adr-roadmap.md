@@ -25,7 +25,7 @@ Para que cualquier agente ubique rápido qué existe y qué falta:
 | DES-2 | `modelo-datos.md` | Existe |
 | DES-3 | `domain/authorized-transfers.json` + schema | Existe |
 | DES-4 | `adr/002-topologia-canales.md` | Existe |
-| DES-5 | `api-contract.md` | Existe (congelado 2.0.2) |
+| DES-5 | `api-contract.md` | Existe (congelado 2.1.0) |
 | DES-6 | `organizations-roles-endorsement.md` | Existe (Aceptado, actualizado post-ADR-005) |
 | DES-7 | `measurement-protocol.md` | Existe (actualizado post-ADR-004, §3.4) |
 | DES-8 | `adr/003-establishment-identity-gln-cufe.md` | Existe |

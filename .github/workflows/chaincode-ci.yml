@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - develop
     types:
       - opened
       - synchronize
@@ -11,6 +12,9 @@ on:
       - ready_for_review
     paths:
       - "chaincode/**"
+      - "domain/**"
+      - "go.work"
+      - "go.work.sum"
       - ".github/workflows/chaincode-ci.yml"
 
 permissions:

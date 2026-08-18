@@ -25,7 +25,7 @@ Tutora: Dra. Mg. Ing. María Roxana Martínez — UADE, 2026.
 
 - [`docs/README.md`](docs/README.md) — índice de la documentación de diseño.
 - [`docs/adr/README.md`](docs/adr/README.md) — índice de Architecture Decision Records.
-- [`docs/api-contract.md`](docs/api-contract.md) — contrato congelado de la interfaz pública del chaincode `snt` (v2.0.1).
+- [`docs/api-contract.md`](docs/api-contract.md) — contrato congelado de la interfaz pública del chaincode `snt` (v2.1.0).
 
 ## Convenciones
 
