@@ -141,7 +141,7 @@ La politica de diseno es:
 | Registro inicial de unidades | Organizacion activa con `agentType=LABORATORY` y rol `operator` | Laboratorio invocante. No hay contraparte previa capaz de verificar custodia; la integridad multiorganizacion se ejerce desde las transferencias posteriores. |
 | Transferencia ordinaria de custodia | Custodio actual activo, destino activo y par permitido por DES-3 | Origen y destino de la transferencia. Si DES-9 separa despacho y recepcion, la transaccion que confirma el cambio de custodia debe quedar cubierta por ambas partes. |
 | Dispensacion | Custodio actual con `agentType=PHARMACY` o `HEALTHCARE_FACILITY` y rol `operator` | Organizacion dispensadora. Validacion por financiador queda fuera de DES-6 y depende de DES-10. |
-| Evento extraordinario informado por custodio | Custodio actual activo y evento admitido por ADR-001. Incluye `RETIRAR_MERCADO` desde `EN_LABORATORIO` cuando el laboratorio todavia es custodio actual. | Custodio actual. `AnmatMSP` solo se agrega cuando la operacion sea iniciada por ANMAT o requiera autorizacion regulatoria previa. |
+| Evento extraordinario informado por custodio | Custodio actual activo y evento admitido por ADR-001. Incluye `RETIRAR_MERCADO` desde `EN_LABORATORIO` cuando el laboratorio todavia es custodio actual. | Custodio actual. `AnmatMSP` solo se agrega cuando la operacion sea iniciada por ANMAT o requiera autorizacion regulatoria previa. **Salvedad durante `EN_TRANSITO`** (ADR-007): mientras dura el transito, la clave de la unidad lleva una politica de endoso basado en estado `OR(AND(emisor, receptor declarado), AnmatMSP)`, de modo que un evento extraordinario informado en esa ventana requiere el coendoso del receptor declarado o de `AnmatMSP`. El endurecimiento es deliberado y acotado a la ventana de transito, donde ambas partes son interesados directos de la operacion pendiente; NET-6 debe validarlo empiricamente. |
 | Retiro, recupero o disposicion final iniciado por laboratorio no custodio | Laboratorio activo con `agentType=LABORATORY` y rol `operator`, vinculado como titular, elaborador o importador de la unidad o lote segun el modelo y contrato vigentes. Cubre las transiciones ADR-001 donde `LABORATORY` actua sobre unidades fuera de su custodia; no habilita `PROHIBIR_PRODUCTO`. | Laboratorio invocante y `AnmatMSP`. El coendoso de ANMAT se exige solo en este caso puntual para validar la legitimidad del reclamo antes de mutar un asset bajo custodia ajena. |
 | Evento regulatorio iniciado por ANMAT | `AnmatMSP` con `snt.role=regulatory-admin` | `AnmatMSP` y, cuando la operacion afecte custodia o datos privados de un establecimiento, la organizacion custodia involucrada. |
 | Lecturas y auditoria | Segun MSP, rol y visibilidad ADR-002 | No generan endoso de escritura; se gobiernan por politicas de lectura del canal, PDC y contrato DES-5. |
@@ -158,6 +158,8 @@ debe preservar estas propiedades:
   retiro, recupero o disposicion final sobre una unidad bajo custodia ajena;
 - no permitir que una transferencia ordinaria cambie custodia solo con endoso del
   origen;
+- durante `EN_TRANSITO`, admitir la salvedad de coendoso que fija ADR-007 para los
+  eventos extraordinarios informados por el custodio;
 - no exponer datos privados a organizaciones no participantes, en linea con
   ADR-002;
 - mantener paridad funcional con la baseline cuando se implemente la logica de
@@ -170,6 +172,11 @@ debe preservar estas propiedades:
   para informacion comercial o documental.
 - [ADR-003](adr/003-establishment-identity-gln-cufe.md): identidad de establecimientos mediante GLN/CUFE y organizacion Fabric
   por establecimiento.
+- [ADR-007](adr/007-network-topology.md): materializacion de estas politicas mediante
+  endoso basado en estado, y salvedad de coendoso durante `EN_TRANSITO`.
+- [ADR-010](adr/010-non-custodial-identity.md): la identidad de `AnmatMSP` y de los
+  financiadores se resuelve por el registro (`agentType` `REGULATOR`/`FINANCIER`), no
+  por el nombre de la MSP.
 - [`domain/authorized-transfers.json`](../domain/authorized-transfers.json): catalogo de `agentType`,
   usado solo para reutilizar categorias de agente.
 - Paper del proyecto, secciones 3.3 a 3.5: red Hyperledger Fabric permisionada,
