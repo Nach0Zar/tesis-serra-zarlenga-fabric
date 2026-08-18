@@ -103,8 +103,8 @@ Toda operación que falla devuelve un `error` cuyo mensaje es un objeto JSON con
 | `REGULATORY_ONLY` | La operación exige `AnmatMSP` (o coendoso regulatorio) y el invocador no lo satisface. |
 | `LAST_ACTIVE_REGULATOR` | Se intentó desactivar la única entrada `REGULATOR` activa del registro (ADR-010). |
 | `ALREADY_INITIALIZED` | Se reinvocó `Init` sobre un chaincode cuyo registro ya contiene la entrada `REGULATOR` (ADR-010). |
-| `INVALID_LAB_INTERVENTION` | La autorización de intervención solicitada no es válida: el laboratorio designado no tiene `agentType=LABORATORY`, la `operacion` está fuera del catálogo o `expiraEn` no es posterior al timestamp de la transacción (ADR-007, punto 6.e). |
-| `LAB_INTERVENTION_REQUIRED` | Un laboratorio no custodio intentó un retiro, recupero o disposición final sin una autorización de intervención vigente para esa unidad, ese laboratorio y esa operación (DES-6; ADR-007, punto 6.e). |
+| `INVALID_LAB_INTERVENTION` | La autorización de intervención solicitada no es válida: el laboratorio designado no tiene `agentType=LABORATORY`, la `operacion` está fuera del catálogo o `expiraEn` no es posterior al timestamp de la transacción (ADR-007, punto 6.f). |
+| `LAB_INTERVENTION_REQUIRED` | Un laboratorio no custodio intentó un retiro, recupero o disposición final sin una autorización de intervención vigente para esa unidad, ese laboratorio y esa operación (DES-6; ADR-007, punto 6.f). |
 | `INTERNAL_ERROR` | Error no clasificable atribuible al chaincode o a la plataforma. |
 
 ## Operación de inicialización
