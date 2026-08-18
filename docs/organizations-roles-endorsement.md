@@ -142,15 +142,23 @@ La politica de diseno es:
 | Transferencia ordinaria de custodia | Custodio actual activo, destino activo y par permitido por DES-3 | Origen y destino de la transferencia. Si DES-9 separa despacho y recepcion, la transaccion que confirma el cambio de custodia debe quedar cubierta por ambas partes. |
 | Dispensacion | Custodio actual con `agentType=PHARMACY` o `HEALTHCARE_FACILITY` y rol `operator` | Organizacion dispensadora. Validacion por financiador queda fuera de DES-6 y depende de DES-10. |
 | Evento extraordinario informado por custodio | Custodio actual activo y evento admitido por ADR-001. Incluye `RETIRAR_MERCADO` desde `EN_LABORATORIO` cuando el laboratorio todavia es custodio actual. | Custodio actual. `AnmatMSP` solo se agrega cuando la operacion sea iniciada por ANMAT o requiera autorizacion regulatoria previa. **Salvedad durante `EN_TRANSITO`** (ADR-007): mientras dura el transito, la clave de la unidad lleva una politica de endoso basado en estado `OR(AND(emisor, receptor declarado), AnmatMSP)`, de modo que un evento extraordinario informado en esa ventana requiere el coendoso del receptor declarado o de `AnmatMSP`. El endurecimiento es deliberado y acotado a la ventana de transito, donde ambas partes son interesados directos de la operacion pendiente; NET-6 debe validarlo empiricamente. |
-| Retiro, recupero o disposicion final iniciado por laboratorio no custodio | Laboratorio activo con `agentType=LABORATORY` y rol `operator`, vinculado como titular, elaborador o importador de la unidad o lote segun el modelo y contrato vigentes. Cubre las transiciones ADR-001 donde `LABORATORY` actua sobre unidades fuera de su custodia; no habilita `PROHIBIR_PRODUCTO`. | Laboratorio invocante y `AnmatMSP`. El coendoso de ANMAT se exige solo en este caso puntual para validar la legitimidad del reclamo antes de mutar un asset bajo custodia ajena. |
-| Evento regulatorio iniciado por ANMAT | `AnmatMSP` con `snt.role=regulatory-admin` | `AnmatMSP` y, cuando la operacion afecte custodia o datos privados de un establecimiento, la organizacion custodia involucrada. |
+| Retiro, recupero o disposicion final iniciado por laboratorio no custodio | Laboratorio activo con `agentType=LABORATORY` y rol `operator`, vinculado como titular, elaborador o importador de la unidad o lote segun el modelo y contrato vigentes. Cubre las transiciones ADR-001 donde `LABORATORY` actua sobre unidades fuera de su custodia; no habilita `PROHIBIR_PRODUCTO`. | Laboratorio invocante y `AnmatMSP`. El coendoso de ANMAT se exige solo en este caso puntual para validar la legitimidad del reclamo antes de mutar un asset bajo custodia ajena. **Materializacion** (ADR-007, punto 6.e): este par no puede imponerse con endoso basado en estado sobre la clave de la unidad, porque la politica de una clave se evalua contra el estado previo y no puede condicionarse a la operacion intentada. Se materializa con una autorizacion regulatoria previa: ANMAT emite `AuthorizeLabIntervention` sobre la unidad, que crea una clave de autorizacion protegida con SBE `AnmatMSP`; la operacion del laboratorio la consume borrandola, con lo que la plataforma exige el endoso de `AnmatMSP` en esa misma transaccion. El laboratorio queda acreditado por su firma de creador y por la validacion de titularidad en la logica del chaincode. |
+| Evento regulatorio iniciado por ANMAT | `AnmatMSP` con `snt.role=regulatory-admin` | `AnmatMSP` y, cuando la operacion afecte custodia o datos privados de un establecimiento, la organizacion custodia involucrada. **Materializacion** (ADR-007, punto 6.f): la exigencia de la organizacion involucrada no se impone sobre la clave publica —la rama `AnmatMSP` de la politica de reposo permitiria a ANMAT escribirla en solitario— sino sobre la politica de endoso de la coleccion privada del par, `OR(org A, org B)` (ADR-006), que `AnmatMSP` no satisface por si sola. Consecuencia asumida: un cierre regulatorio de una transferencia pendiente requiere el endoso de al menos una de las dos organizaciones del par. |
 | Lecturas y auditoria | Segun MSP, rol y visibilidad ADR-002 | No generan endoso de escritura; se gobiernan por politicas de lectura del canal, PDC y contrato DES-5. |
 
 La materializacion concreta queda fuera de DES-6. NET-2, NET-5 y NET-6 deben
 decidir como expresarla en configuracion Fabric, por ejemplo mediante politicas
 generadas por organizacion, endorsement policies de chaincode, state-based
-endorsement o politicas de colecciones privadas. Cualquiera sea el mecanismo,
-debe preservar estas propiedades:
+endorsement o politicas de colecciones privadas. ADR-007 (punto 6) fija esa
+materializacion y deja registrado un limite de plataforma que DES-6 no habia
+considerado: una politica de endoso basada en estado se evalua contra el estado
+**anterior** a la transaccion, por lo que solo puede expresar requisitos
+derivables del estado ya confirmado y nunca condicionarse a la operacion que la
+transaccion intenta. Las filas de esta tabla cuyo conjunto de endosantes depende
+del invocador se materializan por los mecanismos complementarios indicados en
+cada fila, y las condiciones que dependen exclusivamente del invocador se
+validan en la logica del chaincode. Cualquiera sea el mecanismo, debe preservar
+estas propiedades:
 
 - no usar una unica MSP de categoria para representar establecimientos distintos;
 - no exigir `AnmatMSP` como coendosante de toda escritura ordinaria;
@@ -160,6 +168,14 @@ debe preservar estas propiedades:
   origen;
 - durante `EN_TRANSITO`, admitir la salvedad de coendoso que fija ADR-007 para los
   eventos extraordinarios informados por el custodio;
+- restablecer la politica de endoso de la clave de la unidad en **toda** salida de
+  `EN_TRANSITO` (recepcion, rechazo y evento extraordinario que cierre el
+  transito), para que la unidad no quede bloqueada bajo una politica que exige a
+  la contraparte de un despacho ya resuelto;
+- distinguir, en la evidencia que se presente, las reglas impuestas por la
+  plataforma (rechazo por politica de endoso) de las validadas por la logica del
+  chaincode (error tipificado del contrato), sin atribuir a la primera garantias
+  que solo provee la segunda;
 - no exponer datos privados a organizaciones no participantes, en linea con
   ADR-002;
 - mantener paridad funcional con la baseline cuando se implemente la logica de
@@ -173,7 +189,10 @@ debe preservar estas propiedades:
 - [ADR-003](adr/003-establishment-identity-gln-cufe.md): identidad de establecimientos mediante GLN/CUFE y organizacion Fabric
   por establecimiento.
 - [ADR-007](adr/007-network-topology.md): materializacion de estas politicas mediante
-  endoso basado en estado, y salvedad de coendoso durante `EN_TRANSITO`.
+  endoso basado en estado, salvedad de coendoso durante `EN_TRANSITO`, limite de
+  SBE respecto de la operacion intentada, patron de armado por clave de
+  autorizacion protegida y uso de la politica de coleccion para el coendoso de la
+  organizacion involucrada.
 - [ADR-010](adr/010-non-custodial-identity.md): la identidad de `AnmatMSP` y de los
   financiadores se resuelve por el registro (`agentType` `REGULATOR`/`FINANCIER`), no
   por el nombre de la MSP.
