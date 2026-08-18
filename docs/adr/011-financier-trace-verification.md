@@ -77,7 +77,8 @@ La consulta devuelve un **veredicto estructurado**, no un historial crudo:
 ### Naturaleza de la operación y alcance de la firma
 
 - La operación es de **solo lectura**: no muta estado ni genera endoso de escritura, conforme a ADR-005 y al rol `financier-auditor` de DES-6.
-- La **firma concreta** (nombre de función, esquema JSON exacto de request/response) es un **agregado MINOR** al contrato DES-5 (`api-contract.md`, política de versionado: "nueva operación" es cambio compatible) y se define en CC-8 (#62). Esta ADR fija la **semántica** — las cinco comprobaciones, su orden, sus veredictos nombrados y la forma del resultado —, no la firma.
+- La **firma concreta** ya está definida en el contrato DES-5 (`api-contract.md`): `VerifyTrace(ctx, gtin, numeroSerie) (*TraceVerdict, error)`, incorporada como agregado MINOR en la versión 2.1.0. Esta ADR fija la **semántica** — las cinco comprobaciones, su orden, sus veredictos nombrados y la forma del resultado —; el contrato fija la firma. CC-8 (#62) **implementa** ambas, no las diseña.
+- **Autorización de la consulta**: `agentType=FINANCIER` con `snt.role=financier-auditor`, o `agentType=REGULATOR` con rol de auditoría (ADR-010). Un invocador registrado y activo cuyo `agentType` no sea ninguno de los dos recibe `UNAUTHORIZED_AGENT_TYPE`: no es un veredicto de traza sino un rechazo de autorización, y por eso no forma parte de los valores de `motivo`.
 
 ## Justificación
 
@@ -99,13 +100,13 @@ Qué **no** detecta la verificación, en el estilo de los "Límites de garantía
 
 ## Consecuencias
 
-- **Para CC-8 (#62)**: la story queda implementable con criterio de aceptación concreto — las cinco comprobaciones en su orden, los veredictos nombrados (`NO_ENCONTRADA`, `NO_DISPENSADA`, `DISPENSADOR_INVALIDO`, `SECUENCIA_INVALIDA`, `TRANSFERENCIA_NO_AUTORIZADA`) y la forma del veredicto estructurado. Los tests de "traza válida / traza irregular" que la issue exige se derivan directamente de cada comprobación.
-- **Para DES-5 (`api-contract.md`)**: recibirá el agregado **MINOR** de la firma de la operación (nombre, request, response, errores) definido en CC-8, conforme a la política de versionado del contrato.
+- **Para CC-8 (#62)**: la story queda implementable contra una firma ya congelada y con criterio de aceptación concreto — las cinco comprobaciones en su orden, los veredictos nombrados (`NO_ENCONTRADA`, `NO_DISPENSADA`, `DISPENSADOR_INVALIDO`, `SECUENCIA_INVALIDA`, `TRANSFERENCIA_NO_AUTORIZADA`) y la forma del veredicto estructurado. No le queda ninguna decisión de diseño de contrato. Los tests de "traza válida / traza irregular" que la issue exige se derivan directamente de cada comprobación.
+- **Para DES-5 (`api-contract.md`)**: la operación ya está incorporada al contrato (versión 2.1.0, con `UNAUTHORIZED_AGENT_TYPE` agregado en 2.2.0). Cualquier cambio posterior de su semántica exige revisar esta ADR y el contrato en el mismo PR.
 - **Para BASE-3 (#39) y la baseline**: la baseline replica el mismo veredicto, comprobación por comprobación, consumiendo la misma tabla de ADR-001 y el mismo paquete de matriz de ADR-008, para preservar la paridad funcional de la comparación (DES-7).
 - **Para ANMAT (rol `auditor`)**: la misma checklist es utilizable como herramienta de auditoría regulatoria sobre cualquier unidad — la semántica de "traza legítima" no es exclusiva del financiador, aunque su caso de uso (condición de pago) sea el que la motivó.
 - **Se gana**: semántica de "traza legítima" cerrada, determinística y replicable; CC-8 y BASE-3 desbloqueadas con criterio de aceptación verificable; la afirmación del trabajo escrito sobre la validación informática del trazado queda materializada con límites honestos.
 - **Se pierde / costo**: la verificación solo ve lo que el ledger y el registro guardan — sin habilitación histórica, sin versiones históricas de matriz, sin intentos rechazados, sin vínculo afiliado↔unidad (ver "Límites de la verificación"); el veredicto agrega lógica de verificación al chaincode y a la baseline que debe mantenerse en paridad.
-- **Queda pendiente**: la firma exacta de la operación, en CC-8; y el versionado del registro organización-establecimiento si una revisión futura quisiera validar habilitación histórica de actores (reabriría la alternativa C).
+- **Queda pendiente**: el versionado del registro organización-establecimiento, si una revisión futura quisiera validar habilitación histórica de actores (reabriría la alternativa C).
 
 ## Divergencia con el trabajo escrito
 

@@ -84,7 +84,7 @@ Se adoptan las **alternativas C y E**. Las reglas concretas que esta ADR fija so
 
 5. **Reingreso a stock (T25/T26/T27).** `Restock` valida lo que el trabajo escrito enumera para el caso reingreso: la unidad no está vencida, no está destruida/deteriorada, no está robada/extraviada, y no pesan sobre ella retiro de mercado ni prohibición vigentes. El actor es el custodio actual registrado (T25/T26, conforme al punto 3) o ANMAT/laboratorio titular cuando existe cierre o corrección autorizada (T27, conforme a ADR-001). El resultado `EN_CUSTODIA` **mantiene `CustodioActual` sin cambios**: la unidad reingresa al stock de quien la tiene registrada.
 
-Queda fuera de alcance de esta ADR: el modelado bifásico del retorno físico (derivado a una revisión futura de esta ADR si un requisito lo exige), las firmas y payloads concretos de las operaciones (DES-5/EXT-4) y las políticas de endoso (DES-6, que no requiere cambios).
+Queda fuera de alcance de esta ADR: el modelado bifásico del retorno físico (derivado a una revisión futura de esta ADR si un requisito lo exige) y la implementación en chaincode y baseline (EXT-4/CC-5, BASE-2). Las firmas y payloads —incluidos el `transient` `devolucion` y las validaciones del punto 2— **sí** están fijados, en el contrato DES-5 (versiones 2.1.0 y 2.2.0); las políticas de endoso las fija DES-6 con las salvedades de ADR-007 y no requieren cambios adicionales por esta ADR.
 
 ## Justificación
 
