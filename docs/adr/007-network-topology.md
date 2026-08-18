@@ -97,10 +97,12 @@ Además, DES-6 delega explícitamente la materialización de su tabla de endoso 
 5. **Bootstrap del dataset mínimo**: secuencia ordenada, ejecutada por los scripts de red (NET-2/NET-4):
    - (a) generación del material criptográfico de todas las organizaciones (custodiales, `AnmatMSP`, `FinanciadorMSP` y las tres MSP de orderer) vía Fabric CA;
    - (b) génesis y creación de `snt-channel` con las 3 organizaciones de ordenamiento y todas las organizaciones de peers;
-   - (c) despliegue del chaincode `snt` con el `collections_config.json` generado conforme ADR-006;
-   - (d) seed del registro organización-establecimiento: una invocación de `RegisterOrganization` por cada organización custodial, ejecutada por una identidad de `AnmatMSP` con `snt.role=regulatory-admin`, más las entradas de las organizaciones no custodiales según lo que decida ADR-010. La entrada registral de `AnmatMSP` (si corresponde alguna) se resuelve conforme ADR-010; este ADR la referencia como dependencia y no la decide.
+   - (c) **secuencia 1 de lifecycle — despliegue de bootstrap**: instalación del paquete del chaincode `snt` (que embebe la matriz de ADR-008 y el manifiesto fundacional de ADR-010), `approveformyorg` de cada organización sobre ese `packageID`, y `commit` de la definición con el `collections_config.json` generado conforme ADR-006, `--init-required` y **política de endoso `AND` de todas las organizaciones fundacionales** (ADR-010, punto 4);
+   - (d) invocación de `Init` por una identidad de la organización regulatoria con `snt.role=regulatory-admin`, que siembra la entrada `REGULATOR` del registro y fija su protección por SBE. Es la única transacción que se ejecuta bajo la política estricta;
+   - (e) **secuencia 2 de lifecycle — definición operativa**: nueva secuencia con la misma versión de paquete y la **política de endoso operativa** (`OR` laxa de las organizaciones custodiales, punto 6);
+   - (f) seed del resto del registro organización-establecimiento: una invocación de `RegisterOrganization` por cada organización custodial y por cada organización no custodial restante (financiadores), ejecutada por una identidad de la organización regulatoria con `snt.role=regulatory-admin`.
 
-   La secuencia materializa la coordinación que ADR-003 exige: ninguna organización queda activa en el registro sin estar incorporada al canal, ni viceversa.
+   La secuencia materializa la coordinación que ADR-003 exige: ninguna organización queda activa en el registro sin estar incorporada al canal, ni viceversa. Los pasos (c) a (e) materializan el bootstrap en dos etapas que decide ADR-010: la semilla regulatoria se confirma bajo unanimidad de las organizaciones fundacionales y anclada al `packageID` que todas aprobaron, y recién después la red pasa a la política laxa que el punto 6 necesita.
 
 6. **Materialización del endoso (para NET-6)**: política de endoso de chaincode base **laxa** (`OR` de las organizaciones custodiales del dataset mínimo) combinada con **state-based endorsement (SBE)** aplicado por el chaincode sobre la clave pública de cada unidad y sobre las claves de gobernanza.
 
