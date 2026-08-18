@@ -146,6 +146,18 @@ Cambios en orden de aparición dentro del documento.
 
   Si el equipo considera que la redacción original era intencional y que efectivamente debe validarse lo contrario, entonces el cambio va del otro lado: hay que revisar ADR-009, porque el prototipo estaría implementando una regla distinta de la relevada.
 
+### 1.9 — §3.4: el aislamiento no cubre los metadatos de relación entre organizaciones
+
+- [ ] Aplicado
+- **Hallazgo de origen**: detectado en la review del PR #88 sobre ADR-006.
+- **Ubicación exacta**: §3.4, a continuación del párrafo de aislamiento que corrige la entrada 1.6. Aplica también al capítulo de limitaciones de la tesis (entrada 2.12).
+- **Problema**: la corrección de la entrada 1.6 acota el aislamiento al **contenido** comercial y documental, pero sigue sin decir qué pasa con el **hecho** de que dos organizaciones operaron entre sí. ADR-006 materializa las colecciones privadas como una colección por par de organizaciones, con nombre determinístico derivado de ambos `mspId`. Ese nombre viaja **en claro** en el `CollectionHashedReadWriteSet` de cada transacción, y la membresía de cada colección es pública porque forma parte de la definición del chaincode que todas las organizaciones aprueban en el lifecycle. En consecuencia, cualquier miembro del canal que observe los bloques puede inferir que las organizaciones A y B registraron una operación en un momento dado, aunque no pueda leer ni el contenido ni sobre qué unidad recae. El mecanismo **reduce** la exposición de relaciones comerciales a metadatos observables por análisis de bloques; no la elimina.
+- **Cambio requerido** — agregar a continuación del párrafo de aislamiento:
+
+  > Esta protección alcanza al contenido de cada operación, no al hecho de que dos organizaciones hayan operado entre sí. La materialización elegida —una colección de datos privados por par de organizaciones autorizadas— hace que el identificador de la colección utilizada quede registrado en claro en el conjunto de lectura-escritura de cada transacción, de modo que un observador con acceso al canal puede inferir que dos establecimientos registraron una operación, sin poder determinar su contenido, su valor ni la unidad involucrada. Cerrar también ese canal de metadatos exigiría una colección única con contenido cifrado extremo a extremo, alternativa descartada para el prototipo porque traslada la garantía de confidencialidad desde la plataforma hacia la gestión de claves y compromete la visibilidad regulatoria.
+
+- **Nota**: si el equipo prefiere no extender §3.4 en el paper de congreso por límite de espacio, la salvedad **debe** aparecer al menos en el capítulo de limitaciones de la tesis. Lo que no puede quedar es la afirmación de aislamiento sin la acotación.
+
 ---
 
 ## 2. Avance de tesis
@@ -342,6 +354,7 @@ Prioridad derivada de la severidad del hallazgo en `consistency-review.md`: 🔴
 | 1.6 | Paper §3.4 — alcance del aislamiento de información | A3 | Alta |
 | 1.7 | Paper §3.4 — excepción de endoso en el registro inicial | E7 | Baja |
 | 1.8 | Paper §3.2 — condición de custodia en reingreso a stock (negación invertida) | review PR #88 | Alta |
+| 1.9 | Paper §3.4 + limitaciones de tesis — metadatos de relación no cubiertos por el aislamiento | review PR #88 | Media |
 | 2.1 | Tesis §2.1.2.1 + bibliografía — Resolución 435/2011 | B3 | Media |
 | 2.2 | Tesis §2.1.3 — Disp. 7439/1999 y Dec. 1299/1997 | E2 | Media |
 | 2.3 | Tesis §2.1.3.1 — acceso de auditoría de PAMI | B7 | Baja |

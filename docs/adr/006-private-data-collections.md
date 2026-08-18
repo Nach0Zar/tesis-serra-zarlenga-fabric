@@ -113,7 +113,11 @@ Esta limitación debe listarse entre las limitaciones del prototipo en la tesis,
 
 ## Divergencia con el trabajo escrito
 
-No hay divergencia. El trabajo escrito afirma que el ledger común conserva el hash de la información privada como evidencia verificable, y esta decisión lo cumple: cada escritura del registro de operación en la colección del par deja su hash en el read-write set de la transacción del canal, visible para toda organización miembro, incluso después de que el contenido activo se elimine con `DelPrivateData` al cerrar la operación. Se deja constancia explícita de que la afirmación del trabajo escrito queda satisfecha sin necesidad de actualización.
+**Lo que el trabajo escrito afirma y esta decisión cumple sin salvedades**: que el ledger común conserva el hash de la información privada como evidencia verificable. Cada escritura del registro de operación en la colección del par deja su hash en el read-write set de la transacción del canal, visible para toda organización miembro, incluso después de que el contenido activo se elimine con `DelPrivateData` al cerrar la operación.
+
+**Lo que el trabajo escrito afirma de más, y esta decisión obliga a acotar**: la frase de §3.4 sobre aislamiento de información entre actores. La entrada 1.6 del manual de actualización ya la acota al **contenido** comercial y documental, distinguiéndolo del estado mínimo público. La sección "Límites de confidencialidad del mecanismo" de esta ADR agrega una segunda acotación que esa entrada no cubría: la materialización por colección-por-par expone el **hecho** de que dos organizaciones operaron entre sí, porque el nombre de la colección viaja en claro en el `CollectionHashedReadWriteSet` y su membresía es pública. La afirmación de aislamiento, incluso corregida por la entrada 1.6, seguiría siendo más fuerte de lo que el prototipo entrega.
+
+La divergencia queda registrada como **entrada 1.9 del manual de actualización del trabajo escrito** (`docs/paper-update-instructions.md`), con la redacción propuesta, y debe listarse entre las limitaciones del prototipo en la tesis junto con las de ADR-003.
 
 ## Contexto utilizado
 
