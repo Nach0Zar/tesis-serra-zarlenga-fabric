@@ -1,6 +1,6 @@
 # Contrato de interfaz del chaincode `snt`
 
-- **Versión del contrato**: `2.2.0`
+- **Versión del contrato**: `2.3.0`
 - **Estado**: Congelado. Los cambios se rigen por la política de versionado (última sección): un cambio incompatible exige un PR etiquetado `breaking-change` y aprobación explícita de B (el integrante responsable de cliente y baseline, conforme la issue #11 / DES-5).
 - **Fecha**: 2026-08-13
 - **Autores**: Serra, Zarlenga
@@ -136,7 +136,7 @@ func (c *SNTContract) RegisterUnit(ctx contractapi.TransactionContextInterface, 
 
 - **Transición**: T01. Estado resultante: `EN_LABORATORIO`.
 - **Autorización**: `agentType=LABORATORY`, `active=true`, `snt.role=operator`.
-- **Endoso**: laboratorio invocante (DES-6).
+- **Endoso**: laboratorio invocante (DES-6). **Límite declarado** (ADR-007, punto 6.g): la clave de la unidad no existe todavía, con lo que esta primera escritura se valida contra la política de chaincode (`OR` de las organizaciones custodiales) y **cualquier** peer custodial puede endosarla; la política por clave que la operación fija —la organización del laboratorio— rige desde la transacción siguiente. Lo que la plataforma sí garantiza es que el creador de la transacción es una identidad de un laboratorio registrado, y que un alta duplicada se rechaza por validación MVCC.
 - **Request**:
 
 ```json
@@ -159,7 +159,7 @@ func (c *SNTContract) DispatchTransfer(ctx contractapi.TransactionContextInterfa
 
 - **Transición**: T02 (desde `EN_LABORATORIO`) o T03 (desde `EN_CUSTODIA`). Estado resultante: `EN_TRANSITO`.
 - **Autorización**: invocador = custodio actual, `active=true`, `snt.role=operator`; par origen → destino permitido por DES-3.
-- **Endoso**: origen y destino de la transferencia (DES-6).
+- **Endoso**: peer del custodio actual (emisor). La operación fija sobre la clave de la unidad la política de tránsito `AND(emisor, receptor declarado)`, que rige las escrituras posteriores (ADR-007, punto 6.b).
 - **Request** (público): solo referencia la unidad. El destino **no** viaja acá — ver `transient` abajo (ADR-004).
 
 ```json
@@ -198,7 +198,7 @@ func (c *SNTContract) ReceiveTransfer(ctx contractapi.TransactionContextInterfac
 
 - **Transición**: T04. Estado resultante: `EN_CUSTODIA`.
 - **Autorización**: invocador = destinatario declarado en el registro de la operación **activa** (ADR-004, "Ciclo de vida del registro de operación"; nunca contra operaciones cerradas), `active=true`, `snt.role=operator`.
-- **Endoso**: origen y destino (DES-6).
+- **Endoso**: `AND(org emisora, org receptora declarada)`, impuesto por la política de la clave que fijó el despacho. **Sin rama alternativa**: ninguna otra organización —tampoco `AnmatMSP`— puede sustituir a una de las dos partes (ADR-007, punto 6.b).
 - **Request**: `UnitRefRequest` (`gtin`, `numeroSerie`). Puede acompañarse de `transient` clave `commercial` con la confirmación documental de recepción.
 - **Response**: `MedicationUnitView` con `custodioActual` = el receptor y `estado=EN_CUSTODIA`.
 - **Errores**: `INVALID_REQUEST`, `UNIT_NOT_FOUND`, `NOT_IN_TRANSIT`, `RECEIVER_MISMATCH`, `UNAUTHORIZED_ROLE`, `ORG_NOT_REGISTERED`, `ORG_INACTIVE`.
@@ -211,7 +211,7 @@ func (c *SNTContract) RejectTransfer(ctx contractapi.TransactionContextInterface
 
 - **Transición**: T05. Estado resultante: `DEVUELTO`.
 - **Autorización**: invocador = destinatario declarado en el registro de la operación **activa** (ADR-004; nunca contra operaciones cerradas) o custodio actual (emisor), `snt.role=operator`.
-- **Endoso**: origen y destino (DES-6).
+- **Endoso**: `AND(org emisora, org receptora declarada)`, impuesto por la política de la clave que fijó el despacho. **Sin rama alternativa**: ninguna otra organización —tampoco `AnmatMSP`— puede sustituir a una de las dos partes (ADR-007, punto 6.b).
 - **Request**: `UnitEventRequest` (`gtin`, `numeroSerie`, `motivo`).
 - **Response**: `MedicationUnitView` con `estado=DEVUELTO` y `custodioActual` = el emisor, que permanece sin cambios por convención de ADR-004; T05 no registra que el retorno físico al remitente haya ocurrido (la resolución posterior de `DEVUELTO` se rige por ADR-001 y EXT-4).
 - **Errores**: `UNIT_NOT_FOUND`, `NOT_IN_TRANSIT`, `RECEIVER_MISMATCH` (el invocador no es ni el destinatario declarado ni el emisor), `UNAUTHORIZED_ROLE`, `INVALID_REQUEST`.
@@ -224,7 +224,7 @@ func (c *SNTContract) Dispense(ctx contractapi.TransactionContextInterface, req 
 
 - **Transición**: T06. Estado resultante: `DISPENSADO`.
 - **Autorización**: invocador = custodio actual con `agentType=PHARMACY` o `HEALTHCARE_FACILITY`, `snt.role=operator`.
-- **Endoso**: organización dispensadora (DES-6).
+- **Endoso**: peer de la organización dispensadora, que es el custodio actual y la única rama de la política de reposo de la clave (ADR-007, punto 6.a).
 - **Request**: `UnitRefRequest` (`gtin`, `numeroSerie`). **No** se envían datos del paciente (Ley 25.326; ADR-005; CC-4).
 - **Response**: `MedicationUnitView` con `estado=DISPENSADO`.
 - **Errores**: `INVALID_REQUEST`, `UNIT_NOT_FOUND`, `UNAUTHORIZED_CUSTODIAN`, `UNAUTHORIZED_AGENT_TYPE`, `UNAUTHORIZED_ROLE`, `INVALID_STATE_TRANSITION`.
@@ -250,17 +250,17 @@ La diferencia entre operaciones está en la transición ADR-001, el estado resul
 
 | Función | Transiciones | Estado resultante | Actor habilitado | Endoso (DES-6) |
 |---|---|---|---|---|
-| `Quarantine` | T07, T08, T09 | `EN_CUARENTENA` | Custodio actual o ANMAT | Custodio actual; ANMAT si lo inicia ANMAT |
-| `ReleaseQuarantine` | T10 | `EN_CUSTODIA` | Custodio actual o ANMAT | Custodio actual; ANMAT si lo inicia ANMAT |
-| `ReportExpired` | T11, T12, T13 | `VENCIDO` | Custodio actual o ANMAT | Custodio actual |
-| `ReportStolen` | T14 | `ROBADO` | Custodio actual o ANMAT | Custodio actual |
-| `ReportLost` | T15 | `EXTRAVIADO` | Custodio actual o ANMAT | Custodio actual |
-| `ReportDamaged` | T16 | `DETERIORADO` | Custodio actual o ANMAT | Custodio actual |
-| `WithdrawFromMarket` | T17, T18, T19 | `RETIRADO_MERCADO` | ANMAT o laboratorio titular | Custodio actual; **laboratorio no custodio: previa `AuthorizeLabIntervention` + endoso de `AnmatMSP`** (DES-6; ADR-007, punto 6.e) |
-| `ProhibitProduct` | T20 | `PROHIBIDO` | Solo ANMAT | `AnmatMSP` (`REGULATORY_ONLY`) |
-| `ReturnProduct` | T21, T22, T23, T24 | `DEVUELTO` | Custodio actual (o ANMAT según origen) | Custodio actual |
-| `Restock` | T25, T26, T27 | `EN_CUSTODIA` | Agente de recupero, custodio o ANMAT según origen | Custodio actual; ANMAT si el origen es `RETIRADO_MERCADO`; laboratorio no custodio: previa `AuthorizeLabIntervention` + endoso de `AnmatMSP` |
-| `FinalDisposition` | T28, T29, T30, T31, T32, T33 | `DISPUESTO_FINAL` | Agente de recupero/disposición, ANMAT o laboratorio según origen | Custodio actual; ANMAT en disposiciones regulatorias; laboratorio no custodio: previa `AuthorizeLabIntervention` + endoso de `AnmatMSP` |
+| `Quarantine` | T07, T08, T09 | `EN_CUARENTENA` | Custodio actual o ANMAT | Peer del custodio actual. Cuando lo inicia ANMAT, ANMAT es el **creador** de la transacción y el peer del custodio la endosa |
+| `ReleaseQuarantine` | T10 | `EN_CUSTODIA` | Custodio actual o ANMAT | Peer del custodio actual; ANMAT como creador cuando lo inicia |
+| `ReportExpired` | T11, T12, T13 | `VENCIDO` | Custodio actual o ANMAT | Peer del custodio actual |
+| `ReportStolen` | T14 | `ROBADO` | Custodio actual o ANMAT | Peer del custodio actual |
+| `ReportLost` | T15 | `EXTRAVIADO` | Custodio actual o ANMAT | Peer del custodio actual |
+| `ReportDamaged` | T16 | `DETERIORADO` | Custodio actual o ANMAT | Peer del custodio actual |
+| `WithdrawFromMarket` | T17, T18, T19 | `RETIRADO_MERCADO` | ANMAT o laboratorio titular | Peer del custodio actual; **laboratorio no custodio: previa `AuthorizeLabIntervention` + endoso conjunto del laboratorio y de `AnmatMSP`** (DES-6; ADR-007, punto 6.f) |
+| `ProhibitProduct` | T20 | `PROHIBIDO` | Solo ANMAT | ANMAT como creador (`REGULATORY_ONLY`) + peer del custodio actual como endosante |
+| `ReturnProduct` | T21, T22, T23, T24 | `DEVUELTO` | Custodio actual (o ANMAT según origen) | Peer del custodio actual |
+| `Restock` | T25, T26, T27 | `EN_CUSTODIA` | Agente de recupero, custodio o ANMAT según origen | Peer del custodio actual; ANMAT como creador si el origen es `RETIRADO_MERCADO`; laboratorio no custodio: previa `AuthorizeLabIntervention` + endoso conjunto del laboratorio y de `AnmatMSP` |
+| `FinalDisposition` | T28, T29, T30, T31, T32, T33 | `DISPUESTO_FINAL` | Agente de recupero/disposición, ANMAT o laboratorio según origen | Peer del custodio actual; ANMAT como creador en disposiciones regulatorias; laboratorio no custodio: previa `AuthorizeLabIntervention` + endoso conjunto del laboratorio y de `AnmatMSP` |
 
 Notas:
 
@@ -284,9 +284,11 @@ Notas:
 
   La validación 6 es la que garantiza que la colección del par exista (ADR-006, punto 1). Sin ella el chaincode resolvería el nombre de una colección inexistente y la operación fallaría con un error de plataforma en lugar de con un código de este contrato. **No** se exige que el receptor sea el proveedor real de esa unidad: ver ADR-009, punto 2, "Qué no se exige en v1, y por qué".
 
-- **Eventos extraordinarios sobre una unidad en `EN_TRANSITO`**: cuando la unidad está en tránsito, el evento cierra además el registro de operación en la PDC del par (`DelPrivateData`, ADR-006, punto 4). Esa escritura privada debe satisfacer la política de endoso de la colección, `OR(org emisora, org receptora)`, con lo que un evento iniciado por ANMAT en esa ventana **no** es una transacción de un solo endoso: exige también el peer de una de las dos organizaciones de la operación pendiente.
+- **Eventos extraordinarios sobre una unidad en `EN_TRANSITO`**: mientras dura el tránsito, la clave de la unidad lleva la política `AND(org emisora, org receptora declarada)` (ADR-007, punto 6.b), de modo que **cualquier** evento en esa ventana —lo inicie el custodio o ANMAT— exige el endoso de **ambas** organizaciones de la operación pendiente. El evento cierra además el registro de operación en la PDC del par (`DelPrivateData`, ADR-006, punto 4), escritura sujeta a la política de la colección `OR(org emisora, org receptora)`, que queda satisfecha por construcción y opera como barrera independiente.
 
-- **Intervención de un laboratorio no custodio** (`WithdrawFromMarket`, `Restock`, `FinalDisposition`): cuando el invocador es una organización con `agentType=LABORATORY` que **no** es el custodio actual, el chaincode exige una autorización de intervención vigente (`AuthorizeLabIntervention`) para esa unidad, ese laboratorio y esa operación, y la **consume** borrándola. Como esa clave está protegida por SBE que exige a la organización regulatoria, la transacción debe llevar su endoso: es así como se materializa el par «laboratorio invocante + `AnmatMSP`» que pide DES-6 (ADR-007, punto 6.e). Sin autorización vigente, `LAB_INTERVENTION_REQUIRED`.
+- **Endoso de los eventos iniciados por ANMAT**: la política de la clave de una unidad **no** admite a `AnmatMSP` como rama alternativa. Si la admitiera, cualquier operación sobre esa clave —incluida una dispensación o una recepción— podría endosarse únicamente con el peer del regulador, porque Fabric evalúa la política de la clave sin saber qué función la escribió. Un evento regulatorio se ejecuta, por lo tanto, con ANMAT como **creador** de la transacción —identidad verificada por la plataforma y resuelta por el chaincode como `agentType=REGULATOR` con `snt.role=regulatory-admin`— y con el peer del custodio actual (o de ambas partes, en tránsito) como endosante. El cliente de ANMAT debe recolectar ese endoso; si el peer del custodio no está disponible, la operación no puede confirmarse (limitación declarada en `docs/alcance-prototipo.md`).
+
+- **Intervención de un laboratorio no custodio** (`WithdrawFromMarket`, `Restock`, `FinalDisposition`): cuando el invocador es una organización con `agentType=LABORATORY` que **no** es el custodio actual, el chaincode exige una autorización de intervención vigente (`AuthorizeLabIntervention`) para esa unidad, ese laboratorio y esa operación, y la **consume** borrándola. Como esa clave está protegida por SBE `AND(laboratorio designado, AnmatMSP)`, la transacción debe llevar **ambos** endosos: es así como se materializa el par «laboratorio invocante + `AnmatMSP`» que pide DES-6 (ADR-007, punto 6.f). Sumado al endoso del custodio actual que exige la clave de la unidad, la operación queda cubierta por tres organizaciones. Sin autorización vigente, `LAB_INTERVENTION_REQUIRED`.
 
 - El chaincode valida internamente que el estado de origen de la unidad admita la transición pedida; si no, devuelve `INVALID_STATE_TRANSITION`. La misma función cubre varios estados de origen (por ejemplo `ReportStolen` aplica a `EN_LABORATORIO`, `EN_TRANSITO`, `EN_CUSTODIA`, `EN_CUARENTENA` o `DEVUELTO`).
 - Las operaciones que exigen ANMAT devuelven `REGULATORY_ONLY` si el invocador no satisface el rol o coendoso regulatorio.
@@ -298,7 +300,7 @@ Notas:
 func (c *SNTContract) AuthorizeLabIntervention(ctx contractapi.TransactionContextInterface, req AuthorizeLabInterventionRequest) (*LabInterventionView, error)
 ```
 
-Autoriza a un laboratorio titular a ejecutar **una** operación extraordinaria sobre una unidad que está bajo custodia de un tercero. Existe porque el par de endosos que DES-6 exige para ese caso no puede imponerse con SBE sobre la clave de la unidad: la política de una clave se evalúa contra el estado previo y no puede condicionarse a la operación intentada (ADR-007, punto 6).
+Autoriza a un laboratorio titular a ejecutar **una** operación extraordinaria sobre una unidad que está bajo custodia de un tercero. Existe porque el par de endosos que DES-6 exige para ese caso no puede imponerse con SBE sobre la clave de la unidad: la política de una clave se evalúa contra el estado previo y no puede condicionarse a la operación intentada (ADR-007, punto 6.f).
 
 - **Autorización**: `agentType=REGULATOR`, `active=true`, `snt.role=regulatory-admin`.
 - **Request**:
@@ -316,8 +318,9 @@ Autoriza a un laboratorio titular a ejecutar **una** operación extraordinaria s
 
 - **Valores de `operacion`**: `WITHDRAW_FROM_MARKET`, `RESTOCK`, `FINAL_DISPOSITION` — las tres operaciones que DES-6 habilita a un laboratorio no custodio.
 - **Validaciones**: la unidad existe; `laboratorio` está registrado, activo y con `agentType=LABORATORY`; `operacion` pertenece al catálogo; `expiraEn` es ISO 8601 y **posterior** al `GetTxTimestamp()` de la transacción.
-- **Efectos**: escribe la clave pública `LabIntervention`+[`gtin`,`numeroSerie`] y le fija una política de endoso por clave (SBE) que exige a la organización regulatoria. Si ya existía una autorización para esa unidad, la reemplaza.
-- **Consumo**: la operación del laboratorio la lee, verifica que coincidan laboratorio y operación y que no haya expirado, y la **borra**. Como la clave está protegida por SBE regulatoria, ese borrado obliga a que la transacción del laboratorio lleve el endoso de la organización regulatoria.
+- **Efectos**: escribe la clave pública `LabIntervention`+[`gtin`,`numeroSerie`] y le fija una política de endoso por clave (SBE) **`AND(<org del laboratorio designado>, AnmatMSP)`**. No alcanza con exigir a la organización regulatoria: eso probaría la participación de ANMAT y dejaría la del laboratorio apoyada únicamente en su firma de creador, que acredita identidad e iniciativa pero **no es un endoso de peer** — precisión respecto de la versión 2.2.0.
+- **Consumo**: la operación del laboratorio la lee, verifica que coincidan laboratorio y operación y que no haya expirado, y la **borra**. Ese borrado obliga a que la transacción lleve el endoso conjunto del laboratorio designado y de la organización regulatoria. Como esa misma transacción escribe además la clave de la unidad, sujeta a la política de reposo, el endoso efectivo es de **tres** organizaciones: laboratorio designado, regulador y custodio actual (ADR-007, punto 6.f).
+- **Reemplazo**: reemitir una autorización sobre una unidad que ya tiene una vigente exige satisfacer la política de la clave existente, es decir el endoso del laboratorio designado originalmente. Re-dirigir una autorización a un laboratorio distinto antes de su vencimiento requiere, por lo tanto, el endoso del laboratorio anterior o esperar a `expiraEn`. Se acota fijando ventanas de vigencia cortas; queda declarado en `docs/alcance-prototipo.md`.
 - **Response** (`LabInterventionView`): los campos persistidos más el `mspId` regulatorio que la emitió y el timestamp de emisión.
 - **Errores**: `INVALID_REQUEST`, `UNIT_NOT_FOUND`, `ORG_NOT_REGISTERED`, `ORG_INACTIVE`, `INVALID_LAB_INTERVENTION`, `REGULATORY_ONLY`.
 - **Fuera de alcance en v1**: no existe operación de revocación anticipada. El riesgo de una autorización pendiente se acota con `expiraEn`, que la autoridad regulatoria fija tan corto como el caso lo requiera. Agregar `RevokeLabIntervention` sería un cambio MINOR si un requisito lo pidiera.
@@ -500,5 +503,5 @@ func (c *SNTContract) QueryUnitsByGTIN(ctx contractapi.TransactionContextInterfa
 - Todo cambio a este documento requiere aprobación explícita de B antes del merge, según la story DES-5.
 - Este contrato implementa ADR-004 (transferencia en dos operaciones, destinatario declarado en PDC) y ADR-005 (financiador de solo lectura), ambas decisiones vigentes integradas en `develop`. Si alguna se revisara mediante un ADR posterior, las operaciones de transferencia o la nota del financiador deben revisarse aquí.
 - **Historial de cambios incompatibles**: `2.0.0` — el destino de `DispatchTransfer` pasa de argumento público a `transient` (clave `destinatario`), y `destinatarioPendiente` se elimina de `MedicationUnitView`, para alinear el contrato con la revisión de ADR-004 que clasifica el destinatario declarado como dato privado (PDC), no público.
-- **Historial de cambios compatibles**: `2.2.0` — incorpora la superficie que exige la corrección de ADR-007 sobre los límites del endoso basado en estado, y cierra las reglas que ADR-009 dejaba abiertas: nueva operación `Init`, sin argumentos, que siembra la entrada `REGULATOR` resolviendo la identidad del regulador contra el manifiesto fundacional embebido en el paquete (ADR-010); nueva operación `AuthorizeLabIntervention`, sin la cual el par de endosos que DES-6 exige a un laboratorio no custodio no es materializable; seis validaciones tipificadas del receptor declarado en el `transient` `devolucion` de `ReturnProduct`; nota de endoso para los eventos extraordinarios sobre una unidad en `EN_TRANSITO`, que cierran el registro privado y por lo tanto exigen también el endoso de una de las dos partes; `UNAUTHORIZED_AGENT_TYPE` en la lista de errores de `VerifyTrace`; y los códigos nuevos `ALREADY_INITIALIZED`, `INVALID_LAB_INTERVENTION` y `LAB_INTERVENTION_REQUIRED`. Agregados compatibles: ninguna firma existente cambia y ningún `code` previo altera su semántica. `2.1.0` — incorpora al contrato la superficie pública que introdujeron ADR-009, ADR-010 y ADR-011, en lugar de diferirla a las issues de implementación: nueva operación de lectura `VerifyTrace` con su veredicto estructurado; `transient` opcional `devolucion` en `ReturnProduct`; valores admitidos de `agentType`/`idType` para organizaciones no custodiales en `RegisterOrganization`, con la invariante de unicidad del regulador; invariante de último regulador activo y nuevo `code` `LAST_ACTIVE_REGULATOR` en `SetOrganizationActive`. Agregados compatibles: ninguna firma existente cambia ni se altera la semántica de un `code` previo. `2.0.1` — corrige el dígito verificador GS1 del GTIN de los ejemplos (`07791234567890` → `07791234567898`; el valor anterior habría sido rechazado por la propia validación de `INVALID_REQUEST`), completa las listas de errores por operación para que toda condición de autorización declarada tenga su código (`DispatchTransfer`/`ReceiveTransfer`: `ORG_NOT_REGISTERED`/`ORG_INACTIVE`; `RejectTransfer`: `RECEIVER_MISMATCH`; `Dispense`: `UNAUTHORIZED_ROLE`), agrega el lineamiento sobre `motivo` y aclara quién es B. Sin cambios de firmas, `code`s del catálogo ni esquemas. `2.0.2` — la autorización de `ReceiveTransfer`/`RejectTransfer` y el error `RECEIVER_MISMATCH` validan contra el registro de la operación **activa** (nunca contra operaciones cerradas, conforme el ciclo de vida de ADR-004); la respuesta de `RejectTransfer` deja de afirmar un retorno físico consumado; se precisa que el flujo del financiador usa `ReadUnit`/`GetUnitHistory`; las notas de dependencia de merge pasan a describir ADR-004/ADR-005 como decisiones vigentes en `develop`. Sin cambios de firmas, `code`s ni esquemas.
+- **Historial de cambios compatibles**: `2.3.0` — precisa las columnas y notas de **endoso** de todo el contrato tras la corrección de ADR-007 sobre la regla de que la política de endoso es de la clave y no de la función invocada. La política de la clave de una unidad deja de admitir a `AnmatMSP` como rama alternativa —la admitía para habilitar los eventos regulatorios y habilitaba con ello el endoso unilateral del regulador en operaciones ordinarias—, con lo que un evento regulatorio pasa a ejecutarse con ANMAT como creador y el peer del custodio actual como endosante, y todo evento durante el tránsito exige a las dos partes; la SBE de la clave de `AuthorizeLabIntervention` pasa de `AnmatMSP` a `AND(laboratorio designado, AnmatMSP)`, porque la firma de creador del laboratorio no es un endoso de peer; y `RegisterUnit` declara el límite de la ventana de creación de una clave. No cambian firmas, esquemas ni la semántica de ningún `code`, pero **sí cambia de qué peers debe recolectar endosos el cliente**, y por eso se registra como MINOR y no como PATCH. `2.2.0` — incorpora la superficie que exige la corrección de ADR-007 sobre los límites del endoso basado en estado, y cierra las reglas que ADR-009 dejaba abiertas: nueva operación `Init`, sin argumentos, que siembra la entrada `REGULATOR` resolviendo la identidad del regulador contra el manifiesto fundacional embebido en el paquete (ADR-010); nueva operación `AuthorizeLabIntervention`, sin la cual el par de endosos que DES-6 exige a un laboratorio no custodio no es materializable; seis validaciones tipificadas del receptor declarado en el `transient` `devolucion` de `ReturnProduct`; nota de endoso para los eventos extraordinarios sobre una unidad en `EN_TRANSITO`, que cierran el registro privado y por lo tanto exigen también el endoso de una de las dos partes; `UNAUTHORIZED_AGENT_TYPE` en la lista de errores de `VerifyTrace`; y los códigos nuevos `ALREADY_INITIALIZED`, `INVALID_LAB_INTERVENTION` y `LAB_INTERVENTION_REQUIRED`. Agregados compatibles: ninguna firma existente cambia y ningún `code` previo altera su semántica. `2.1.0` — incorpora al contrato la superficie pública que introdujeron ADR-009, ADR-010 y ADR-011, en lugar de diferirla a las issues de implementación: nueva operación de lectura `VerifyTrace` con su veredicto estructurado; `transient` opcional `devolucion` en `ReturnProduct`; valores admitidos de `agentType`/`idType` para organizaciones no custodiales en `RegisterOrganization`, con la invariante de unicidad del regulador; invariante de último regulador activo y nuevo `code` `LAST_ACTIVE_REGULATOR` en `SetOrganizationActive`. Agregados compatibles: ninguna firma existente cambia ni se altera la semántica de un `code` previo. `2.0.1` — corrige el dígito verificador GS1 del GTIN de los ejemplos (`07791234567890` → `07791234567898`; el valor anterior habría sido rechazado por la propia validación de `INVALID_REQUEST`), completa las listas de errores por operación para que toda condición de autorización declarada tenga su código (`DispatchTransfer`/`ReceiveTransfer`: `ORG_NOT_REGISTERED`/`ORG_INACTIVE`; `RejectTransfer`: `RECEIVER_MISMATCH`; `Dispense`: `UNAUTHORIZED_ROLE`), agrega el lineamiento sobre `motivo` y aclara quién es B. Sin cambios de firmas, `code`s del catálogo ni esquemas. `2.0.2` — la autorización de `ReceiveTransfer`/`RejectTransfer` y el error `RECEIVER_MISMATCH` validan contra el registro de la operación **activa** (nunca contra operaciones cerradas, conforme el ciclo de vida de ADR-004); la respuesta de `RejectTransfer` deja de afirmar un retorno físico consumado; se precisa que el flujo del financiador usa `ReadUnit`/`GetUnitHistory`; las notas de dependencia de merge pasan a describir ADR-004/ADR-005 como decisiones vigentes en `develop`. Sin cambios de firmas, `code`s ni esquemas.
 
