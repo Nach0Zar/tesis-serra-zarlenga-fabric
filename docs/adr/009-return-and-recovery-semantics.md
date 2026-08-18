@@ -12,7 +12,7 @@ ADR-001 define el estado `DEVUELTO` y cinco caminos de entrada: el rechazo en tr
 
 En paralelo, el hallazgo C5 de la revisión de congruencia (`docs/consistency-review.md`) señala que el actor lógico `RECOVERY_OR_DISPOSAL_AGENT` de ADR-001 — habilitado en T25 (reingreso a stock) y T28, T29, T31, T32, T33 (disposiciones finales) — no tiene resolución en términos de organizaciones, `agentType` ni `snt.role`: ni ADR-003, ni DES-6, ni el contrato de API definen quién es. Sin esa resolución, esas transiciones no tienen regla de autorización implementable y las operaciones `ReturnProduct`, `Restock` y `FinalDisposition` del contrato (`docs/api-contract.md`) tienen actor habilitado ambiguo.
 
-La decisión D4 de `docs/adr-roadmap.md` (issue #84, DES-15) agrupa estas cuatro preguntas — custodia tras cada camino a `DEVUELTO`, devolución como par bifásico o evento único, resolución de `RECOVERY_OR_DISPOSAL_AGENT`, y distinción entre rechazo en tránsito y devolución post-custodia — y advierte el riesgo de divergencia con el trabajo escrito: el paper describe el caso devolución como entrega y recepción entre dos actores, y el caso reingreso a stock con validaciones concretas que incluyen que quien reingresa sea el actual custodio. Esta ADR resuelve las cuatro preguntas y desbloquea las issues EXT-4 (#30), EXT-5 (#31) y EXT-8 (#63).
+La decisión D4 de `docs/adr-roadmap.md` (issue #84, DES-15) agrupa estas cuatro preguntas — custodia tras cada camino a `DEVUELTO`, devolución como par bifásico o evento único, resolución de `RECOVERY_OR_DISPOSAL_AGENT`, y distinción entre rechazo en tránsito y devolución post-custodia — y advierte el riesgo de divergencia con el trabajo escrito: el paper describe el caso devolución como entrega y recepción entre dos actores, y el caso reingreso a stock con validaciones concretas sobre la aptitud de la unidad y sobre quién puede reincorporarla (con una ambigüedad de redacción en la fuente que esta ADR resuelve explícitamente; ver Justificación). Esta ADR resuelve las cuatro preguntas y desbloquea las issues EXT-4 (#30), EXT-5 (#31) y EXT-8 (#63).
 
 ## Alternativas
 
@@ -42,19 +42,19 @@ La decisión D4 de `docs/adr-roadmap.md` (issue #84, DES-15) agrupa estas cuatro
 
 - Introducir en ADR-003/DES-6 un tipo de agente "recuperador/dispositor" (por ejemplo, gestores de residuos patológicos) con organizaciones propias en el registro.
 - Ningún documento normativo relevado por el proyecto exige que el agente de recupero sea un eslabón trazado distinto de los ya modelados; agregarlo obliga a extender el catálogo de `agentType`, la matriz DES-3 y las políticas de DES-6 sin respaldo en el relevamiento.
-- Se descarta porque agrega un tipo de actor sin fundamento normativo y contradice la validación que el trabajo escrito sí releva: que quien reingresa a stock sea el actual custodio.
+- Se descarta porque agrega un tipo de actor sin fundamento normativo y contradice la validación de custodia que el trabajo escrito sí releva para el reingreso a stock (ver Justificación sobre la lectura adoptada de esa cláusula).
 
 **E. `RECOVERY_OR_DISPOSAL_AGENT` resuelto como el custodio actual registrado con rol `operator`**
 
 - El actor lógico se resuelve, en cada transición donde ADR-001 lo habilita, como la organización que figura como `CustodioActual` de la unidad, con `snt.role=operator`, complementada por los actores alternativos que la fila correspondiente de ADR-001 ya lista (ANMAT, laboratorio titular según transición).
-- Aplica literalmente la validación del trabajo escrito, no requiere `agentType` ni rol nuevo, y es implementable con las reglas de autorización ya definidas por DES-6.
+- Aplica la validación de custodia que el trabajo escrito releva para el reingreso, en la lectura corregida que la Justificación declara, no requiere `agentType` ni rol nuevo, y es implementable con las reglas de autorización ya definidas por DES-6.
 - Se adopta.
 
 ## Decisión
 
 Se adoptan las **alternativas C y E**. Las reglas concretas que esta ADR fija son:
 
-1. **La devolución es un evento único, no un par despacho/recepción.** `DEVOLVER_PRODUCTO` (T05, T21–T24) registra el hecho normativo de la devolución en una sola transacción de chaincode (`ReturnProduct` en el contrato de DES-5). `CustodioActual` **no cambia** en ninguna transición hacia `DEVUELTO`: permanece en quien tenía la custodia registrada — en T05, el emisor del despacho rechazado (como ya fijó ADR-004); en T21–T24, el custodio que declara devolver (aun cuando la transición la invoque ANMAT en los casos T22/T23 donde ADR-001 lo habilita). El traslado físico de retorno al proveedor **no se modela como cambio de custodia en v1**.
+1. **La devolución es un evento único, no un par despacho/recepción.** `DEVOLVER_PRODUCTO` registra el hecho normativo de la devolución en una sola transacción de chaincode. El contrato vigente (DES-5) lo expone con dos funciones según el origen, y esta ADR conserva esa correspondencia: `RejectTransfer` cubre el rechazo en tránsito (T05) y `ReturnProduct` las devoluciones posteriores a custodia (T21–T24). `CustodioActual` **no cambia** en ninguna transición hacia `DEVUELTO`: permanece en quien tenía la custodia registrada — en T05, el emisor del despacho rechazado (como ya fijó ADR-004); en T21–T24, el custodio que declara devolver (aun cuando la transición la invoque ANMAT en los casos T22/T23 donde ADR-001 lo habilita). El traslado físico de retorno al proveedor **no se modela como cambio de custodia en v1**.
 
 2. **Receptor de la devolución como dato privado.** La operación de devolución puede declarar el receptor de la devolución (laboratorio, proveedor, destino de recupero) como dato del registro de la operación en PDC, análogo al destinatario declarado de ADR-004 y con la misma lógica de confidencialidad: es una relación no consumada que no debe quedar en el estado público ni en los argumentos públicos de la transacción (transporte por campo `transient`, materialización de la colección según el esquema de ADR-006). Es un dato informativo y auditable — visible para el custodio declarante, el receptor declarado y `AnmatMSP` — **sin efecto sobre `CustodioActual`**. El payload concreto queda para la actualización del contrato en EXT-4/CC-5.
 
@@ -68,7 +68,13 @@ Queda fuera de alcance de esta ADR: el modelado bifásico del retorno físico (d
 
 ## Justificación
 
-La resolución del actor de recupero aplica literalmente la validación que el trabajo escrito releva para el reingreso a stock: exige "que el actor que intenta reingresar a stock el medicamento sea el actual custodio de este". Resolver `RECOVERY_OR_DISPOSAL_AGENT` hacia el custodio actual registrado convierte esa frase en regla determinística de autorización, sin introducir un tipo de agente nuevo que ninguna fuente normativa relevada respalda. Es además la opción que el hallazgo C5 y la decisión D4 del roadmap identificaron como la más simple y consistente con el resto del diseño.
+La resolución del actor de recupero se apoya en la validación que el trabajo escrito releva para el reingreso a stock, con una corrección de lectura que debe declararse explícitamente. El texto original enumera las condiciones a verificar así:
+
+> "Ejemplos de esto puede ser que el medicamento no se encuentre vencido, que el actor que intenta reingresar a stock el medicamento **no sea** el actual custodio de este o que el medicamento no se haya registrado como destruido o finalmente dispuesto."
+
+Leído literalmente, el segundo ejemplo exigiría validar que quien reingresa **no** sea el custodio actual, lo que resulta incoherente con los otros dos elementos de la misma enumeración —ambos redactados como condiciones cuya verificación protege la operación (que no esté vencido, que no esté destruido)— y con la lógica del proceso: quien reincorpora una unidad al stock es precisamente quien la tiene bajo su custodia registrada. Esta ADR interpreta que se trata de un **error de redacción del trabajo escrito** y adopta la lectura corregida: la validación consiste en verificar que quien reingresa **sí sea** el custodio actual. Es una interpretación consciente, no una cita literal; queda registrada acá y en el manual de correcciones del trabajo escrito (`docs/paper-update-instructions.md`) para que la próxima iteración del documento resuelva la ambigüedad en la fuente.
+
+Sobre esa lectura, resolver `RECOVERY_OR_DISPOSAL_AGENT` hacia el custodio actual registrado convierte la validación en regla determinística de autorización, sin introducir un tipo de agente nuevo que ninguna fuente normativa relevada respalda. Es además la opción que el hallazgo C5 y la decisión D4 del roadmap identificaron como la más simple y consistente con el resto del diseño.
 
 La semántica de evento único extiende a T21–T24 el criterio que ADR-004 ya fijó para T05: en `DEVUELTO`, la custodia registrada permanece en quien la tenía. Esto mantiene una invariante única para todo el estado — el custodio registrado de una unidad en `DEVUELTO` es siempre quien puede resolverla (reingresar, disponer) o sobre quien recaen los eventos extraordinarios — y evita registrar cambios de custodia que el receptor nunca confirmó. El tratamiento del receptor declarado como dato privado es una aplicación directa de la regla de ADR-002/ADR-004: una relación entre partes que aún no se consumó no debe quedar expuesta en el estado público ni en el historial del canal.
 
@@ -80,7 +86,7 @@ Descartar la alternativa A no niega su fidelidad al proceso físico: la descarta
 
 El trabajo escrito describe el caso devolución como "entrega y recepción de un medicamento como devolución **entre dos actores** de la cadena" — es decir, un flujo bifásico con dos agentes detonantes, simétrico al de distribución/recepción.
 
-El prototipo v1 lo simplifica: la devolución es un **evento único** (`DEVOLVER_PRODUCTO`, transacción `ReturnProduct`) que registra el hecho normativo sin cambio de `CustodioActual`; el receptor de la devolución solo existe como dato privado declarado en la PDC de la operación, y el traslado físico de retorno no se representa como transferencia.
+El prototipo v1 lo simplifica: la devolución es un **evento único** (`DEVOLVER_PRODUCTO`, expuesto como `RejectTransfer` para T05 y `ReturnProduct` para T21–T24) que registra el hecho normativo sin cambio de `CustodioActual`; el receptor de la devolución solo existe como dato privado declarado en la PDC de la operación, y el traslado físico de retorno no se representa como transferencia.
 
 La razón es de alcance: replicar el mecanismo bifásico de ADR-004 (estado intermedio, registro de operación, endoso conjunto emisor/receptor, validación de destinatario declarado) para la devolución duplicaría el componente más complejo del diseño en un flujo secundario que no forma parte de las operaciones core medidas por el protocolo de DES-7, sin aportar a la hipótesis comparativa del trabajo.
 
@@ -89,7 +95,7 @@ Esta simplificación debe listarse en el capítulo de limitaciones de la tesis: 
 ## Consecuencias
 
 - **Para EXT-4 (#30), EXT-5 (#31) y EXT-8 (#63)**: quedan desbloqueadas. Las siete transiciones sin regla de autorización implementable (T21–T25, T28, T33, más T29/T31/T32) tienen ahora actor resuelto; los criterios de aceptación de EXT-4 que suponían dos eventos y reversión de custodia deben ajustarse a la semántica de evento único de esta ADR.
-- **Para CC-5/CC-6 y el contrato de API**: `ReturnProduct`, `Restock` y `FinalDisposition` son implementables con las columnas de actor y endoso ya publicadas; el contrato debe incorporar, como extensión compatible, el transporte `transient` opcional del receptor declarado de la devolución (punto 2).
+- **Para CC-5/CC-6 y el contrato de API**: `RejectTransfer`, `ReturnProduct`, `Restock` y `FinalDisposition` son implementables con las columnas de actor y endoso ya publicadas. El contrato incorpora, como agregado compatible de la versión 2.1.0, el transporte `transient` opcional del receptor declarado de la devolución (punto 2): el diseño de esa superficie pertenece a DES-5, no a las issues de implementación.
 - **Para DES-6**: sin cambios. La resolución del punto 3 se apoya en roles y políticas ya definidos (`operator`, coendoso regulatorio existente).
 - **Para ADR-001**: sin cambios en la máquina; esta ADR fija la interpretación de `RECOVERY_OR_DISPOSAL_AGENT` sin tocar la tabla de transiciones.
 - **Para la baseline (BASE-2/ADR-012)**: debe replicar la misma semántica — devolución como evento único sin cambio de custodia y misma resolución de actores — para preservar la paridad funcional exigida por el protocolo de medición.
