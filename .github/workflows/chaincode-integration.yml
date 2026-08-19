@@ -31,13 +31,15 @@ env:
   FABRIC_VERSION: "2.5.16"
   FABRIC_CA_VERSION: "1.5.17"
 
+  # NET-4 (#23) migra este valor a "snt-channel" cuando la red propia del
+  # prototipo reemplace a fabric-samples/test-network (ADR-007, punto 4).
   CHANNEL_NAME: "mychannel"
   CHAINCODE_NAME: "snt"
   CHAINCODE_LANGUAGE: "go"
   CHAINCODE_VERSION: "1.0"
   CHAINCODE_SEQUENCE: "1"
   #TODO: Descomentar cuando exista test/integration/chaincode-e2e.sh (issue CC-3).
-  # Payloads alineados al contrato congelado docs/api-contract.md (v2.1.0):
+  # Payloads alineados al contrato congelado docs/api-contract.md (v2.5.0):
   # - Las escrituras reciben un único argumento JSON (`req`); el custodio NO viaja
   #   como argumento: se resuelve del MSP del invocador (ADR-003).
   # - La transferencia requiere dos pasos: `DispatchTransfer` con el destinatario
@@ -56,7 +58,37 @@ env:
   #   and .estado == "EN_LABORATORIO"
 
 jobs:
+  preflight:
+    name: Detect chaincode module and e2e script
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.detect.outputs.ready }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # El escenario de integracion necesita DOS artefactos que todavia no existen:
+      # el modulo Go del chaincode (CC-1, #14) y el script E2E (CC-3, #16). Se exigen
+      # los dos, y no solo el modulo, para que el job no pase de "skipped" a "rojo"
+      # el dia que aparezca el primero de ellos.
+      - name: Detect prerequisites
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f chaincode/go.mod && -f test/integration/chaincode-e2e.sh ]]; then
+            echo "ready=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "ready=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Falta chaincode/go.mod (CC-1, #14) o test/integration/chaincode-e2e.sh (CC-3, #16); el escenario de integracion se habilita solo cuando existan ambos."
+          fi
+
   integration-test:
+    needs: preflight
+    if: needs.preflight.outputs.ready == 'true'
     name: Fabric network integration
     runs-on: ubuntu-latest
     timeout-minutes: 35
