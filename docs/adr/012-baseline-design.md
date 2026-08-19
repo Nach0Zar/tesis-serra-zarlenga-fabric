@@ -125,7 +125,7 @@ No hay divergencia. El trabajo escrito define la baseline como "interfaz de serv
 - Issue GitHub #37: BASE-1 · Esquema relacional, consultada el 2026-08-17.
 - Issue GitHub #38: BASE-2 · API REST con los procesos core, consultada el 2026-08-17.
 - [`docs/measurement-protocol.md`](../measurement-protocol.md): objetivo y alcance de la comparación (§1–2), definición de latencia de la baseline (§3.1), medición bifásica de la transferencia (§3.4), dataset compartido (§4), condiciones idénticas (§5) y escenarios DB-1/API-1 (§8.2).
-- [`docs/api-contract.md`](../api-contract.md) (v2.4.0): catálogo de códigos de error estables y operaciones del contrato que la baseline debe espejar.
+- [`docs/api-contract.md`](../api-contract.md) (v2.5.0): catálogo de códigos de error estables y operaciones del contrato que la baseline debe espejar.
 - [ADR-001: Máquina de estados del medicamento](001-maquina-estados-medicamento.md): la máquina que la baseline aplica vía el paquete compartido; regla de consumo "el chaincode y la baseline deben rechazar cualquier transición no listada".
 - [ADR-003: Identidad de establecimientos mediante GLN/CUFE](003-establishment-identity-gln-cufe.md): registro organización-establecimiento que `organizations` espeja.
 - [ADR-004: Modelado de la transferencia — despacho/recepción como dos transacciones](004-transfer-dispatch-reception.md): semántica de operación activa que la baseline replica en dos pasos.
