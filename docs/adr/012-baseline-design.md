@@ -49,7 +49,7 @@ La elección de Go es deliberada y es el corazón de esta decisión: la máquina
 
 ### 2. Esquema relacional mínimo
 
-Cuatro tablas, cuyo DDL concreto, índices y migraciones define BASE-1 (#37):
+Cinco tablas, cuyo DDL concreto, índices y migraciones define BASE-1 (#37):
 
 | Tabla | Contenido | Análogo Fabric |
 |---|---|---|

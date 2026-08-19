@@ -32,7 +32,7 @@ El algoritmo de decisión ya está fijado por `domain/README.md` y no se rediscu
 
 **B. `go:embed` del JSON + paquete Go compartido entre chaincode y baseline**
 
-- El JSON se embebe en el binario en tiempo de compilación; todos los peers endosantes ejecutan el mismo binario con la misma matriz, con determinismo garantizado por construcción.
+- El JSON se embebe en el binario en tiempo de compilación: un binario dado evalúa siempre la misma matriz, sin depender del filesystem del peer. La igualdad **entre** los binarios de organizaciones distintas no la da el lifecycle —el `packageID` es local— y se resuelve con el control de despliegue y la comprobación cruzada del punto 5 de la Decisión.
 - Un único paquete Go del repositorio embebe el archivo y expone la función de decisión; chaincode y baseline lo importan, de modo que la paridad no depende de disciplina de los implementadores sino de compartir literalmente el mismo código.
 - Costo: actualizar la matriz exige recompilar y actualizar el chaincode (nueva secuencia del ciclo de vida) y recompilar la baseline. Aceptable para v1, donde la matriz no cambia durante la evaluación.
 - Se adopta.
