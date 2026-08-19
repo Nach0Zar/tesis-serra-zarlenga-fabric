@@ -81,7 +81,7 @@ No hay divergencia. El trabajo escrito exige que la validación normativa se tra
 - [`domain/README.md`](../../domain/README.md): mandato de fuente única sin duplicación de reglas, algoritmo de decisión y política de versionado de la matriz.
 - [`domain/authorized-transfers.json`](../../domain/authorized-transfers.json): matriz vigente (`schemaVersion` 1.0.0, `rulesetId` `PFI_SNT_AUTHORIZED_TRANSFERS`), ids de reglas y prohibiciones.
 - [ADR-005: Rol del organismo financiador en la dispensación](005-rol-organismo-financiador.md): origen de la pregunta sobre la matriz "vigente al momento de esa transferencia" (Decisión, punto 2).
-- ADR-006 (Diseño de colecciones privadas, decisión D1/issue #81, en elaboración): destino del registro de `ruleId` + versión en el registro de operación de la PDC.
+- [ADR-006: Mecanismo de colecciones privadas](006-private-data-collections.md): destino del registro de `ruleId` + `schemaVersion` en el registro de operación de la PDC. ADR-006 lo incorporó al contenido del registro de operación (punto 5 de su Decisión).
 - [`docs/api-contract.md`](../api-contract.md): `DispatchTransfer` y el error `TRANSFER_NOT_AUTHORIZED`.
 - [`docs/adr-roadmap.md`](../adr-roadmap.md): decisión D3, recomendación validada por esta ADR.
 - [Documentación del paquete `embed` de Go](https://pkg.go.dev/embed): semántica de la directiva `//go:embed` (archivos embebidos en el binario en tiempo de compilación).

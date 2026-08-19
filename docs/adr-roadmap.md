@@ -138,7 +138,7 @@ Cada afirmación arquitectónica del trabajo escrito quedó mapeada a la decisi�
 |---|---|---|
 | Hash de datos privados en el ledger común, confidencialidad comercial | D1 · ADR-006 | ✔ cumple (hash del registro de operación en el read-write set del canal) |
 | Distintas organizaciones contribuyen nodos de ordenamiento; sin administrador único | D2 · ADR-007 | ✔ cumple — se eligió deliberadamente la opción fiel (3 orderers en 3 organizaciones) en lugar de simplificar |
-| Raft 3 nodos tolera 1 caída; prueba de disponibilidad | D2 · ADR-007 + DES-7 | ✔ cumple, y gana significado: cada caída es la de una organización distinta |
+| Raft 3 nodos tolera 1 caída; prueba de disponibilidad | D2 · ADR-007 + DES-7 | ✔ cumple **con alcance acotado**: los 3 orderers pertenecen a 3 organizaciones de ordenamiento distintas, de modo que la descentralización es verificable en la configuración del canal. Lo que los escenarios Raft-1/Raft-2 miden es la tolerancia a la caída de **nodos lógicamente asignados** a organizaciones distintas, en host único y con fallos simulados a nivel de contenedor — no la caída física ni administrativa de una organización completa (ADR-007, Justificación; issue #55) |
 | Validación normativa trasladada al chaincode, rechazo determinístico | D3 · ADR-008 | ✔ cumple (matriz embebida en el binario aprobado por las organizaciones) |
 | Casos devolución y reingreso a stock con sus validaciones | D4 · ADR-009 | → **divergencia**: el reingreso aplica la validación del trabajo escrito, pero la devolución se simplifica a evento único (el texto la describe entre dos actores) |
 | Financiadores (en plural: PAMI, obras sociales) con acceso de verificación | D5 · ADR-010, D6 · ADR-011 | ✔ cumple (múltiples financiadores soportados de forma nativa) |

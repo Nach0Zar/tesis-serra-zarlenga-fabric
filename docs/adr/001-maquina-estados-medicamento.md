@@ -55,7 +55,7 @@ La Disposición ANMAT 3683/2011 enumera movimientos logísticos diferenciados qu
 
 La máquina explícita es compatible con ADR-002 porque el `estado del producto` forma parte del estado mínimo de trazabilidad visible en el canal, mientras que esta ADR no define ni replica información comercial o documental que ADR-002 reserva para datos privados. También es compatible con ADR-003 porque los actores de esta ADR son roles lógicos de dominio, no MSP compartidas por categoría: la identidad concreta del custodio o destinatario debe resolverse mediante el registro organización-establecimiento definido por ADR-003.
 
-El estado `EN_TRANSITO` se conserva porque DES-1 lo exige y porque el flujo relevado distingue distribución al eslabón posterior y recepción en establecimiento. La decisión final sobre si esto se implementa como dos transacciones o una operación atómica queda reservada a DES-9, pero cualquier simplificación posterior deberá preservar o modificar explícitamente esta ADR.
+El estado `EN_TRANSITO` se conserva porque DES-1 lo exige y porque el flujo relevado distingue distribución al eslabón posterior y recepción en establecimiento. La decisión final sobre si esto se implementa como dos transacciones o una operación atómica queda reservada a DES-9, pero cualquier simplificación posterior deberá preservar o modificar explícitamente esta ADR. **Actualización posterior**: [ADR-004](004-transfer-dispatch-reception.md) resolvió DES-9 adoptando las **dos transacciones**; `EN_TRANSITO` y T02–T05 se conservan sin cambios y esta ADR no requiere modificación.
 
 ## Alcance
 
@@ -75,7 +75,7 @@ Queda fuera de alcance:
 - `DES-5`: nombres de funciones, requests, responses y errores públicos;
 - `DES-6`: MSP, roles, ABAC y políticas de endoso;
 - `ADR-003` / `DES-8`: identidad de establecimientos por GLN/CUFE y organización Fabric por establecimiento;
-- `DES-9`: granularidad transaccional final de despacho/recepción; esta ADR conserva `EN_TRANSITO` porque la issue DES-1 lo exige y porque la Disposición 3683/2011 distingue distribución y recepción como movimientos logísticos.
+- `DES-9` (resuelto por [ADR-004](004-transfer-dispatch-reception.md)): granularidad transaccional final de despacho/recepción; esta ADR conserva `EN_TRANSITO` porque la issue DES-1 lo exige y porque la Disposición 3683/2011 distingue distribución y recepción como movimientos logísticos. ADR-004 confirmó el modelo de dos transacciones.
 
 ## Actores lógicos
 
@@ -243,7 +243,8 @@ Los estados `VENCIDO`, `DETERIORADO`, `RETIRADO_MERCADO`, `PROHIBIDO`, `DEVUELTO
 - Las transiciones de transferencia deben consultar la fuente única de verdad de DES-3 para validar pares origen-destino; esta ADR no reimplementa esa matriz.
 - Las transiciones que mencionan `CURRENT_CUSTODIAN`, `DESTINATION_AGENT` o `ANMAT` deben resolverse mediante ADR-003 para identidad de establecimiento y DES-6 para autorización, roles y políticas.
 - Las transiciones de estados bloqueantes deben impedir transferencias ordinarias y dispensación, salvo las transiciones administrativas explícitas listadas.
-- Si DES-9 decide exponer transferencia como una única operación atómica, deberá preservar el significado observable de `EN_TRANSITO` o proponer una modificación explícita a ADR-001.
+- Si DES-9 decide exponer transferencia como una única operación atómica, deberá preservar el significado observable de `EN_TRANSITO` o proponer una modificación explícita a ADR-001. **Resuelto**: ADR-004 adoptó las dos transacciones, de modo que esta condición no se activa.
+- **La columna «actor habilitado» de esta tabla es la fuente de verdad** de quién puede detonar cada transición; el contrato DES-5 la refleja, no la restringe. En particular T09 y T13 habilitan al `DESTINATION_AGENT` sobre una unidad en `EN_TRANSITO` — el receptor que detecta la anomalía al recibir —, mientras que T14–T16 quedan reservadas al custodio actual o a ANMAT aun cuando la unidad esté en tránsito.
 
 ## Consecuencias
 
