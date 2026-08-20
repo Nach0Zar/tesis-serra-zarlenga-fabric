@@ -1,0 +1,435 @@
+      Trazabilidad farmacéutica confiable: diseño y
+evaluación de una arquitectura blockchain permisionada
+  para el Sistema Nacional de Trazabilidad de ANMAT
+         Juan Cruz Bautista Serra, Ignacio Zarlenga y María Roxana Martínez,
+
+    Universidad Argentina de la Empresa (UADE), Lima 757, Ciudad Autónoma de Buenos
+                                     Aires, Argentina
+                     {juaserra, izarlenga, mariamartinez}@uade.edu.ar
+
+
+
+       Abstract. El Sistema Nacional de Trazabilidad (SNT) de Medicamentos de la
+       Administración Nacional de Medicamentos, Alimentos y Tecnología Médica
+       (ANMAT) centraliza el registro de eventos de la cadena de suministro
+       farmacéutica en Argentina, la cual enfrenta desafíos vinculados con la
+       disponibilidad, la integridad de los datos y la auditabilidad. Este trabajo busca
+       analizar y evaluar la factibilidad técnica y regulatoria de representar los
+       procesos del actual flujo sobre una arquitectura blockchain permisionada basada
+       en Hyperledger Fabric. Para lograrlo, este trabajo propone relevar el marco
+       normativo vigente, estudiar los procesos del sistema actual y diseñar un
+       prototipo funcional que simule el registro de lotes, las transferencias entre
+       distintos actores, la dispensación y seguimiento de estos mediante smart
+       contracts, canales y mecanismos de membresía. Como aporte, se espera poder
+       evaluar comparativamente esta propuesta frente a un prototipo del modelo
+       centralizado actual, considerando métricas de disponibilidad, latencia,
+       integridad y capacidad de auditoría.
+
+       Keywords: ANMAT, SNT, Farmacéutica, Medicamentos, Blockchain,
+       Hyperledger Fabric, Smart Contracts.
+
+
+
+
+1    Introduction
+
+En el campo de la medicina resulta esencial la trazabilidad de los medicamentos, tanto
+por motivos de seguridad en términos de salubridad del paciente como por su
+característica de auditabilidad. Es de suma importancia comprender con precisión la
+cadena de suministros actual en la Argentina, la cual está fuertemente regulada y
+legislada por un organismo nacional como lo es la Administración Nacional de
+Medicamentos, Alimentos y Tecnología médica (ANMAT). La cadena de suministro
+farmacéutica se separa en dos flujos principales: el upstream, el cual se centra en el
+abastecimiento de ingredientes farmacéuticos activos (API) hacia las plantas de
+manufactura, y el downstream, cuyo foco es la distribución de los medicamentos
+desarrollados por laboratorios hasta la recepción por parte de los agentes de
+distribución y dispensación autorizados [1]. Es este segundo flujo que, a partir de las
+legislaciones impuestas por la ANMAT, se ve fuertemente regulado por el Sistema
+Nacional de Trazabilidad, el cual tiene como objetivo la identificación y trazabilidad
+unívoca de los medicamentos a partir de su liberación de laboratorios [2].
+
+
+1.1   Delimitación del alcance del trabajo
+
+El presente análisis se delimitará al análisis del flujo downstream de la cadena de
+suministro farmacéutica ya que es el flujo alcanzado por el SNT. Por consiguiente, se
+analizarán y evaluarán los procesos regulados a partir de la distribución de los
+medicamentos por parte del laboratorio hasta la recepción y dispensación de los
+actores identificados en la cadena. Queda por fuera de todo análisis el flujo upstream,
+ya que no está contemplado dentro del SNT.
+   El objetivo de este trabajo es analizar la factibilidad técnica y regulatoria de la
+implementación de un sistema nacional de trazabilidad a partir de tecnología
+blockchain basada en el modelo Hyperledger Fabric, atándose a las regulaciones
+impuestas por las disposiciones y regulaciones de la ANMAT en el flujo antes
+descripto.
+
+
+2     Marco regulatorio y trabajos relacionados
+
+La trazabilidad farmacéutica es un elemento central en el proceso regulatorio de
+fármacos, que tiene como objetivo la detección y prevención de medicamentos
+falsificados, garantizar la seguridad del paciente y asegurar la auditabilidad de la
+cadena de suministro.
+   En el caso argentino, la trazabilidad de los medicamentos se encuentra regulada
+por la ANMAT a través del Sistema Nacional de Trazabilidad (SNT), cuyo objetivo
+es la identificación unívoca de determinadas especialidades medicinales y exigir el
+registro de eventos asociados a la comercialización, distribución y dispensación de
+productos alcanzados por la normativa por parte de los actores de la cadena [2]. El
+actual SNT está basado en arquitecturas centralizadas en el cual los agentes registran
+eventos/transacciones a un sistema que se encuentra administrado por la autoridad
+reguladora.
+   A nivel técnico, el SNT se apoya en estándares de identificación internacionales,
+como lo son el GS1, GTIN y GLN, cuyos estándares son ampliamente utilizados en
+cadenas de suministro de distintos sectores, incluido el sanitario, donde facilitan la
+interoperabilidad y la trazabilidad de productos a nivel mundial [3]. Estos estándares
+son de gran utilidad a la hora de identificar unívocamente cada medicamento y
+relacionarlo con información relevante, como su lote, fecha de vencimiento, número
+de serie, entre otros.
+   A nivel académico, se han realizado investigaciones que estudian el uso de
+blockchain en su aplicabilidad en cadena de suministro, más específicamente en la
+industria farmacéutica y salud. Estos estudios concluyen en que la aplicación de
+blockchain en la cadena de suministro farmacéutica puede mejorar los mecanismos de
+autenticación de medicamentos y mejorara la eficiencia de los procesos logísticos [4]
+y que la aplicación de blockchain puede solucionar múltiples problemáticas
+identificadas como lo son la circulación de medicamentos falsificados, desvío hacia
+canales no autorizados de distribución y las limitaciones sobre la supervisión
+adecuada del recorrido de los productos [5][6][7][8].
+
+
+3       Propuesta
+
+Dentro de las alternativas de soluciones blockchain, Hyperledger Fabric resulta ser
+relevante para el caso de estudio, ya que parte de una red permisionada y privada,
+donde los actores deben estar correctamente autenticados y autorizados a partir de un
+proveedor de servicios de membresía, lo que permite la asignación de roles, permisos
+y el control del acceso a la información. Además, el modelo basado en canales, peers
+segmentados, servicios de ordenamiento y chaincodes permite representar las reglas
+de negocio, que serían en esencia las regulaciones del actual SNT impuestas a partir
+de las disposiciones de la ANMAT [9].
+   El objetivo de la propuesta es validar la factibilidad técnica y regulatoria de
+implementar los procesos detallados por la ANMAT en una arquitectura blockchain
+permisionada a partir de Smart Contracts para el cumplimiento de estas normativas
+impuestos en los distintos actores de la cadena.
+
+
+3.1     Actores contemplados
+
+Dentro de la cadena de suministro, la ANMAT reconoce una serie de actores, los
+cuales serán representados a fin de poder diseñar y modelar lógica de negocio dentro
+de la arquitectura, contemplando los siguientes actores:
+
+    -    Laboratorios farmacéuticos
+    -    Distribuidores / Logísticas
+    -    Droguerías
+    -    Farmacias
+    -    Centros médicos (hospitales, clínicas, sanatorios, etc.)
+    -    ANMAT
+    -    Organismos financiadores (obras sociales y PAMI)
+
+
+3.2     Procesos SNT a representar
+
+A partir de las regulaciones de la ANMAT, se pueden detallar los siguientes procesos
+como centrales dentro de la cadena de suministro de medicamentos, los cuales serán
+analizados, evaluados y representados dentro de la propuesta a partir de las
+chaincodes del modelo Hyperledger Fabric. Estos procesos son los siguientes:
+  - Proceso de producción/importación del producto por parte del laboratorio,
+       donde a partir de los estándares detallados previamente se establecerán con
+       GTIN número de serie, lote y fecha de vencimiento.
+  Fig. 1. Representación del proceso de Producción/importación
+
+  -    Proceso de transferencia de custodia, donde se registrarán despacho de
+       unidades de un actor a otro. Estas transferencias deben ser validadas a partir de
+       chaincode en donde se analice que el actor de origen de la transferencia de la
+       custodia sea el actual poseedor del medicamento, que el receptor sea un actor
+       habilitado para la recepción y que la operación respete el flujo autorizado de la
+       cadena, los cuales pueden ser de laboratorio a droguería, de laboratorio a
+       farmacia, de laboratorio a centro médico, de droguería a farmacia o de
+       droguería a centro médico.
+
+
+
+
+    Fig. 2. Representación del proceso de transferencia de custodia entre un laboratorio
+y una droguería a modo de representación, la misma es aplicable a las transferencias
+listadas previamente.
+
+  -    Proceso de dispensación al paciente, en la que se centra en los actores
+       identificados como farmacias y centros médicos, cuya responsabilidad es la de
+       entregar una unidad de medicamento al paciente final y se enfoca en registrar
+       información mínima del paciente con el objetivo de preservar su privacidad,
+       ya que la propuesta no incluye el almacenamiento de datos sensibles,
+       identificados por la ley argentina en términos de datos personales [10].
+   Fig. 3. Representación del proceso de dispensación al paciente por parte de un
+centro médico o farmacia y su validación por parte de un organismo financiador.
+
+   Además de los procesos convencionales de producción o importación,
+transferencia de custodia y dispensación, la cadena de suministro contempla
+escenarios en los cuales es necesario hacer uso de procesos complementarios
+denominados procesos extraordinarios, los cuales hacen referencia a productos
+vencidos, robados, extraviados, deteriorados o prohibidos. Estos procesos siguen una
+lógica de notificación, validación y actualización de su estado, donde primero se
+detecta la situación irregular, se registra el evento y se restringen las operaciones
+futuras sobre los medicamentos afectados.
+   Caso producto vencido o próximo a vencer: El sistema debe permitir que el actor
+que posee la custodia del medicamento pueda informar de la proximidad de la fecha
+de vencimiento o la caducidad de este. En estos casos, la unidad debe quedar
+bloqueada para su dispensación al paciente y debe ser tratado correspondientemente a
+la legislación de residuos peligrosos, la cual responsabiliza al actor poseedor de la
+custodia de la disposición final mediante la normativa sanitaria jurisdiccional [11].
+   Caso producto robado/extraviado: El sistema debe permitir que el actor que se
+encuentra en posesión de la custodia pueda registrar el medicamento como
+robado/extraviado, permitiendo así que se bloquee cualquier tipo de operación futura
+sobre este medicamento y que el actor ANMAT pueda auditar la trazabilidad previa
+del mismo.
+   Caso producto deteriorado/destruido: El sistema debe permitir que el actor que
+posee la custodia del medicamento afectado pueda registrar un evento de deterioro o
+destrucción del medicamento a fin de evitar la dispensación a un paciente y que se
+disponga finalmente, acorde a las normativas sanitarias jurisdiccionales.
+   Caso producto prohibido: El sistema debe permitir a la ANMAT declarar un
+medicamento como prohibido, permitiendo así que el medicamento sea bloqueado de
+futuras operaciones. El actor que posea la custodia física del producto deberá
+segregarlo e inmovilizarlo dentro de su stock, evitando su uso o comercialización.
+Posteriormente, el sistema podrá registrar eventos asociados a su gestión posterior,
+tales como la devolución o disposición final, según lo indicado por la medida sanitaria
+correspondiente y la normativa aplicable de residuos peligrosos.
+   Caso producto retirado del mercado: El sistema debe permitir que el laboratorio
+productor o importador y la ANMAT puedan determinar que un producto sea
+marcado como “retirado del mercado” a fin de determinar que un medicamento o lote
+de medicamentos no sean permitidos ser dispensados a pacientes y ser transferidos en
+términos de circulación ordinaria. Los actores que posean unidades alcanzadas por el
+retiro deberán segregarlas, inmovilizarlas y registrarlas como parte del proceso de
+recupero. Posteriormente, el sistema podrá permitir eventos de devolución al
+laboratorio o importador, recuperación, corrección, destrucción autorizada o cierre del
+retiro, dejando evidencia auditable de cada etapa.
+   Caso producto en cuarentena: El sistema debe permitir que el actor que posee la
+custodia del medicamento o la ANMAT puedan marcar una unidad o lote como
+cuarentena, suspendiendo temporalmente la circulación del producto y su
+dispensación a paciente. Posteriormente, el sistema puede permitir eventos de
+liberación de cuarentena, permitiéndolo volver al flujo de circulación común, retiro
+del mercado, prohibición o disposición final.
+   Caso devolución: El sistema debe permitir registrar la entrega y recepción de un
+medicamento como devolución entre dos actores de la cadena ante errores de entrega,
+inconsistencias en documentación, vencimiento próximo o cualquier causa que
+permita que sea rechazada su transferencia previa.
+   Caso reingreso a stock: El sistema debe permitir que un medicamento
+previamente devuelto o puesto en cuarentena pueda ser reincorporado al stock y el
+flujo común de la cadena de suministro, validando que al momento del reingreso el
+medicamento esté en condiciones normales para su operación. Ejemplos de esto
+puede ser que el medicamento no se encuentre vencido, que el actor que intenta
+reingresar a stock el medicamento no sea el actual custodio de este o que el
+medicamento no se haya registrado como destruido o finalmente dispuesto. Este
+evento de reingreso debe registrar al actor que realiza la validación del medicamento,
+fecha de reingreso y estado resultante.
+
+
+3.3   Diseño de arquitectura
+
+La arquitectura propuesta se modela como una red Hyperledger Fabric permisionada
+en la que cada categoría de actor reconocida por el SNT se representa como una
+organización con identidad gestionada a través de un Proveedor de Servicios de
+Membresía (MSP) [9]. De este modo, los laboratorios, los distribuidores y operadores
+logísticos, las droguerías, las farmacias, los centros médicos, los organismos
+financiadores y la ANMAT participan de la red como organizaciones autenticadas y
+autorizadas, replicando la estructura de roles que la normativa impone sobre cada
+eslabón de la cadena. La ANMAT ocupa un rol diferenciado, con potestad de
+auditoría sobre la totalidad de los eventos registrados y capacidad de iniciar eventos
+extraordinarios como el retiro del mercado o la prohibición de un producto.
+   Cada unidad de especialidad medicinal se representa como un activo dentro del
+world state del ledger, identificado de manera unívoca por la combinación de GTIN y
+número de serie conforme a los estándares GS1 [3], y acompañado de los metadatos
+exigidos por la normativa, tales como el lote, la fecha de vencimiento, el custodio
+actual y el estado del producto dentro del flujo. Los activos se modelan como pares
+clave-valor cuyos cambios de estado se registran como transacciones [12]. Cada
+evento del SNT, ya sea de producción, transferencia de custodia, dispensación o
+cualquiera de los eventos extraordinarios, se materializa como una transacción que
+modifica el estado del activo y queda asentada de manera secuenciada e inmutable en
+el ledger del canal [12].
+    La lógica de negocio derivada de las disposiciones de la ANMAT se implementa
+mediante chaincodes, que encapsulan las reglas que gobiernan las operaciones
+admisibles sobre cada activo [12]. La validación del cumplimiento normativo se
+traslada al chaincode, de modo que toda operación que no respete el flujo autorizado
+de la cadena es rechazada de manera determinística por los nodos de endoso antes de
+su confirmación en el ledger.
+    La segmentación de la información se resuelve mediante el modelo de canales, que
+permite que un subconjunto de organizaciones establezca una subred con visibilidad
+sobre un conjunto determinado de transacciones [13]. La topología de canales
+constituye una decisión de diseño que se evalúa dentro del trabajo, contemplando
+desde un canal único compartido por todos los actores, que maximiza la visibilidad de
+la ANMAT, hasta esquemas de múltiples canales o el uso de colecciones de datos
+privados. Estas últimas permiten que solo un subconjunto autorizado de
+organizaciones acceda a determinados datos de una transacción sin necesidad de crear
+un canal separado, manteniendo en el ledger compartido únicamente el hash de la
+información privada para su validación [15]. Esta capacidad resulta relevante para
+conciliar la visibilidad regulatoria con la confidencialidad comercial que cada actor
+requiere frente a sus competidores.
+    El ordenamiento de las transacciones y la formación de bloques quedan a cargo del
+servicio de ordenamiento basado en el protocolo Raft, tolerante a fallos por caída
+(Crash Fault Tolerant), en el que un nodo líder electo por canal coordina la
+replicación del registro entre los nodos ordenadores [14]. Bajo este protocolo, el
+ordenamiento se mantiene operativo mientras se conserve el quórum, definido como
+la mayoría de los nodos del conjunto de consenso, lo que en una configuración de tres
+nodos ordenadores tolera la caída de uno de ellos [14]. Esta característica habilita un
+esquema en el que distintas organizaciones contribuyen nodos al servicio de
+ordenamiento, reduciendo la dependencia de un único administrador central.
+
+
+3.4   Validaciones y restricciones
+
+El cumplimiento normativo del SNT se modela como un conjunto de validaciones
+ejecutadas por los chaincodes en el momento de la propuesta de cada transacción, de
+manera que las reglas regulatorias pasen a formar parte de la lógica que gobierna el
+ciclo de vida de cada unidad de medicamento. A diferencia del esquema centralizado
+actual, en el que la validación recae sobre un software provisto por la autoridad de
+aplicación, estas comprobaciones son ejecutadas y endosadas por los nodos de las
+distintas organizaciones según la política de endoso definida, de modo que ninguna
+operación se confirma sin haber superado las reglas establecidas [14].
+   La validación de la custodia y la legitimidad de la operación verifica que el actor
+de origen de una transferencia sea el custodio actual del medicamento según el world
+state, que el actor receptor sea una organización habilitada y que la operación respete
+el flujo autorizado de la cadena. Esto impide operatorias no permitidas, como la venta
+hacia un eslabón superior de la cadena de distribución. La validación de unicidad y
+consistencia de la identificación garantiza que la combinación de GTIN y número de
+serie sea unívoca al registrar una nueva unidad, replicando la responsabilidad que la
+normativa asigna al laboratorio titular, y verifica la coherencia de los metadatos
+asociados, como el formato de la fecha de vencimiento y la consistencia del lote.
+   La validación del estado del producto comprueba que el activo admita la operación
+solicitada, impidiendo la dispensación de un producto vencido, robado, en cuarentena,
+prohibido o retirado del mercado. Los eventos extraordinarios bloquean las
+operaciones futuras sobre las unidades afectadas y habilitan únicamente las
+transiciones de estado previstas por la normativa. El aislamiento de la información
+entre actores garantiza que ningún establecimiento acceda a información
+correspondiente a transacciones de las que no forma parte, con excepción de la
+autoridad de aplicación en su rol de auditoría, condición que se sostiene en la
+arquitectura de canales y colecciones de datos privados de la plataforma [13][15].
+Finalmente, la dispensación al paciente restringe el registro a la información mínima
+necesaria para la trazabilidad, evitando el almacenamiento de datos personales
+sensibles conforme a la legislación argentina de protección de datos personales [10].
+
+
+3.5   Estrategia de evaluación
+
+La evaluación se estructura sobre un marco de dos dimensiones que distingue entre
+métricas cuantitativas, medibles empíricamente sobre el prototipo, y métricas
+cualitativas o estructurales, analizables a partir de las propiedades arquitectónicas de
+la solución. Esta distinción responde a la naturaleza heterogénea de los objetivos
+comprometidos, dado que la latencia y la disponibilidad admiten una medición directa
+sobre el sistema en ejecución, mientras que la integridad y la auditabilidad se
+sostienen en propiedades de diseño que se analizan de manera comparativa frente al
+modelo centralizado.
+   En la dimensión cuantitativa se mide sobre el prototipo Hyperledger Fabric la
+latencia de las operaciones core de registro de lotes, transferencia de custodia y
+dispensación, el throughput expresado en transacciones procesadas por unidad de
+tiempo, y el comportamiento de la red ante la caída de nodos como indicador de
+disponibilidad. La prueba de disponibilidad se apoya en la tolerancia a fallos del
+servicio de ordenamiento Raft, evaluando la continuidad operativa de la red ante la
+baja de nodos ordenadores mientras se mantiene el quórum, así como la re-elección
+automática de líder por canal [14]. Estas métricas se contrastan contra un prototipo
+centralizado construido como línea base, consistente en una interfaz de servicios
+sobre una base de datos relacional que implementa los mismos procesos core, con el
+fin de habilitar una comparación cuantitativa equivalente bajo idénticas condiciones
+de carga.
+   En la dimensión cualitativa se analiza la integridad de los datos a partir de la
+inmutabilidad criptográfica del ledger y del requisito de endoso por parte de múltiples
+organizaciones, que eleva la dificultad de manipular registros respecto de un esquema
+donde la información reside bajo el control de un único administrador [12][14]. La
+auditabilidad se evalúa considerando el carácter secuenciado e inmutable del
+transaction log, que conserva tanto las transacciones válidas como las inválidas para
+fines de auditoría, y que permite a la autoridad de aplicación reconstruir la
+trazabilidad completa de cada unidad [12]. Se analiza asimismo la eliminación del
+punto único de falla del modelo centralizado, en el cual la indisponibilidad del
+sistema administrado por la autoridad afecta a la totalidad de los actores de la cadena.
+   La comparación evidencia un compromiso entre propiedades antes que una
+superioridad absoluta de una arquitectura sobre la otra. La incorporación de
+mecanismos de consenso, endoso y replicación introduce un costo en términos de
+latencia y de complejidad operativa frente a la simplicidad de un sistema centralizado,
+a cambio de mayores garantías de integridad, auditabilidad y disponibilidad. La
+caracterización de este compromiso permite discutir en qué condiciones dicho costo
+se encuentra justificado para un sistema de trazabilidad de carácter regulatorio.
+   La evaluación se desarrolla en un entorno de recursos acotados, sobre una
+infraestructura de contenedores ejecutada en un único host. En consecuencia, las
+pruebas de disponibilidad se basan en la simulación de fallos de nodos y no en fallos
+de infraestructura física distribuida, y los valores de latencia y throughput obtenidos
+se interpretan como indicativos del comportamiento relativo de las arquitecturas, no
+como medidas absolutas extrapolables a un despliegue productivo.
+
+
+4    Conclusiones
+
+El trabajo aborda la factibilidad técnica y regulatoria de representar los procesos del
+Sistema Nacional de Trazabilidad de Medicamentos de la ANMAT sobre una
+arquitectura blockchain permisionada basada en Hyperledger Fabric. A partir del
+relevamiento del marco normativo vigente y del estudio de los procesos que
+componen el flujo downstream de la cadena de suministro farmacéutica, se constata
+que las obligaciones que la normativa impone sobre cada actor, a saber la
+identificación unívoca de las unidades, la validación de la custodia, el registro de
+eventos y la confidencialidad de la información comercial, admiten una
+representación mediante los componentes del modelo: organizaciones gestionadas por
+un proveedor de servicios de membresía, activos sobre el world state, reglas de
+negocio codificadas en chaincodes y segmentación de la información a través de
+canales y colecciones de datos privados.
+   El aporte diferencial de una arquitectura permisionada no reside en la
+identificación de las unidades de producto, función que el sistema actual ya cumple a
+través de los estándares GS1, sino en trasladar la validación del cumplimiento
+normativo a la lógica distribuida de la red y en proveer un registro inmutable,
+auditable y resistente al punto único de falla. El valor de la solución se vincula con la
+integridad de los datos, la capacidad de auditoría de la autoridad de aplicación y la
+disponibilidad del sistema frente a fallos, propiedades que la estrategia de evaluación
+caracteriza de manera empírica y estructural.
+   El desarrollo y la evaluación del prototipo funcional se ejecutan conforme al marco
+descripto, junto con la construcción de una línea base centralizada que habilita la
+comparación cuantitativa equivalente y la determinación de la topología de canales
+que concilia la visibilidad regulatoria con la confidencialidad comercial. Los
+resultados permiten determinar la factibilidad de la propuesta y discutir el
+compromiso entre las garantías que aporta la tecnología y los costos que introduce, en
+el marco del debate sobre la modernización de los sistemas de trazabilidad
+farmacéutica en la Argentina.
+
+
+Referencias
+
+1.    Haji, M., Kerbache, L., Sheriff, K. M. M., & Al-Ansari, T. (2021). Critical success factors
+      and traceability technologies for establishing a safe pharmaceutical supply chain. Methods
+      and Protocols, 4(4), 85. https://doi.org/10.3390/mps4040085
+2.    Administración Nacional de Medicamentos, Alimentos y Tecnología Médica. (2011).
+      Disposición 3683/2011: Sistema de trazabilidad de medicamentos. Boletín Oficial de la
+      República                                                                          Argentina.
+      https://www.argentina.gob.ar/normativa/nacional/disposici%C3%B3n-3683-2011-182665
+3.    GS1. (2025). GS1 standards in healthcare.
+      https://www.gs1.org/industries/healthcare/standards
+4.    Damian Rojas, A. S., Martel Morales, O. F., Ibañez Estrella, J. L., & Rueda Ñopo, M. I.
+      (2025). Blockchain e inteligencia artificial en la trazabilidad de la cadena de suministro
+      farmacéutica: Una revisión sistemática. LACCEI, 2(13).
+      https://doi.org/10.18687/LEIRD2025.1.1.985
+5.    Gonzalez-Argote, D., Gonzalez-Argote, J., & Machuca-Contreras, F. (2023). Blockchain
+      in the health sector: A systematic literature review of success cases. SAP Gamification and
+      Augmented Reality, 1, Article 6. https://doi.org/10.56294/gr20236
+6.    Kordestani, A., Oghazi, P., & Mostaghel, R. (2023). Smart contract diffusion in the
+      pharmaceutical blockchain: The battle of counterfeit drugs. Journal of Business Research,
+      158, Article 113646. https://doi.org/10.1016/j.jbusres.2023.113646
+7.    Gomasta, S. S., Dhali, A., Tahlil, T., Anwar, M. M., & Ali, A. B. M. S. (2023).
+      PharmaChain: Blockchain-based drug supply chain provenance verification system.
+      Heliyon, 9(7), Article e17957. https://doi.org/10.1016/j.heliyon.2023.e17957
+8.    Zakari, N., Al-Razgan, M., Alsaadi, A., Alshareef, H., Al Saigh, H., Alashaikh, L.,
+      Alharbi, M., Alomar, R., & Alotaibi, S. (2022). Blockchain technology in the
+      pharmaceutical industry: A systematic review. PeerJ Computer Science, 8, Article e840.
+      https://doi.org/10.7717/peerj-cs.840
+9.    Hyperledger Foundation. (s. f.). Hyperledger Fabric documentation. Hyperledger Fabric
+      Docs. Consultado el 6 de junio de 2026, de https://hyperledger-
+      fabric.readthedocs.io/en/release-2.5/
+10.   Honorable Congreso de la Nación Argentina. (2000). Ley 25.326: Protección de los datos
+      personales. Boletín Oficial de la República Argentina.
+      https://www.argentina.gob.ar/normativa/nacional/ley-25326-64790
+11.   Honorable Congreso de la Nación Argentina. (1992). Ley 24.051: Residuos peligrosos.
+      Boletín Oficial de la República Argentina.
+      https://www.argentina.gob.ar/normativa/nacional/ley-24051-450
+12.   Hyperledger Foundation. (s. f.). Hyperledger Fabric Model. Hyperledger Fabric Docs
+      (release 2.5). Consultado el 21 de junio de 2026, de https://hyperledger-
+      fabric.readthedocs.io/en/release-2.5/fabric_model.html
+13.   Hyperledger Foundation. (s. f.). Introduction. Hyperledger Fabric Docs (release 2.5).
+      Consultado el 21 de junio de 2026, de https://hyperledger-fabric.readthedocs.io/en/release-
+      2.5/whatis.html
+14.   Hyperledger Foundation. (s. f.). The Ordering Service. Hyperledger Fabric Docs (release
+      2.5). Consultado el 21 de junio de 2026, de https://hyperledger-
+      fabric.readthedocs.io/en/release-2.5/orderer/ordering_service.html
+

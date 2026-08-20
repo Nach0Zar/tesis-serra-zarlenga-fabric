@@ -67,11 +67,14 @@ Debe reportarse junto con:
 - operaciones intentadas;
 - operaciones exitosas;
 - rechazos esperados por reglas de negocio;
+- reintentos operativos transitorios;
 - errores inesperados;
 - timeouts;
 - tasa efectiva enviada por el cliente.
 
 Los rechazos esperados por reglas regulatorias o de dominio no se mezclan con el throughput exitoso de caminos felices. Si se miden, deben aparecer en rondas separadas de rechazo esperado, con su propia latencia y tasa de rechazo.
+
+Los reintentos operativos transitorios tampoco son rechazos de negocio. Se registran por separado con su causa, cantidad de intentos y tiempo acumulado, pero el trabajo necesario hasta confirmar la operación permanece dentro de la latencia y del throughput observados del camino feliz correspondiente.
 
 ### 3.3 Disponibilidad
 
@@ -96,6 +99,8 @@ Conforme ADR-004, la transferencia de custodia se implementa como dos transaccio
 - Se reporta ademas la metrica derivada **latencia end-to-end del par**: tiempo desde el envio del despacho hasta la confirmacion de commit de la recepcion correspondiente, ejecutando la recepcion inmediatamente despues de confirmado el despacho (sin espera artificial).
 - En los perfiles de carga, "1 operacion de transferencia" = 1 par completo despacho+recepcion = 2 transacciones write. Las tasas objetivo de transferencia se expresan en pares por segundo y la tasa efectiva de transacciones es el doble.
 - La baseline debe exponer y medir los mismos dos pasos con la misma semantica (BASE-2); de lo contrario la comparacion no mide los mismos procesos.
+- Con `requiredPeerCount: 1` (ADR-006), el peer receptor puede no disponer todavía del registro privado cuando se intenta `ReceiveTransfer`. El cliente aplica un reintento controlado hasta que el *pull* o la reconciliación permitan leerlo, o hasta el timeout de la operación. Este caso es un **reintento operativo transitorio**, no T05 ni un rechazo esperado de negocio.
+- La latencia end-to-end del par incluye el primer intento fallido, la espera entre intentos y todos los reintentos hasta la confirmación de commit de la recepción. Se reportan además la cantidad y tasa de pares que necesitaron reintento. Excluir ese tiempo ocultaría un costo real del diseño Fabric frente a la baseline.
 - Los rechazos en recepcion (transicion T05) pertenecen a las rondas de rechazo esperado (seccion 6.5), no al camino feliz.
 
 ## 4. Dataset compartido
@@ -234,6 +239,8 @@ Objetivo: medir costo de validacion de operaciones invalidas sin contaminar el c
 | Resultado esperado | Rechazo controlado, no error inesperado |
 
 Estas rondas reportan latencia y tasa de rechazo esperado. No se suman al throughput exitoso.
+
+La indisponibilidad temporal del registro privado en el peer receptor (ADR-006, `requiredPeerCount: 1`) no pertenece a estas rondas: no expresa una regla regulatoria ni de dominio. Se conserva como reintento operativo del camino feliz conforme la seccion 3.4.
 
 ## 7. Repeticiones y estadistica
 

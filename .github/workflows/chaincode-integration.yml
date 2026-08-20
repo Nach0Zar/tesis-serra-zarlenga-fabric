@@ -39,7 +39,7 @@ env:
   CHAINCODE_VERSION: "1.0"
   CHAINCODE_SEQUENCE: "1"
   #TODO: Descomentar cuando exista test/integration/chaincode-e2e.sh (issue CC-3).
-  # Payloads alineados al contrato congelado docs/api-contract.md (v2.5.0):
+  # Payloads alineados al contrato congelado docs/api-contract.md (versión vigente):
   # - Las escrituras reciben un único argumento JSON (`req`); el custodio NO viaja
   #   como argumento: se resuelve del MSP del invocador (ADR-003).
   # - La transferencia requiere dos pasos: `DispatchTransfer` con el destinatario
