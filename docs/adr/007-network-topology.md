@@ -260,7 +260,7 @@ Las operaciones unilaterales que existen son exactamente las del custodio sobre 
 - [ADR-004: Transferencia como despacho y recepción en dos transacciones](004-transfer-dispatch-reception.md), sección "Endoso": la recepción requiere endoso conjunto de emisor y receptor; base del SBE del punto 6.
 - [ADR-006: Mecanismo de colecciones privadas para la información comercial y el registro de operación](006-private-data-collections.md) (D1, issue #81): fuente del `collections_config.json` que consume el bootstrap.
 - [DES-6: Organizaciones, MSP, roles, ABAC y políticas de endoso](../organizations-roles-endorsement.md): dataset mínimo de MSP de ejemplo, tabla de endoso por clase de operación y propiedades que la materialización debe preservar.
-- [Protocolo de medición](../measurement-protocol.md), sección 8.1: escenarios Raft-1/Raft-2/Peer-1 sobre cluster de 3 orderers.
+- [Protocolo de medición](../measurement-protocol.md), sección 8.1: escenarios Raft-1/Raft-2/Peer-1a–Peer-1d sobre cluster de 3 orderers.
 - [Roadmap de ADRs](../adr-roadmap.md), decisión D2: alcance de esta decisión y riesgo de divergencia con el trabajo escrito.
 - [Contrato público del chaincode](../api-contract.md) (versión vigente): `QueryUnitsByGTIN` por clave compuesta parcial (sin rich queries), `RegisterOrganization` para el seed del registro, `Init` para el bootstrap regulatorio, y `AuthorizeLabIntervention`/`RevokeLabIntervention` para los puntos 6.e y 6.f.
 - Hyperledger Fabric, The Ordering Service (Raft): https://hyperledger-fabric.readthedocs.io/en/release-2.5/orderer/ordering_service.html — cluster Raft, quorum y contribución de orderers por múltiples organizaciones.
