@@ -103,6 +103,18 @@ Conforme ADR-004, la transferencia de custodia se implementa como dos transaccio
 - La latencia end-to-end del par incluye el primer intento fallido, la espera entre intentos y todos los reintentos hasta la confirmación de commit de la recepción. Se reportan además la cantidad y tasa de pares que necesitaron reintento. Excluir ese tiempo ocultaría un costo real del diseño Fabric frente a la baseline.
 - Los rechazos en recepcion (transicion T05) pertenecen a las rondas de rechazo esperado (seccion 6.5), no al camino feliz.
 
+### 3.5 Costo de los marcadores de participación (ADR-007)
+
+Los marcadores de participación definidos en ADR-007, punto 6, agregan una escritura privada y el hash correspondiente al *read-write set*. Ese trabajo adicional se registra como métrica específica y no se atribuye implícitamente sólo a la escritura del estado público.
+
+Por escenario se reportan:
+
+- cantidad total de escrituras de marcador confirmadas, desglosada entre altas `RegisterUnit` y eventos regulatorios;
+- tasa de escrituras de marcador por segundo y proporción respecto de las transacciones write exitosas;
+- cantidad esperada frente a cantidad observada, para detectar marcadores omitidos o duplicados.
+
+La latencia y el throughput de la operación ya incluyen el costo del marcador. La métrica separada atribuye el volumen de trabajo adicional, pero no lo resta ni presenta una ejecución sin marcadores como resultado comparable, porque esa ablación cambiaría la política de endoso evaluada.
+
 ## 4. Dataset compartido
 
 El dataset debe ser sintetico, deterministico y consumido por Fabric y baseline sin modificaciones semanticas.
@@ -126,6 +138,8 @@ Reglas de uso:
 - Las operaciones invalidas deben separarse en rondas especificas de rechazo esperado.
 - Si 50.000 unidades no alcanzan para todas las rondas sin reutilizacion indebida, el generador debe producir `max(50000, unidades_requeridas * 1.2)`.
 - El dataset o su receta de generacion debe registrar seed, parametros, version del generador y hash del archivo producido.
+
+La construcción del snapshot lógico inicial se realiza mediante al menos 50.000 altas `RegisterUnit` exitosas en cada SUT. En Fabric, cada alta agrega un marcador en la colección implícita del laboratorio, por lo que el mínimo implica 50.000 escrituras privadas adicionales y sus hashes. La preparación del dataset debe reportar por separado duración, throughput efectivo y cantidad de marcadores; esas cifras no se mezclan con las rondas medidas. Si una repetición restaura un snapshot en vez de repetir las altas, debe verificarse que conserva el estado público, los datos privados y los marcadores equivalentes.
 
 ## 5. Condiciones identicas entre Fabric y baseline
 
@@ -270,7 +284,12 @@ Escenarios de disponibilidad para Fabric:
 |---|---|---|---|
 | Raft-1 | Mixta, 20 TPS | Caida de 1 orderer en cluster de 3 | La red conserva quorum y continua operando. |
 | Raft-2 | Mixta, 20 TPS | Caida de 2 orderers en cluster de 3 | La red pierde quorum y deja de ordenar nuevas transacciones. |
-| Peer-1 | Mixta, 20 TPS | Caida de 1 peer de una organizacion | Las demas organizaciones continuan segun politicas vigentes. |
+| Peer-1a · custodio | Mixta, 20 TPS | Caída del peer del custodio actual de las unidades objetivo | Ninguna escritura cuya SBE de reposo exija ese peer puede confirmarse; las operaciones sobre unidades que no lo requieren sirven como control. |
+| Peer-1b · tránsito | Mixta, 20 TPS | Caída del peer de una de las dos partes de un tránsito activo | El tránsito objetivo no puede resolverse por recepción, rechazo, evento extraordinario ni intervención regulatoria mientras falte uno de los endosos de `AND(emisor, receptor)`. |
+| Peer-1c · regulador | Mixta, 20 TPS | Caída del peer de la organización regulatoria | Ningún evento regulatorio que escriba su marcador de participación puede confirmarse; las operaciones custodiales que no requieren al regulador sirven como control. |
+| Peer-1d · laboratorio | Mixta, 20 TPS | Caída del peer del laboratorio que intenta registrar unidades | Las altas `RegisterUnit` de ese laboratorio no pueden confirmarse porque falta el endoso exigido por su marcador; las altas de otros laboratorios y las operaciones no relacionadas sirven como control. |
+
+Peer-1a–Peer-1d se ejecutan como rondas separadas. Cada ronda combina operaciones objetivo cuyo conjunto de endosos incluye al peer caído con operaciones de control que no lo requieren; la disponibilidad se reporta por clase de operación y endoso requerido, no sólo como un agregado global de throughput.
 
 Ventana recomendada por escenario:
 

@@ -53,18 +53,23 @@ Además, DES-6 delega explícitamente la materialización de su tabla de endoso 
 
 ### Autoridad de certificación
 
-**A. Una única instancia de Fabric CA para todas las organizaciones del prototipo**
+**A. Una CA y raíz de confianza compartidas por todas las organizaciones**
 
-- ADR-003 ya fundamenta que una instancia de Fabric CA puede emitir identidades para múltiples organizaciones.
-- Reduce el número de contenedores y la complejidad de bootstrap en el host único.
-- Concentra la raíz de confianza: quien opera la CA puede emitir identidades de cualquier organización. Es una simplificación consciente del prototipo, no un modelo productivo.
-- Se adopta, con el límite de confianza declarado explícitamente (ver Decisión, punto 3).
+- Un único proceso y una única CA firman las identidades de todos los MSP, que comparten el mismo *trust anchor*.
+- Minimiza contenedores y pasos de bootstrap, pero permite al operador emitir una identidad aceptable como miembro de cualquier organización. Esto debilita la separación criptográfica entre establecimientos sobre la que ADR-003 apoya la prevención de suplantación.
+- Se descarta: el ahorro operativo no justifica perder una garantía de identidad ya asumida por una decisión aceptada.
 
-**B. Una CA (o jerarquía de CA intermedias) por organización**
+**B. Un servidor de Fabric CA con una CA lógica y raíz propia por organización**
 
-- Es el modelo productivo correcto: cada organización controla su propia raíz de confianza y ninguna puede emitir identidades ajenas.
-- Multiplica contenedores y pasos de enrolamiento en un prototipo cuyo objetivo de medición (latencia, throughput, disponibilidad, confidencialidad) no depende de esa separación.
-- Se descarta para el prototipo; queda documentado como el diseño esperado en producción.
+- Un solo proceso servidor hospeda múltiples *signing CAs* mediante `cafiles`; cada una conserva su propio material y cada MSP declara únicamente su raíz correspondiente como *trust anchor*.
+- Mantiene un solo contenedor y un bootstrap acotado sin compartir la raíz de confianza entre organizaciones. El límite restante es operativo: el mismo administrador controla el proceso y el material de todas las CA lógicas.
+- **Se adopta** para el prototipo (ver Decisión, punto 3).
+
+**C. Un servidor o una jerarquía de CA bajo control independiente por organización**
+
+- Cada organización administra su propio servidor de CA o sus CA intermedias, además de conservar una raíz de confianza separada.
+- Es el modelo productivo esperado porque agrega independencia administrativa, pero multiplica contenedores y pasos de enrolamiento en el host único de medición sin cambiar las operaciones evaluadas.
+- Se descarta para el prototipo por costo operativo; queda documentado como el diseño esperado en producción.
 
 ### Materialización del endoso de DES-6
 
