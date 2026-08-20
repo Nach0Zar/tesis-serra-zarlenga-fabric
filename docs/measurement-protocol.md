@@ -21,7 +21,7 @@ Operaciones core a medir:
 | Grupo | Operacion conceptual | Tipo | Observaciones |
 |---|---|---|---|
 | Registro | Registro de lote o unidades | Write | Debe representar el alta inicial por laboratorio. |
-| Transferencia | Transferencia de custodia | Write | Debe usar pares validos e invalidos derivados de la matriz regulatoria aprobada. |
+| Transferencia | Transferencia de custodia | Write | Debe usar pares validos e invalidos derivados de la matriz regulatoria aprobada. Conforme ADR-004, una transferencia son DOS transacciones: despacho y recepcion (ver seccion 3.4). |
 | Dispensacion | Dispensacion | Write | Debe cerrar el ciclo de una unidad dispensada sin persistir datos personales sensibles. |
 | Consulta puntual | Consulta de unidad | Read | Debe leer el estado actual de una unidad por identificador. |
 | Consulta de historial | Consulta de traza o historial | Read | Debe recuperar evidencia de trazabilidad/auditoria segun el contrato vigente. |
@@ -67,11 +67,14 @@ Debe reportarse junto con:
 - operaciones intentadas;
 - operaciones exitosas;
 - rechazos esperados por reglas de negocio;
+- reintentos operativos transitorios;
 - errores inesperados;
 - timeouts;
 - tasa efectiva enviada por el cliente.
 
 Los rechazos esperados por reglas regulatorias o de dominio no se mezclan con el throughput exitoso de caminos felices. Si se miden, deben aparecer en rondas separadas de rechazo esperado, con su propia latencia y tasa de rechazo.
+
+Los reintentos operativos transitorios tampoco son rechazos de negocio. Se registran por separado con su causa, cantidad de intentos y tiempo acumulado, pero el trabajo necesario hasta confirmar la operación permanece dentro de la latencia y del throughput observados del camino feliz correspondiente.
 
 ### 3.3 Disponibilidad
 
@@ -87,6 +90,30 @@ Para cada escenario de falla se debe reportar:
 - logs que expliquen la condicion de falla.
 
 **Tiempo de recuperacion**: intervalo entre la inyeccion de la falla y el primer tramo estable de 30 segundos en el que la tasa de exito vuelve al menos al 95% de la tasa previa a la falla.
+
+### 3.4 Unidad de medida de la transferencia (ADR-004)
+
+Conforme ADR-004, la transferencia de custodia se implementa como dos transacciones encadenadas: despacho (invocado por el emisor) y recepcion (invocada por el receptor). Para la medicion:
+
+- Cada transaccion se mide por separado, con su propia latencia write (confirmacion de commit) y su contribucion propia al throughput.
+- Se reporta ademas la metrica derivada **latencia end-to-end del par**: tiempo desde el envio del despacho hasta la confirmacion de commit de la recepcion correspondiente, ejecutando la recepcion inmediatamente despues de confirmado el despacho (sin espera artificial).
+- En los perfiles de carga, "1 operacion de transferencia" = 1 par completo despacho+recepcion = 2 transacciones write. Las tasas objetivo de transferencia se expresan en pares por segundo y la tasa efectiva de transacciones es el doble.
+- La baseline debe exponer y medir los mismos dos pasos con la misma semantica (BASE-2); de lo contrario la comparacion no mide los mismos procesos.
+- Con `requiredPeerCount: 1` (ADR-006), el peer receptor puede no disponer todavía del registro privado cuando se intenta `ReceiveTransfer`. El cliente aplica un reintento controlado hasta que el *pull* o la reconciliación permitan leerlo, o hasta el timeout de la operación. Este caso es un **reintento operativo transitorio**, no T05 ni un rechazo esperado de negocio.
+- La latencia end-to-end del par incluye el primer intento fallido, la espera entre intentos y todos los reintentos hasta la confirmación de commit de la recepción. Se reportan además la cantidad y tasa de pares que necesitaron reintento. Excluir ese tiempo ocultaría un costo real del diseño Fabric frente a la baseline.
+- Los rechazos en recepcion (transicion T05) pertenecen a las rondas de rechazo esperado (seccion 6.5), no al camino feliz.
+
+### 3.5 Costo de los marcadores de participación (ADR-007)
+
+Los marcadores de participación definidos en ADR-007, punto 6, agregan una escritura privada y el hash correspondiente al *read-write set*. Ese trabajo adicional se registra como métrica específica y no se atribuye implícitamente sólo a la escritura del estado público.
+
+Por escenario se reportan:
+
+- cantidad total de escrituras de marcador confirmadas, desglosada entre altas `RegisterUnit` y eventos regulatorios;
+- tasa de escrituras de marcador por segundo y proporción respecto de las transacciones write exitosas;
+- cantidad esperada frente a cantidad observada, para detectar marcadores omitidos o duplicados.
+
+La latencia y el throughput de la operación ya incluyen el costo del marcador. La métrica separada atribuye el volumen de trabajo adicional, pero no lo resta ni presenta una ejecución sin marcadores como resultado comparable, porque esa ablación cambiaría la política de endoso evaluada.
 
 ## 4. Dataset compartido
 
@@ -111,6 +138,8 @@ Reglas de uso:
 - Las operaciones invalidas deben separarse en rondas especificas de rechazo esperado.
 - Si 50.000 unidades no alcanzan para todas las rondas sin reutilizacion indebida, el generador debe producir `max(50000, unidades_requeridas * 1.2)`.
 - El dataset o su receta de generacion debe registrar seed, parametros, version del generador y hash del archivo producido.
+
+La construcción del snapshot lógico inicial se realiza mediante al menos 50.000 altas `RegisterUnit` exitosas en cada SUT. En Fabric, cada alta agrega un marcador en la colección implícita del laboratorio, por lo que el mínimo implica 50.000 escrituras privadas adicionales y sus hashes. La preparación del dataset debe reportar por separado duración, throughput efectivo y cantidad de marcadores; esas cifras no se mezclan con las rondas medidas. Si una repetición restaura un snapshot en vez de repetir las altas, debe verificarse que conserva el estado público, los datos privados y los marcadores equivalentes.
 
 ## 5. Condiciones identicas entre Fabric y baseline
 
@@ -179,6 +208,8 @@ Objetivo: medir registro, transferencia y dispensacion por separado.
 
 Cada ronda debe usar `txDuration: 120`. La tasa efectiva observada debe registrarse junto con la tasa objetivo.
 
+Para la fila Transferencia valida, la tasa objetivo se expresa en pares despacho+recepcion por segundo; la tasa efectiva de transacciones write es aproximadamente el doble (seccion 3.4).
+
 ### 6.3 Lecturas
 
 Objetivo: medir consulta puntual e historial/traza.
@@ -207,6 +238,8 @@ Objetivo: medir un flujo representativo con operaciones combinadas.
 
 La mezcla exacta debe implementarse de forma deterministica a partir de la seed y del indice de worker para que Fabric y baseline reciban la misma secuencia conceptual.
 
+El 55% de transferencia valida se cuenta en pares completos despacho+recepcion (seccion 3.4).
+
 ### 6.5 Rechazos esperados
 
 Objetivo: medir costo de validacion de operaciones invalidas sin contaminar el camino feliz.
@@ -220,6 +253,8 @@ Objetivo: medir costo de validacion de operaciones invalidas sin contaminar el c
 | Resultado esperado | Rechazo controlado, no error inesperado |
 
 Estas rondas reportan latencia y tasa de rechazo esperado. No se suman al throughput exitoso.
+
+La indisponibilidad temporal del registro privado en el peer receptor (ADR-006, `requiredPeerCount: 1`) no pertenece a estas rondas: no expresa una regla regulatoria ni de dominio. Se conserva como reintento operativo del camino feliz conforme la seccion 3.4.
 
 ## 7. Repeticiones y estadistica
 
@@ -249,7 +284,12 @@ Escenarios de disponibilidad para Fabric:
 |---|---|---|---|
 | Raft-1 | Mixta, 20 TPS | Caida de 1 orderer en cluster de 3 | La red conserva quorum y continua operando. |
 | Raft-2 | Mixta, 20 TPS | Caida de 2 orderers en cluster de 3 | La red pierde quorum y deja de ordenar nuevas transacciones. |
-| Peer-1 | Mixta, 20 TPS | Caida de 1 peer de una organizacion | Las demas organizaciones continuan segun politicas vigentes. |
+| Peer-1a · custodio | Mixta, 20 TPS | Caída del peer del custodio actual de las unidades objetivo | Ninguna escritura cuya SBE de reposo exija ese peer puede confirmarse; las operaciones sobre unidades que no lo requieren sirven como control. |
+| Peer-1b · tránsito | Mixta, 20 TPS | Caída del peer de una de las dos partes de un tránsito activo | El tránsito objetivo no puede resolverse por recepción, rechazo, evento extraordinario ni intervención regulatoria mientras falte uno de los endosos de `AND(emisor, receptor)`. |
+| Peer-1c · regulador | Mixta, 20 TPS | Caída del peer de la organización regulatoria | Ningún evento regulatorio que escriba su marcador de participación puede confirmarse; las operaciones custodiales que no requieren al regulador sirven como control. |
+| Peer-1d · laboratorio | Mixta, 20 TPS | Caída del peer del laboratorio que intenta registrar unidades | Las altas `RegisterUnit` de ese laboratorio no pueden confirmarse porque falta el endoso exigido por su marcador; las altas de otros laboratorios y las operaciones no relacionadas sirven como control. |
+
+Peer-1a–Peer-1d se ejecutan como rondas separadas. Cada ronda combina operaciones objetivo cuyo conjunto de endosos incluye al peer caído con operaciones de control que no lo requieren; la disponibilidad se reporta por clase de operación y endoso requerido, no sólo como un agregado global de throughput.
 
 Ventana recomendada por escenario:
 
@@ -383,3 +423,4 @@ Antes de medir:
 - Hyperledger Caliper workload modules: <https://caliper-doc-trial.readthedocs.io/en/latest/overview/workload-module/>.
 - Hyperledger Caliper rate controllers: <https://caliper-doc-trial.readthedocs.io/en/latest/references/rate-controllers/>.
 - Hyperledger Fabric ordering service, release 2.5: <https://hyperledger-fabric.readthedocs.io/en/release-2.5/orderer/ordering_service.html>.
+- ADR-004 (docs/adr/004-transfer-dispatch-reception.md): modelo de dos transacciones que fija la unidad de medida de la transferencia.

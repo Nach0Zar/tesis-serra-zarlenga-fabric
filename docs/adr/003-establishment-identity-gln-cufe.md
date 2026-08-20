@@ -47,6 +47,8 @@ Se adopta el **modelo B: una organización Fabric (MSP) por establecimiento**, i
 3. El ledger mantiene un registro liviano que traduce el identificador interno de organización (`mspId`) al identificador canónico de dominio (GLN o CUFE), junto con su categoría normativa (`agentType`) y su estado de habilitación (`active`).
 4. El custodio persistido en los assets es el identificador canónico `GLN:<13 dígitos>` o `CUFE:<13 dígitos>`, resuelto a partir del `mspId` del invocador mediante el registro. El `mspId` no se persiste como custodio.
 
+**Nota de simplificación sobre CUFE**: el relevamiento normativo del proyecto acota el CUFE a los laboratorios de producción pública (los agentes laboratorio, distribuidora, operador logístico y droguería se registran con GLN de GS1 Argentina). El prototipo acepta `CUFE:` como identificador canónico para cualquier `agentType` como simplificación consciente; una implementación productiva debería validar que `idType=CUFE` solo acompañe establecimientos habilitados para usarlo. Esta simplificación debe listarse entre las limitaciones del prototipo.
+
 Se decide no acoplar el identificador de dominio (GLN/CUFE) al nombre interno de la MSP en la configuración de red. El nombre de la MSP es un detalle de configuración de Fabric; el registro en el ledger es la única fuente de verdad que vincula ese nombre con el identificador regulatorio. Esto permite operar renombrados o migraciones de configuración de red sin alterar el identificador de dominio que ya quedó persistido en el historial de custodia.
 
 ## Registro de organización-establecimiento
@@ -57,8 +59,8 @@ El ledger debe contener un registro mínimo por organización habilitada:
 |---|---|
 | `mspId` | Identificador de la organización Fabric del establecimiento. |
 | `id` | GLN o CUFE del establecimiento. |
-| `idType` | `GLN` o `CUFE`. |
-| `agentType` | Categoría normativa del establecimiento. |
+| `idType` | `GLN` o `CUFE`. **Actualización posterior**: [ADR-010](010-non-custodial-identity.md) agrega el valor `REG` para las organizaciones **no custodiales** (autoridad de aplicación y financiadores), cuyo `id` es un slug estable del organismo en lugar de un identificador GS1. |
+| `agentType` | Categoría normativa del establecimiento. **Actualización posterior**: [ADR-010](010-non-custodial-identity.md) agrega `REGULATOR` y `FINANCIER` a este catálogo, de modo que todas las organizaciones de la red —custodiales y no custodiales— se resuelvan por el mismo camino `cid.GetMSPID()` → entrada del registro → `agentType`. Los tipos no custodiales nunca son origen ni destino de una transferencia ni se persisten como `custodioActual`. |
 | `active` | Indica si el establecimiento puede operar. |
 
 A diferencia de la versión anterior de este ADR, la relación entre `mspId` y `id` es uno a uno: cada organización representa exactamente un establecimiento. El registro ya no necesita resolver ambigüedad entre múltiples establecimientos de una misma MSP, porque esa ambigüedad no existe en este modelo.
@@ -78,7 +80,9 @@ Para operaciones donde el invocador actúa como custodio:
 5. Comparar el identificador canónico resuelto contra el custodio actual del asset.
 6. Rechazar la transacción si el invocador no coincide con el custodio actual, si su organización no está registrada o si no está activa.
 
-Para transferencias, el destino puede viajar como parámetro de request porque no representa la identidad del invocador. Antes de actualizar el custodio, el chaincode debe validar que el destino exista en el registro (por `mspId` o por identificador canónico, según cómo lo declare el cliente), esté activo y tenga un tipo de agente compatible con la matriz de transferencias autorizadas.
+Para transferencias, el destino puede viajar como dato provisto por el cliente porque no representa la identidad del invocador. Antes de actualizar el custodio, el chaincode debe validar que el destino exista en el registro (por `mspId` o por identificador canónico, según cómo lo declare el cliente), esté activo y tenga un tipo de agente compatible con la matriz de transferencias autorizadas.
+
+**Actualización posterior — por dónde viaja ese dato**: [ADR-004](004-transfer-dispatch-reception.md) lo reclasificó como **dato privado** y fijó que viaja **exclusivamente por el campo `transient` de la propuesta**, nunca como argumento público ni en una respuesta pública, porque el identificador del destinatario declarado revela una relación emisor→receptor que puede no consumarse. La regla de validación de este párrafo no cambia; cambia el transporte.
 
 Este modelo elimina la necesidad de leer atributos de certificado (`cid.GetAttributeValue`) para resolver identidad de establecimiento, porque `cid.GetMSPID()` ya identifica unívocamente al establecimiento a través del registro. La suplantación de un establecimiento por otro deja de ser un caso que el chaincode deba validar con lógica propia: requeriría que el atacante posea una identidad válida emitida por la CA de una organización que no es la suya, lo cual está cubierto por las garantías criptográficas base de la membresía Fabric, no por una regla adicional de este ADR.
 
@@ -112,7 +116,7 @@ Además, aun con el límite de confidencialidad correctamente ubicado en la orga
 - El modelo de red debe representar cada establecimiento habilitado como una organización Fabric independiente, con su propia MSP.
 - El modelo de asset debe persistir el custodio como GLN/CUFE canónico, resuelto desde el registro a partir del `mspId` del invocador, no como MSP ni como atributo de certificado.
 - El contrato público del chaincode no requiere que el cliente envíe el GLN/CUFE del invocador en operaciones donde este actúa como custodio.
-- Las transferencias deben recibir un destinatario identificable por GLN/CUFE o `mspId` y validarlo contra el registro de organización-establecimiento.
+- Las transferencias deben recibir un destinatario identificable por GLN/CUFE o `mspId` y validarlo contra el registro de organización-establecimiento. ADR-004 precisó después que ese identificador viaja por el campo `transient`, no como argumento público.
 - La CA de la red debe soportar la emisión de identidades para un número creciente de organizaciones. Para el prototipo, Fabric CA sigue siendo la opción por defecto; una única instancia de CA puede emitir identidades para múltiples organizaciones, por lo que este cambio no exige una CA por establecimiento.
 - El alta y baja de establecimientos deja de ser una operación exclusiva del ledger: requiere coordinar una actualización de configuración de canal (agregar o remover la organización) junto con el alta o baja en el registro de organización-establecimiento.
 - Las políticas de endoso, transferencia y colecciones privadas que antes referenciaban una MSP por categoría (`FarmaciaMSP`) deben rediseñarse para referenciar organizaciones individuales o resolverse mediante generación programática de políticas a partir del registro, ya que Fabric no ofrece una forma nativa de referenciar "cualquier organización de esta categoría".

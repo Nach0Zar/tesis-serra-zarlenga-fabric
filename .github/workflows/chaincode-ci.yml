@@ -4,11 +4,18 @@ on:
   pull_request:
     branches:
       - main
+      - develop
     types:
       - opened
       - synchronize
       - reopened
       - ready_for_review
+    paths:
+      - "chaincode/**"
+      - "domain/**"
+      - "go.work"
+      - "go.work.sum"
+      - ".github/workflows/chaincode-ci.yml"
 
 permissions:
   contents: read
@@ -18,17 +25,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  preflight:
+    name: Detect chaincode module
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      chaincode_exists: ${{ steps.detect.outputs.exists }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # El modulo Go del chaincode todavia no existe: lo crea CC-1 (#14). Sin este
+      # preflight, `setup-go` falla al resolver `go-version-file: chaincode/go.mod`
+      # y los tres jobs quedan en rojo cada vez que el propio workflow entra en el
+      # diff de un PR, sin que haya nada que compilar.
+      - name: Detect chaincode module
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f chaincode/go.mod ]]; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::chaincode/go.mod todavia no existe; los jobs de build, lint y test se habilitan solos cuando CC-1 (#14) lo cree."
+          fi
+
   build:
+    needs: preflight
+    if: needs.preflight.outputs.chaincode_exists == 'true'
     name: Build chaincode
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: chaincode/go.mod
           cache: true
@@ -47,16 +82,18 @@ jobs:
         run: go build -v ./...
 
   lint:
+    needs: preflight
+    if: needs.preflight.outputs.chaincode_exists == 'true'
     name: Lint chaincode
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: chaincode/go.mod
           cache: true
@@ -70,16 +107,18 @@ jobs:
           args: --timeout=5m
 
   test:
+    needs: preflight
+    if: needs.preflight.outputs.chaincode_exists == 'true'
     name: Test chaincode
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: chaincode/go.mod
           cache: true
