@@ -1,0 +1,315 @@
+---
+
+# Configuracion inicial del unico canal de aplicacion del prototipo SNT.
+# Fabric 2.5 usa el channel participation API: este archivo no define un
+# system channel ni consorcios heredados.
+
+Organizations:
+  # Organizaciones de aplicacion. ADR-003 fija una organizacion por
+  # establecimiento; estos nombres representan el dataset minimo del prototipo.
+  - &AnmatApplication
+    Name: AnmatMSP
+    ID: AnmatMSP
+    MSPDir: organizations/anmat/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('AnmatMSP.admin', 'AnmatMSP.peer', 'AnmatMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('AnmatMSP.admin', 'AnmatMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('AnmatMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('AnmatMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.anmat.snt.local
+        Port: 7051
+
+  - &LabApplication
+    Name: LabMSP
+    ID: LabMSP
+    MSPDir: organizations/lab/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('LabMSP.admin', 'LabMSP.peer', 'LabMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('LabMSP.admin', 'LabMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('LabMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('LabMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.lab.snt.local
+        Port: 7051
+
+  - &DrogueriaApplication
+    Name: DrogueriaMSP
+    ID: DrogueriaMSP
+    MSPDir: organizations/drogueria/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('DrogueriaMSP.admin', 'DrogueriaMSP.peer', 'DrogueriaMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('DrogueriaMSP.admin', 'DrogueriaMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('DrogueriaMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('DrogueriaMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.drogueria.snt.local
+        Port: 7051
+
+  - &DistribuidorApplication
+    Name: DistribuidorMSP
+    ID: DistribuidorMSP
+    MSPDir: organizations/distribuidor/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('DistribuidorMSP.admin', 'DistribuidorMSP.peer', 'DistribuidorMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('DistribuidorMSP.admin', 'DistribuidorMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('DistribuidorMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('DistribuidorMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.distribuidor.snt.local
+        Port: 7051
+
+  - &FarmaciaApplication
+    Name: FarmaciaMSP
+    ID: FarmaciaMSP
+    MSPDir: organizations/farmacia/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('FarmaciaMSP.admin', 'FarmaciaMSP.peer', 'FarmaciaMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('FarmaciaMSP.admin', 'FarmaciaMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('FarmaciaMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('FarmaciaMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.farmacia.snt.local
+        Port: 7051
+
+  - &CentroMedicoApplication
+    Name: CentroMedicoMSP
+    ID: CentroMedicoMSP
+    MSPDir: organizations/centromedico/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('CentroMedicoMSP.admin', 'CentroMedicoMSP.peer', 'CentroMedicoMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('CentroMedicoMSP.admin', 'CentroMedicoMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('CentroMedicoMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('CentroMedicoMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.centromedico.snt.local
+        Port: 7051
+
+  - &FinanciadorApplication
+    Name: FinanciadorMSP
+    ID: FinanciadorMSP
+    MSPDir: organizations/financiador/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('FinanciadorMSP.admin', 'FinanciadorMSP.peer', 'FinanciadorMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('FinanciadorMSP.admin', 'FinanciadorMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('FinanciadorMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('FinanciadorMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.financiador.snt.local
+        Port: 7051
+
+  # Las tres organizaciones siguientes usan los mismos MSP ID y raices que sus
+  # pares de aplicacion, pero restringen sus politicas a identidades orderer.
+  - &AnmatOrderer
+    Name: AnmatOrderer
+    ID: AnmatMSP
+    MSPDir: organizations/anmat/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('AnmatMSP.admin', 'AnmatMSP.orderer')"
+      Writers:
+        Type: Signature
+        Rule: "OR('AnmatMSP.admin', 'AnmatMSP.orderer')"
+      Admins:
+        Type: Signature
+        Rule: "OR('AnmatMSP.admin')"
+    OrdererEndpoints:
+      - orderer.anmat.snt.local:7050
+
+  - &LabOrderer
+    Name: LabOrderer
+    ID: LabMSP
+    MSPDir: organizations/lab/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('LabMSP.admin', 'LabMSP.orderer')"
+      Writers:
+        Type: Signature
+        Rule: "OR('LabMSP.admin', 'LabMSP.orderer')"
+      Admins:
+        Type: Signature
+        Rule: "OR('LabMSP.admin')"
+    OrdererEndpoints:
+      - orderer.lab.snt.local:7050
+
+  - &DrogueriaOrderer
+    Name: DrogueriaOrderer
+    ID: DrogueriaMSP
+    MSPDir: organizations/drogueria/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('DrogueriaMSP.admin', 'DrogueriaMSP.orderer')"
+      Writers:
+        Type: Signature
+        Rule: "OR('DrogueriaMSP.admin', 'DrogueriaMSP.orderer')"
+      Admins:
+        Type: Signature
+        Rule: "OR('DrogueriaMSP.admin')"
+    OrdererEndpoints:
+      - orderer.drogueria.snt.local:7050
+
+Capabilities:
+  Channel: &ChannelCapabilities
+    V2_0: true
+  Orderer: &OrdererCapabilities
+    V2_0: true
+  Application: &ApplicationCapabilities
+    V2_5: true
+
+Application: &ApplicationDefaults
+  Organizations:
+  Policies:
+    LifecycleEndorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+    Endorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+  Capabilities:
+    <<: *ApplicationCapabilities
+
+Orderer: &OrdererDefaults
+  OrdererType: etcdraft
+  BatchTimeout: 2s
+  BatchSize:
+    MaxMessageCount: 500
+    AbsoluteMaxBytes: 10 MB
+    PreferredMaxBytes: 2 MB
+  EtcdRaft:
+    Consenters:
+      - Host: orderer.anmat.snt.local
+        Port: 7050
+        ClientTLSCert: organizations/anmat/orderers/orderer.anmat.snt.local/tls/server.crt
+        ServerTLSCert: organizations/anmat/orderers/orderer.anmat.snt.local/tls/server.crt
+      - Host: orderer.lab.snt.local
+        Port: 7050
+        ClientTLSCert: organizations/lab/orderers/orderer.lab.snt.local/tls/server.crt
+        ServerTLSCert: organizations/lab/orderers/orderer.lab.snt.local/tls/server.crt
+      - Host: orderer.drogueria.snt.local
+        Port: 7050
+        ClientTLSCert: organizations/drogueria/orderers/orderer.drogueria.snt.local/tls/server.crt
+        ServerTLSCert: organizations/drogueria/orderers/orderer.drogueria.snt.local/tls/server.crt
+    Options:
+      TickInterval: 500ms
+      ElectionTick: 10
+      HeartbeatTick: 1
+      MaxInflightBlocks: 5
+      SnapshotIntervalSize: 16 MB
+  Organizations:
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    BlockValidation:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+  Capabilities:
+    <<: *OrdererCapabilities
+
+Channel: &ChannelDefaults
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+  Capabilities:
+    <<: *ChannelCapabilities
+
+Profiles:
+  SNTChannelGenesis:
+    <<: *ChannelDefaults
+    Orderer:
+      <<: *OrdererDefaults
+      Organizations:
+        - *AnmatOrderer
+        - *LabOrderer
+        - *DrogueriaOrderer
+    Application:
+      <<: *ApplicationDefaults
+      Organizations:
+        - *AnmatApplication
+        - *LabApplication
+        - *DrogueriaApplication
+        - *DistribuidorApplication
+        - *FarmaciaApplication
+        - *CentroMedicoApplication
+        - *FinanciadorApplication
