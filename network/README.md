@@ -81,6 +81,8 @@ organizations/
 
 Cada MSP habilita NodeOUs para `client`, `peer`, `admin` y `orderer`. Solamente el ECert de `User1` incluye el atributo `snt.role` indicado por el manifiesto; los certificados de peer, administrador y orderer no lo incluyen. Los certificados TLS contienen el SAN del hostname que consume `configtx.yaml`.
 
+El campo `clientRole` describe el rol de esa única identidad `User1` exigida por NET-1; no es el catálogo exhaustivo de identidades internas de DES-6. En particular, la identidad de solo lectura `auditor` de la organización regulatoria no se emite en este issue: incorporarla requiere ampliar el manifiesto a múltiples usuarios por organización y queda diferida a la configuración de autorización e integración que la consuma.
+
 ## Idempotencia y secretos
 
 En la primera ejecución se generan secretos aleatorios con OpenSSL y se guardan sin imprimir en `.state/secrets.env`, con permisos `0600`. No se deben copiar, mostrar ni incorporar al repositorio las claves, certificados, bases SQLite, logs o secretos de `network/organizations/`.

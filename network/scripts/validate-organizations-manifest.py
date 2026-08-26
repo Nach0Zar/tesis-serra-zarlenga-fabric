@@ -20,16 +20,16 @@ except ImportError as exc:  # pragma: no cover - dependency preflight
     raise SystemExit(2) from exc
 
 
-FOUNDATIONAL_MSPS = {
-    "AnmatMSP",
-    "LabMSP",
-    "DrogueriaMSP",
-    "DistribuidorMSP",
-    "FarmaciaMSP",
-    "CentroMedicoMSP",
-    "FinanciadorMSP",
+FOUNDATIONAL_AGENT_TYPES = {
+    "REGULATOR",
+    "LABORATORY",
+    "DISTRIBUTOR",
+    "DRUGSTORE",
+    "PHARMACY",
+    "HEALTHCARE_FACILITY",
+    "FINANCIER",
 }
-ORDERER_MSPS = {"AnmatMSP", "LabMSP", "DrogueriaMSP"}
+ORDERER_AGENT_TYPES = {"REGULATOR", "LABORATORY", "DRUGSTORE"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -118,11 +118,12 @@ def validate_manifest_invariants(manifest: dict[str, Any]) -> list[str]:
             f"duplicate ordererHostname: {', '.join(sorted(repeated_orderers))}"
         )
 
-    msp_ids = {organization["mspId"] for organization in organizations}
-    missing_foundational = FOUNDATIONAL_MSPS - msp_ids
+    agent_types = {organization["agentType"] for organization in organizations}
+    missing_foundational = FOUNDATIONAL_AGENT_TYPES - agent_types
     if missing_foundational:
         errors.append(
-            "missing foundational MSPs: " + ", ".join(sorted(missing_foundational))
+            "missing foundational agent types: "
+            + ", ".join(sorted(missing_foundational))
         )
 
     regulators = [
@@ -133,16 +134,24 @@ def validate_manifest_invariants(manifest: dict[str, Any]) -> list[str]:
     if len(regulators) != 1:
         errors.append(f"expected exactly one REGULATOR, found {len(regulators)}")
 
-    orderer_msps = {
-        organization["mspId"]
+    orderer_organizations = [
+        organization
         for organization in organizations
         if "ordererHostname" in organization
+    ]
+    orderer_agent_types = {
+        organization["agentType"] for organization in orderer_organizations
     }
-    if orderer_msps != ORDERER_MSPS:
+    if len(orderer_organizations) != 3:
         errors.append(
-            "orderer MSPs must be exactly "
-            f"{', '.join(sorted(ORDERER_MSPS))}; found "
-            f"{', '.join(sorted(orderer_msps))}"
+            "expected exactly 3 orderer organizations, "
+            f"found {len(orderer_organizations)}"
+        )
+    if orderer_agent_types != ORDERER_AGENT_TYPES:
+        errors.append(
+            "orderer agent types must be exactly "
+            f"{', '.join(sorted(ORDERER_AGENT_TYPES))}; found "
+            f"{', '.join(sorted(orderer_agent_types))}"
         )
 
     for organization in organizations:
@@ -159,12 +168,12 @@ def validate_manifest_invariants(manifest: dict[str, Any]) -> list[str]:
                     f'{organization["mspId"]}: ordererHostname must be '
                     f"{expected_orderer}"
                 )
-        if organization["idType"] in {"GLN", "CUFE"} and not gs1_check_digit_is_valid(
+        if organization["idType"] == "GLN" and not gs1_check_digit_is_valid(
             organization["id"]
         ):
             errors.append(
                 f'{organization["mspId"]}: invalid GS1 check digit in '
-                f'{organization["idType"]} {organization["id"]}'
+                f'GLN {organization["id"]}'
             )
 
     return errors
