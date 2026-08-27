@@ -9,7 +9,7 @@ Módulo Go `github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain`: la **única
 | `states.go` | Máquina de estados 1.0.0: catálogo de estados, eventos, actores y las 33 transiciones. | [ADR-001](../docs/adr/001-maquina-estados-medicamento.md) |
 | `manifest/` | Manifiesto fundacional embebido que `Init` consume en el bootstrap. | `network/organizations-manifest.json` |
 
-`states.go` **reproduce** la tabla de ADR-001, no la interpreta: `TestTransitionTableMatchesADR001` contrasta cada fila contra el Markdown del propio ADR y falla si divergen. Lo mismo hace `manifest/sync_test.go` con la copia embebida del manifiesto.
+`states.go` **reproduce** la tabla de ADR-001, no la interpreta: `TestTransitionTableMatchesADR001` contrasta cada fila contra el Markdown del propio ADR —estado de origen, evento, estado destino y **actor habilitado**— y falla si divergen. La columna de actores se compara porque no es documental: ADR-001 («Reglas de consumo») la declara fuente de verdad de quién puede detonar cada transición, y de ella dependen las decisiones de autorización y de endoso posteriores. Lo mismo hace `manifest/sync_test.go` con la copia embebida del manifiesto.
 
 El layout del workspace Go (módulos separados con `replace`, y por qué el empaquetado del chaincode exige `go mod vendor`) está documentado en [`chaincode/README.md`](../chaincode/README.md).
 

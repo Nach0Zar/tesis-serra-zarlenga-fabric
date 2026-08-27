@@ -17,6 +17,11 @@ AGENTS.md
 *.out
 coverage.out
 
+# Artefactos de empaquetado del chaincode. `make package` construye el arbol
+# staged y el tar.gz FUERA de chaincode/, para que una segunda corrida no
+# empaquete el artefacto de la primera (ADR-008 punto 5, ADR-010 punto 4).
+/build/
+
 # Directorios de vendoring. El del chaincode lo genera `make vendor` solo para
 # empaquetar (ver chaincode/README.md); no se versiona.
 vendor/

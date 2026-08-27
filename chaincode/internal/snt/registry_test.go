@@ -365,19 +365,44 @@ func TestParticipationMarkerKeyPutsTxIDLast(t *testing.T) {
 // es una frontera de seguridad. Una operacion futura que cree una clave publica
 // sin marcador reabriria una ventana de creacion sin dueno.
 //
-// Hoy son tres operaciones. RegisterUnit la agrega CC-2 (#15), que es duena de
-// T01 y de sus tests de endoso.
+// El test cubre las TRES operaciones que #14 enumera. `RegisterUnit` todavia es
+// un stub de CC-2 (#15): mientras lo sea, su caso comprueba que siga siendolo y
+// se marca como pendiente. El dia que CC-2 le ponga logica, el caso deja de
+// saltearse por si solo y exige el marcador. La invariante queda asi cubierta
+// por un test que no depende de que nadie se acuerde de agregarlo.
 func TestPublicKeyCreationWritesMarker(t *testing.T) {
 	cases := []struct {
-		name          string
-		responsable   string
-		run           func(t *testing.T, stub *mockStub)
+		name        string
+		responsable string
+		run         func(t *testing.T, stub *mockStub) error
+		// markerOwnerOp es la operacion que debe figurar en el marcador.
 		markerOwnerOp string
+		// pendingOwner, si no es vacio, es la issue duena de la logica
+		// todavia no implementada. El caso se saltea SOLO mientras la
+		// operacion siga devolviendo el error de stub de esa issue.
+		pendingOwner string
 	}{
+		{
+			name:        "RegisterUnit",
+			responsable: labMSP,
+			run: func(t *testing.T, stub *mockStub) error {
+				registerOrg(t, stub, labMSP, labGLN, domain.AgentLaboratory)
+				contract := new(SNTContract)
+				_, err := contract.RegisterUnit(
+					testContext(stub, labMSP, RoleOperator),
+					RegisterUnitRequest{
+						GTIN: validGTIN, NumeroSerie: validSerial,
+						Lote: "L2026-014", FechaVencimiento: "2027-12-31",
+					})
+				return err
+			},
+			markerOwnerOp: opRegisterUnit,
+			pendingOwner:  "CC-2 (#15)",
+		},
 		{
 			name:        "RegisterOrganization",
 			responsable: anmatMSP,
-			run: func(t *testing.T, stub *mockStub) {
+			run: func(_ *testing.T, stub *mockStub) error {
 				contract := new(SNTContract)
 				_, err := contract.RegisterOrganization(
 					testContext(stub, anmatMSP, RoleRegulatoryAdmin),
@@ -385,14 +410,14 @@ func TestPublicKeyCreationWritesMarker(t *testing.T) {
 						MSPID: farmaciaMSP, ID: farmaciaGLN, IDType: IDTypeGLN,
 						AgentType: domain.AgentPharmacy, Active: true,
 					})
-				requireNoError(t, err)
+				return err
 			},
 			markerOwnerOp: opRegisterOrganization,
 		},
 		{
 			name:        "AuthorizeLabIntervention",
 			responsable: anmatMSP,
-			run: func(t *testing.T, stub *mockStub) {
+			run: func(t *testing.T, stub *mockStub) error {
 				registerOrg(t, stub, labMSP, labGLN, domain.AgentLaboratory)
 				seedUnit(t, stub, domain.StateEnCustodia, "GLN:"+drogueriaGLN)
 				contract := new(SNTContract)
@@ -405,7 +430,7 @@ func TestPublicKeyCreationWritesMarker(t *testing.T) {
 						Motivo:      "Retiro de lote, expediente ANMAT 1234/2026.",
 						ExpiraEn:    "2026-09-30T00:00:00Z",
 					})
-				requireNoError(t, err)
+				return err
 			},
 			markerOwnerOp: opAuthorizeLabIntervent,
 		},
@@ -415,7 +440,13 @@ func TestPublicKeyCreationWritesMarker(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stub := newMockStub()
 			seedRegistry(t, stub)
-			tc.run(t, stub)
+			err := tc.run(t, stub)
+
+			if tc.pendingOwner != "" && isStubOf(err, tc.pendingOwner) {
+				t.Skipf("%s todavia es un stub de %s; este caso se activa solo cuando esa issue le ponga logica",
+					tc.name, tc.pendingOwner)
+			}
+			requireNoError(t, err)
 
 			collection := stub.privateData[implicitCollection(tc.responsable)]
 			found := false
@@ -434,4 +465,15 @@ func TestPublicKeyCreationWritesMarker(t *testing.T) {
 			}
 		})
 	}
+}
+
+// isStubOf informa si el error es el que devuelve una operacion declarada pero
+// todavia no implementada por la issue indicada (ver notImplemented).
+func isStubOf(err error, owner string) bool {
+	parsed, ok := cerr.Parse(err)
+	if !ok || parsed.Code != cerr.InternalError {
+		return false
+	}
+	issue, _ := parsed.Details["issue"].(string)
+	return issue == owner
 }
