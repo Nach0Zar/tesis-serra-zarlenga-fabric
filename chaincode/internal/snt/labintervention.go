@@ -37,9 +37,14 @@ func (c *SNTContract) AuthorizeLabIntervention(
 	}
 
 	// El laboratorio designado debe estar registrado, activo y ser LABORATORY.
-	lab, err := findOrganizationByCanonicalID(ctx, req.Laboratorio)
+	lab, err := lookupOrganizationByCanonicalID(ctx, req.Laboratorio)
 	if err != nil {
 		return nil, err
+	}
+	if !lab.Active {
+		return nil, cerr.New(cerr.OrgInactive,
+			"el laboratorio designado %s esta registrado pero no habilitado", req.Laboratorio).
+			WithDetails(map[string]any{"laboratorio": req.Laboratorio})
 	}
 	if lab.AgentType != domain.AgentLaboratory {
 		return nil, cerr.New(cerr.InvalidLabIntervention,
@@ -233,37 +238,4 @@ func putLabIntervention(
 		return "", cerr.Internal(err, "no se pudo escribir la autorizacion de intervencion")
 	}
 	return key, nil
-}
-
-// findOrganizationByCanonicalID resuelve una organizacion por su identificador
-// canonico `<idType>:<id>` y aplica las validaciones de existencia y
-// habilitacion que comparten el destino de un despacho (ADR-003) y el receptor
-// declarado de una devolucion (ADR-009, punto 2, validaciones 1 a 3).
-func findOrganizationByCanonicalID(
-	ctx contractapi.TransactionContextInterface,
-	canonicalID string,
-) (OrganizationRecord, error) {
-	if _, _, err := parseCanonicalID(canonicalID); err != nil {
-		return OrganizationRecord{}, err
-	}
-
-	all, err := listOrganizations(ctx)
-	if err != nil {
-		return OrganizationRecord{}, err
-	}
-	for _, org := range all {
-		if org.CanonicalID() != canonicalID {
-			continue
-		}
-		if !org.Active {
-			return OrganizationRecord{}, cerr.New(cerr.OrgInactive,
-				"la organizacion %s esta registrada pero no habilitada", canonicalID).
-				WithDetails(map[string]any{"id": canonicalID})
-		}
-		return org, nil
-	}
-
-	return OrganizationRecord{}, cerr.New(cerr.OrgNotRegistered,
-		"el identificador %s no tiene entrada en el registro organizacion-establecimiento", canonicalID).
-		WithDetails(map[string]any{"id": canonicalID})
 }
