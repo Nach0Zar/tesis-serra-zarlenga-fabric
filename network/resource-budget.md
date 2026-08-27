@@ -59,9 +59,17 @@ MiB para Fabric CA y 12,87 MiB para un orderer, todos bajo los límites de
 `compose.yaml`. Esta observación valida el arranque y el instrumento, no el
 consumo bajo carga.
 
-Las fuentes versionadas consultadas para NET-3 no especifican los recursos del
-segundo equipo. Falta repetir la medición en ese host y bajo los perfiles de
-carga de DES-7, con el techo homogéneo de la sección siguiente.
+La repetición en el segundo host se ejecutó sobre el commit `7ba7e39`, con el
+perfil homogéneo aplicado: 6 procesadores, 8.327.917.568 bytes visibles de RAM y
+4.294.967.296 bytes de swap. Con Docker 29.7.2 y Compose 5.4.0, los once
+contenedores alcanzaron `healthy`, sin reinicios ni OOM. La muestra en reposo
+registró máximos de 42,61 MiB para un peer, 33,32 MiB para Fabric CA y 14,18 MiB
+para un orderer, todos bajo sus límites.
+
+Esta repetición confirma que el arranque y el instrumento entran en el techo
+homogéneo en el segundo equipo. La carga sostenida, los 50.000 marcadores,
+benchmark y recuperación permanecen como perfiles de DES-7 y no se presentan
+como resultados de NET-3.
 
 ## Costo de los marcadores de participación
 
