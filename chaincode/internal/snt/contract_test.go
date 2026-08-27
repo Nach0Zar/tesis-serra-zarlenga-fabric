@@ -108,10 +108,6 @@ func TestDeclaredOperationsReportTheirOwner(t *testing.T) {
 	contract := new(SNTContract)
 
 	pending := map[string]func() error{
-		"RegisterUnit": func() error {
-			_, err := contract.RegisterUnit(ctx, RegisterUnitRequest{})
-			return err
-		},
 		"DispatchTransfer": func() error {
 			_, err := contract.DispatchTransfer(ctx, DispatchTransferRequest{})
 			return err
@@ -226,5 +222,10 @@ func TestImplementedOperationsAreNotStubs(t *testing.T) {
 		MSPID: labMSP, Active: true,
 	}); err != nil {
 		t.Fatalf("SetOrganizationActive deberia estar implementada: %v", err)
+	}
+	// T01, implementada por CC-2 (#15).
+	if _, err := contract.RegisterUnit(
+		testContext(stub, labMSP, RoleOperator), validRegisterUnitRequest()); err != nil {
+		t.Fatalf("RegisterUnit deberia estar implementada: %v", err)
 	}
 }

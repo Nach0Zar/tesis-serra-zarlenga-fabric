@@ -12,6 +12,7 @@ import (
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
 	"github.com/hyperledger/fabric-chaincode-go/v2/pkg/cid"
+	"github.com/hyperledger/fabric-chaincode-go/v2/pkg/statebased"
 	"github.com/hyperledger/fabric-chaincode-go/v2/shim"
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 	"github.com/hyperledger/fabric-protos-go-apiv2/ledger/queryresult"
@@ -257,6 +258,20 @@ func requireCode(t *testing.T, err error, want cerr.Code) {
 	if parsed.Code != want {
 		t.Fatalf("codigo de error = %s, se esperaba %s (mensaje: %v)", parsed.Code, want, err)
 	}
+}
+
+// endorsingOrganizations decodifica una politica de endoso por clave y devuelve
+// las organizaciones que exige. Permite afirmar sobre la politica que fijo el
+// chaincode en lugar de solo sobre su presencia.
+func endorsingOrganizations(t *testing.T, policy []byte) []string {
+	t.Helper()
+	parsed, err := statebased.NewStateEP(policy)
+	if err != nil {
+		t.Fatalf("la politica de endoso por clave no es decodificable: %v", err)
+	}
+	orgs := parsed.ListOrgs()
+	sort.Strings(orgs)
+	return orgs
 }
 
 // requireNoError falla el test si la operacion devolvio error.

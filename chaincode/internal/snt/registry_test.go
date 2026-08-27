@@ -365,8 +365,8 @@ func TestParticipationMarkerKeyPutsTxIDLast(t *testing.T) {
 // es una frontera de seguridad. Una operacion futura que cree una clave publica
 // sin marcador reabriria una ventana de creacion sin dueno.
 //
-// Hoy son tres operaciones. RegisterUnit la agrega CC-2 (#15), que es duena de
-// T01 y de sus tests de endoso.
+// Hoy son exactamente tres: RegisterUnit (laboratorio invocante),
+// RegisterOrganization (regulador) y AuthorizeLabIntervention (regulador).
 func TestPublicKeyCreationWritesMarker(t *testing.T) {
 	cases := []struct {
 		name          string
@@ -374,6 +374,20 @@ func TestPublicKeyCreationWritesMarker(t *testing.T) {
 		run           func(t *testing.T, stub *mockStub)
 		markerOwnerOp string
 	}{
+		{
+			// Unica de las tres cuya organizacion responsable NO es la
+			// regulatoria: la clave de la unidad la crea el laboratorio.
+			name:        "RegisterUnit",
+			responsable: labMSP,
+			run: func(t *testing.T, stub *mockStub) {
+				registerOrg(t, stub, labMSP, labGLN, domain.AgentLaboratory)
+				contract := new(SNTContract)
+				_, err := contract.RegisterUnit(
+					testContext(stub, labMSP, RoleOperator), validRegisterUnitRequest())
+				requireNoError(t, err)
+			},
+			markerOwnerOp: opRegisterUnit,
+		},
 		{
 			name:        "RegisterOrganization",
 			responsable: anmatMSP,
