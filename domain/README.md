@@ -1,3 +1,20 @@
+# Paquete compartido de reglas (`domain`)
+
+Módulo Go `github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain`: la **única** implementación de las reglas de negocio que el chaincode y la baseline centralizada deben aplicar por igual. La paridad funcional queda garantizada por construcción y no por disciplina — no hay dos implementaciones que mantener consistentes, hay una sola que ambos binarios importan ([ADR-008](../docs/adr/008-transfer-matrix-distribution.md) punto 2, [ADR-012](../docs/adr/012-baseline-design.md) sección 1).
+
+| Archivo | Contenido | Fuente de verdad |
+|---|---|---|
+| `authorized-transfers.json` | Matriz regulatoria de transferencias (embebida por `go:embed`). | Este archivo |
+| `transfers.go` | `DecideTransfer(origen, destino)`: el algoritmo de decisión documentado más abajo. | `authorized-transfers.json` |
+| `states.go` | Máquina de estados 1.0.0: catálogo de estados, eventos, actores y las 33 transiciones. | [ADR-001](../docs/adr/001-maquina-estados-medicamento.md) |
+| `manifest/` | Manifiesto fundacional embebido que `Init` consume en el bootstrap. | `network/organizations-manifest.json` |
+
+`states.go` **reproduce** la tabla de ADR-001, no la interpreta: `TestTransitionTableMatchesADR001` contrasta cada fila contra el Markdown del propio ADR y falla si divergen. Lo mismo hace `manifest/sync_test.go` con la copia embebida del manifiesto.
+
+El layout del workspace Go (módulos separados con `replace`, y por qué el empaquetado del chaincode exige `go mod vendor`) está documentado en [`chaincode/README.md`](../chaincode/README.md).
+
+---
+
 # Matriz regulatoria de transferencias autorizadas — PFI SNT
 
 Este directorio contiene la fuente única de verdad para validar pares **origen → destino** en transferencias ordinarias de custodia del Sistema Nacional de Trazabilidad de Medicamentos.

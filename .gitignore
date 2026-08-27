@@ -16,7 +16,10 @@ AGENTS.md
 *.test
 *.out
 coverage.out
-/vendor/
+
+# Directorios de vendoring. El del chaincode lo genera `make vendor` solo para
+# empaquetar (ver chaincode/README.md); no se versiona.
+vendor/
 
 # Go workspace
 go.work

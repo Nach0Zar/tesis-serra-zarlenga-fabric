@@ -77,9 +77,22 @@ jobs:
         working-directory: chaincode
         run: go mod verify
 
+      - name: Build shared domain package
+        working-directory: domain
+        run: go build -v ./...
+
       - name: Build chaincode
         working-directory: chaincode
         run: go build -v ./...
+
+      # El artefacto que se instala en los peers debe ser autocontenido: el
+      # `replace ../domain` de go.mod apunta fuera del directorio que el peer
+      # empaqueta. `make vendor` materializa el paquete compartido y verifica
+      # que los dos JSON embebidos (matriz DES-3 y manifiesto fundacional)
+      # hayan quedado adentro. Ver chaincode/README.md.
+      - name: Verify vendored package is self-contained
+        working-directory: chaincode
+        run: make vendor
 
   lint:
     needs: preflight
@@ -99,11 +112,18 @@ jobs:
           cache: true
           cache-dependency-path: chaincode/go.sum
 
-      - name: Run golangci-lint
+      - name: Run golangci-lint on chaincode
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
           working-directory: chaincode
+          args: --timeout=5m
+
+      - name: Run golangci-lint on shared domain package
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+          working-directory: domain
           args: --timeout=5m
 
   test:
@@ -127,6 +147,14 @@ jobs:
       - name: Download dependencies
         working-directory: chaincode
         run: go mod download
+
+      # Incluye TestTransitionTableMatchesADR001, que contrasta la maquina de
+      # estados del paquete contra la tabla de ADR-001, y el test que verifica
+      # que la copia embebida del manifiesto fundacional no divergio de
+      # network/organizations-manifest.json.
+      - name: Run shared domain package tests
+        working-directory: domain
+        run: go test -v -race ./...
 
       - name: Run unit tests
         working-directory: chaincode
