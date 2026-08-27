@@ -53,14 +53,15 @@ segundo equipo.
 
 En el host disponible al implementar NET-3, WSL informó 33.201.737.728 bytes de
 RAM y 16 procesadores, pero no existía `.wslconfig`; Docker Compose era 5.3.0.
-El material local de NET-1 estaba disponible, pero Docker Desktop 4.82.0 abortó
-durante la inicialización de su backend antes de exponer el motor Linux. Por lo
-tanto no se registró consumo runtime ni se afirmó que los once contenedores
-alcanzaran `healthy`.
+Con Docker 29.6.1 y el material local de NET-1, los once contenedores alcanzaron
+`healthy`. La muestra en reposo registró un máximo de 68,57 MiB por peer, 32,38
+MiB para Fabric CA y 12,87 MiB para un orderer, todos bajo los límites de
+`compose.yaml`. Esta observación valida el arranque y el instrumento, no el
+consumo bajo carga.
 
 Las fuentes versionadas consultadas para NET-3 no especifican los recursos del
-segundo equipo. La prueba en ambos hosts sigue siendo una condición de
-aceptación: debe ejecutarse con el techo homogéneo de la sección siguiente.
+segundo equipo. Falta repetir la medición en ese host y bajo los perfiles de
+carga de DES-7, con el techo homogéneo de la sección siguiente.
 
 ## Costo de los marcadores de participación
 

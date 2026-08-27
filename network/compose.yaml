@@ -5,7 +5,7 @@ name: snt-fabric
 # versioned. Channel creation and chaincode lifecycle belong to NET-4.
 
 x-peer-environment: &peer-environment
-  FABRIC_CFG_PATH: /etc/hyperledger/peercfg
+  FABRIC_CFG_PATH: /etc/hyperledger/fabric
   FABRIC_LOGGING_SPEC: INFO
   CORE_LEDGER_STATE_STATEDATABASE: goleveldb
   CORE_LEDGER_HISTORY_ENABLEHISTORYDATABASE: "true"
@@ -79,7 +79,13 @@ x-orderer-service: &orderer-service
   command: orderer
   working_dir: /root
   healthcheck:
-    test: ["CMD-SHELL", "wget --quiet --output-document=- http://127.0.0.1:9443/healthz >/dev/null 2>&1"]
+    test:
+      - CMD-SHELL
+      - >-
+        bash -ec 'exec 3<>/dev/tcp/127.0.0.1/9443;
+        printf "GET /healthz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3;
+        IFS= read -r status <&3;
+        [[ "$$status" == "HTTP/1.1 200"* ]]'
     interval: 10s
     timeout: 5s
     retries: 12
