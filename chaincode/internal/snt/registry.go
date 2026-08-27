@@ -191,13 +191,10 @@ func (c *SNTContract) RegisterOrganization(
 		return nil, err
 	}
 
-	record := OrganizationRecord{
-		MSPID:     req.MSPID,
-		ID:        req.ID,
-		IDType:    req.IDType,
-		AgentType: req.AgentType,
-		Active:    req.Active,
-	}
+	// La entrada del registro y el request son tipos espejo: la conversion
+	// directa deja de compilar si dejan de serlo, que es exactamente el aviso
+	// que se quiere.
+	record := OrganizationRecord(req)
 
 	for _, org := range existing {
 		if org.MSPID == req.MSPID {

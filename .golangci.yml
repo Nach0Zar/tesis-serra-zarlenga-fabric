@@ -8,7 +8,13 @@ linters:
   enable:
     - gosec
     - revive
-    - misspell
+
+  # misspell queda deshabilitado a proposito. Es un corrector de ingles y la
+  # prosa de este repositorio -- ADRs, documentos de diseno y comentarios de
+  # codigo -- se redacta en espanol por convencion del proyecto
+  # (docs/adr/README.md, "Convenciones"), de modo que marca como error de
+  # tipeo practicamente cada palabra de cada comentario. No admite otra
+  # localizacion que en-US / en-GB.
 
 formatters:
   enable:

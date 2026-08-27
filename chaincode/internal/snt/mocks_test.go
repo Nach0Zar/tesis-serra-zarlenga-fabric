@@ -42,8 +42,16 @@ type mockStub struct {
 	// GetHistoryForKey: cada escritura confirmada agrega una modificacion.
 	history map[string][]*queryresult.KeyModification
 
-	failGetState bool
+	// failures inyecta fallas de plataforma por nombre de metodo del stub, para
+	// ejercitar las ramas que devuelven INTERNAL_ERROR sin las cuales una parte
+	// del manejo de errores quedaria sin probar.
+	failures map[string]error
 }
+
+// failOn programa una falla de plataforma en el metodo indicado.
+func (s *mockStub) failOn(method string, err error) { s.failures[method] = err }
+
+func (s *mockStub) injected(method string) error { return s.failures[method] }
 
 func newMockStub() *mockStub {
 	return &mockStub{
@@ -55,29 +63,41 @@ func newMockStub() *mockStub {
 		validation:  map[string][]byte{},
 		events:      map[string][]byte{},
 		history:     map[string][]*queryresult.KeyModification{},
+		failures:    map[string]error{},
 	}
 }
 
 func (s *mockStub) GetTxID() string { return s.txID }
 
 func (s *mockStub) GetTxTimestamp() (*timestamppb.Timestamp, error) {
+	if err := s.injected("GetTxTimestamp"); err != nil {
+		return nil, err
+	}
 	return timestamppb.New(s.timestamp), nil
 }
 
-func (s *mockStub) GetTransient() (map[string][]byte, error) { return s.transient, nil }
+func (s *mockStub) GetTransient() (map[string][]byte, error) {
+	if err := s.injected("GetTransient"); err != nil {
+		return nil, err
+	}
+	return s.transient, nil
+}
 
 func (s *mockStub) CreateCompositeKey(objectType string, attributes []string) (string, error) {
 	return shim.CreateCompositeKey(objectType, attributes)
 }
 
 func (s *mockStub) GetState(key string) ([]byte, error) {
-	if s.failGetState {
-		return nil, errors.New("fallo simulado del ledger")
+	if err := s.injected("GetState"); err != nil {
+		return nil, err
 	}
 	return s.state[key], nil
 }
 
 func (s *mockStub) PutState(key string, value []byte) error {
+	if err := s.injected("PutState"); err != nil {
+		return err
+	}
 	s.state[key] = value
 	s.appendHistory(key, value, false)
 	return nil
@@ -100,14 +120,23 @@ func (s *mockStub) appendHistory(key string, value []byte, isDelete bool) {
 }
 
 func (s *mockStub) GetHistoryForKey(key string) (shim.HistoryQueryIteratorInterface, error) {
+	if err := s.injected("GetHistoryForKey"); err != nil {
+		return nil, err
+	}
 	return &mockHistoryIterator{items: s.history[key]}, nil
 }
 
 func (s *mockStub) GetPrivateData(collection, key string) ([]byte, error) {
+	if err := s.injected("GetPrivateData"); err != nil {
+		return nil, err
+	}
 	return s.privateData[collection][key], nil
 }
 
 func (s *mockStub) PutPrivateData(collection, key string, value []byte) error {
+	if err := s.injected("PutPrivateData"); err != nil {
+		return err
+	}
 	if s.privateData[collection] == nil {
 		s.privateData[collection] = map[string][]byte{}
 	}
@@ -116,11 +145,17 @@ func (s *mockStub) PutPrivateData(collection, key string, value []byte) error {
 }
 
 func (s *mockStub) DelPrivateData(collection, key string) error {
+	if err := s.injected("DelPrivateData"); err != nil {
+		return err
+	}
 	delete(s.privateData[collection], key)
 	return nil
 }
 
 func (s *mockStub) SetStateValidationParameter(key string, ep []byte) error {
+	if err := s.injected("SetStateValidationParameter"); err != nil {
+		return err
+	}
 	s.validation[key] = ep
 	return nil
 }
@@ -130,11 +165,17 @@ func (s *mockStub) GetStateValidationParameter(key string) ([]byte, error) {
 }
 
 func (s *mockStub) SetEvent(name string, payload []byte) error {
+	if err := s.injected("SetEvent"); err != nil {
+		return err
+	}
 	s.events[name] = payload
 	return nil
 }
 
 func (s *mockStub) GetStateByPartialCompositeKey(objectType string, keys []string) (shim.StateQueryIteratorInterface, error) {
+	if err := s.injected("GetStateByPartialCompositeKey"); err != nil {
+		return nil, err
+	}
 	prefix, err := shim.CreateCompositeKey(objectType, keys)
 	if err != nil {
 		return nil, err

@@ -94,6 +94,21 @@ Las operaciones declaradas devuelven `INTERNAL_ERROR` con el detalle `{"operacio
 
 `TestPublicKeyCreationWritesMarker` cubre la invariante de ADR-007 punto 6.j: toda operación que crea una clave pública nueva escribe también el marcador de la organización responsable. Hoy son exactamente tres — `RegisterUnit` (laboratorio invocante), `RegisterOrganization` y `AuthorizeLabIntervention` (organización regulatoria) — y el test las cubre a las tres. Mientras se cumpla, la política de chaincode `OR(custodiales, regulatoria)` no es una frontera de seguridad; una operación futura que cree una clave pública sin marcador reabriría una ventana de creación sin dueño.
 
+## Tests
+
+CC-6 (#19) es dueña de la batería:
+
+- **mocks del `ChaincodeStub`** y de la identidad del cliente (`internal/snt/mocks_test.go`), con world state, datos privados, políticas de endoso por clave, transaction log e **inyección de fallas de plataforma** por método, para poder ejercitar las ramas `INTERNAL_ERROR`;
+- **un camino feliz por operación implementada**, inventariado en `TestHappyPathInventory`;
+- **un escenario por cada código del catálogo de errores** del contrato, en `TestErrorCatalogIsCovered`. Los códigos que las operaciones implementadas todavía no pueden producir se declaran con la issue que los habilitará, de modo que la tabla nunca queda muda sobre uno de ellos — hoy solo `LAB_INTERVENTION_REQUIRED`, que aparece con las issues EXT;
+- cobertura por encima del 80 % y suite limpia con `-race`.
+
+Los mocks embeben la interfaz de Fabric en lugar de implementarla entera: un método que un test use sin estar implementado entra en pánico de forma evidente, en vez de devolver un cero silencioso.
+
+### `misspell` deshabilitado
+
+`.golangci.yml` deja de habilitar `misspell`. Es un corrector de inglés —solo admite `en-US`/`en-GB`— y la prosa del repositorio se redacta en español por convención del proyecto (`docs/adr/README.md`), de modo que marcaba como error de tipeo casi cada palabra de cada comentario. `gosec` y `revive` siguen habilitados.
+
 ## Desarrollo
 
 ```bash

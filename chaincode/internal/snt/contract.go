@@ -33,6 +33,14 @@ import (
 const ContractVersion = "2.6.1"
 
 // SNTContract es el contrato publico del chaincode `snt`.
+//
+// El nombre lo fija docs/api-contract.md ("metodos de un contrato
+// `SNTContract`") y no es un detalle de estilo: contractapi deriva de el el
+// namespace de invocacion, de modo que renombrarlo cambiaria el nombre de
+// TODAS las transacciones que el cliente y la baseline invocan. Por eso se
+// silencia la regla de revive sobre el prefijo repetido del paquete.
+//
+//nolint:revive // el nombre es parte del contrato publico congelado
 type SNTContract struct {
 	contractapi.Contract
 }

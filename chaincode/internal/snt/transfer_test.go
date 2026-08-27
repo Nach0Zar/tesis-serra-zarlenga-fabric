@@ -2,6 +2,7 @@ package snt
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
@@ -111,7 +112,7 @@ func TestDispatchTransferHappyPath(t *testing.T) {
 	// relacion emisor -> receptor que puede no consumarse (ADR-004).
 	encoded, err := json.Marshal(view)
 	requireNoError(t, err)
-	if contains(string(encoded), drogueriaGLN) {
+	if strings.Contains(string(encoded), drogueriaGLN) {
 		t.Fatalf("la vista publica expone el destinatario declarado: %s", encoded)
 	}
 
@@ -766,16 +767,4 @@ func TestTransferIsTwoTransactions(t *testing.T) {
 		testContext(stub, drogueriaMSP, RoleOperator),
 		DispatchTransferRequest{GTIN: validGTIN, NumeroSerie: validSerial})
 	requireNoError(t, err)
-}
-
-func contains(haystack, needle string) bool {
-	return len(needle) > 0 && len(haystack) >= len(needle) &&
-		func() bool {
-			for i := 0; i+len(needle) <= len(haystack); i++ {
-				if haystack[i:i+len(needle)] == needle {
-					return true
-				}
-			}
-			return false
-		}()
 }
