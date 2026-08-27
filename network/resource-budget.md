@@ -116,6 +116,12 @@ empírico de almacenamiento, sin mezclar la preparación de las 50.000 unidades
 con las rondas de rendimiento. La medición posterior reemplaza esta estimación,
 pero nunca elimina el costo del reporte.
 
+El límite de 384 MiB por peer es provisional hasta medir la carga representativa.
+El protocolo de DES-7 debe incluir como punto de control una corrida con las
+50.000 unidades cargadas y comprobar el pico residente, los reinicios y
+`OOMKilled`. Si un peer alcanza el límite, la corrida se considera inválida y
+el mismo límite debe revisarse de forma simétrica para ambos hosts.
+
 ## Criterio para ambos hosts
 
 Antes de una corrida comparativa, en ambos equipos:

@@ -14,16 +14,44 @@ if [[ "${#services[@]}" -ne 11 ]]; then
   exit 1
 fi
 
-unhealthy=0
+invalid_run=0
+declare -a container_ids=()
+declare -A container_id_by_service=()
 for service in "${services[@]}"; do
-  status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing-healthcheck{{end}}' "${service}" 2>/dev/null || true)"
+  mapfile -t service_container_ids < <(docker compose -f "${compose_file}" ps -q "${service}")
+  if [[ "${#service_container_ids[@]}" -ne 1 ]]; then
+    echo "ERROR: ${service} debe tener exactamente un contenedor en ejecución; se encontraron ${#service_container_ids[@]}." >&2
+    invalid_run=1
+    continue
+  fi
+
+  container_id="${service_container_ids[0]}"
+  inspection="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing-healthcheck{{end}} {{.RestartCount}} {{.State.OOMKilled}}' "${container_id}" 2>/dev/null || true)"
+  if [[ -z "${inspection}" ]]; then
+    echo "ERROR: no se pudo inspeccionar el contenedor de ${service}." >&2
+    invalid_run=1
+    continue
+  fi
+
+  read -r status restart_count oom_killed <<< "${inspection}"
+  container_ids+=("${container_id}")
+  container_id_by_service["${service}"]="${container_id}"
+
   if [[ "${status}" != "healthy" ]]; then
     echo "ERROR: ${service} está ${status:-ausente}." >&2
-    unhealthy=1
+    invalid_run=1
+  fi
+  if [[ "${restart_count}" -ne 0 ]]; then
+    echo "ERROR: ${service} registra ${restart_count} reinicio(s); la medición no es válida." >&2
+    invalid_run=1
+  fi
+  if [[ "${oom_killed}" != "false" ]]; then
+    echo "ERROR: ${service} registra OOMKilled=${oom_killed}; la medición no es válida." >&2
+    invalid_run=1
   fi
 done
 
-if [[ "${unhealthy}" -ne 0 ]]; then
+if [[ "${invalid_run}" -ne 0 ]]; then
   exit 1
 fi
 
@@ -38,29 +66,30 @@ echo "compose_version=$(docker compose version --short)"
 echo "service_count=${#services[@]}"
 
 echo
-echo "container,health"
+echo "container,health,restart_count,oom_killed"
 for service in "${services[@]}"; do
-  docker inspect --format '{{.Name}},{{.State.Health.Status}}' "${service}" | sed 's#^/##'
+  docker inspect --format '{{.Name}},{{.State.Health.Status}},{{.RestartCount}},{{.State.OOMKilled}}' "${container_id_by_service[${service}]}" | sed 's#^/##'
 done
 
 echo
 echo "container,cpu_percent,memory_usage,memory_percent,pids"
 docker stats --no-stream \
   --format '{{.Name}},{{.CPUPerc}},{{.MemUsage}},{{.MemPerc}},{{.PIDs}}' \
-  "${services[@]}"
+  "${container_ids[@]}"
 
 echo
 echo "container,persistent_kib"
 for service in "${services[@]}"; do
+  container_id="${container_id_by_service[${service}]}"
   case "${service}" in
     peer0.*)
-      size="$(docker exec "${service}" du -sk /var/hyperledger/production 2>/dev/null | awk '{print $1}')"
+      size="$(docker exec "${container_id}" du -sk /var/hyperledger/production 2>/dev/null | awk '{print $1}')"
       ;;
     orderer.*)
-      size="$(docker exec "${service}" du -sk /var/hyperledger/production/orderer 2>/dev/null | awk '{print $1}')"
+      size="$(docker exec "${container_id}" du -sk /var/hyperledger/production/orderer 2>/dev/null | awk '{print $1}')"
       ;;
     fabric-ca.*)
-      size="$(docker exec "${service}" du -sk /etc/hyperledger/fabric-ca-server 2>/dev/null | awk '{print $1}')"
+      size="$(docker exec "${container_id}" du -sk /etc/hyperledger/fabric-ca-server 2>/dev/null | awk '{print $1}')"
       ;;
     *)
       size="unknown"

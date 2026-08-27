@@ -36,7 +36,13 @@ x-peer-service: &peer-service
   command: peer node start
   working_dir: /root
   healthcheck:
-    test: ["CMD-SHELL", "peer node status >/dev/null 2>&1"]
+    test:
+      - CMD-SHELL
+      - >-
+        bash -ec 'exec 3<>/dev/tcp/127.0.0.1/9443;
+        printf "GET /healthz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3;
+        IFS= read -r status <&3;
+        [[ "$$status" == "HTTP/1.1 200"* ]]'
     interval: 10s
     timeout: 5s
     retries: 12
@@ -141,14 +147,16 @@ services:
       test:
         - CMD-SHELL
         - >-
+          for ca_name in ca-anmat ca-lab ca-drogueria ca-distribuidor ca-farmacia ca-centromedico ca-financiador; do
           fabric-ca-client getcainfo
           --home /tmp/fabric-ca-health
           --url https://127.0.0.1:7054
-          --caname ca-anmat
+          --caname "$$ca_name"
           --tls.certfiles /etc/hyperledger/fabric-ca-server/tls/server-tls-cert.pem
-          >/dev/null 2>&1
+          >/dev/null 2>&1 || exit 1;
+          done
       interval: 10s
-      timeout: 5s
+      timeout: 15s
       retries: 12
       start_period: 30s
     volumes:

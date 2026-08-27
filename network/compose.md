@@ -97,11 +97,24 @@ estén versionados y sin cambios staged o unstaged. Así, el commit informado
 identifica efectivamente la configuración ejecutada en ambos hosts.
 
 `up --wait` falla si alguno de los once contenedores no alcanza `healthy`.
-Los peers ejecutan `peer node status`; los orderers consultan `/healthz` del
-endpoint de operaciones; Fabric CA ejecuta `getcainfo` contra `ca-anmat`.
+Los peers y orderers consultan `/healthz` en sus endpoints de operaciones.
+Fabric CA ejecuta `getcainfo` para las siete CA lógicas configuradas. El script
+de medición también registra `RestartCount` y `OOMKilled`, e invalida la
+corrida si detecta un reinicio o una terminación por falta de memoria.
+
+Antes de crear y unir un canal, `healthy` sólo demuestra que los procesos y sus
+endpoints de operaciones responden. No demuestra que el consenter set de Raft
+haya formado quorum ni elegido líder.
 
 NET-4 es responsable de los wrappers idempotentes `up/down/restart`, de crear
-`snt-channel`, unir los nodos y ejecutar las dos secuencias de lifecycle.
+`snt-channel`, unir los nodos y ejecutar las dos secuencias de lifecycle. En
+ese contexto deberá verificar explícitamente que los tres orderers participen,
+formen quorum y elijan líder.
+
+Los endpoints administrativos de los orderers exigen mTLS y cada uno confía en
+la CA TLS de su propia organización. Por lo tanto, NET-4 no debe asumir una
+identidad TLS administrativa compartida: las invocaciones de `osnadmin` deben
+usar, para cada orderer, una identidad cliente aceptada por su raíz configurada.
 
 ## Puertos publicados
 
