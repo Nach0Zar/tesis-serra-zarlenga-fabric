@@ -109,10 +109,6 @@ func TestDeclaredOperationsReportTheirOwner(t *testing.T) {
 	contract := new(SNTContract)
 
 	pending := map[string]func() error{
-		"Dispense": func() error {
-			_, err := contract.Dispense(ctx, UnitRefRequest{})
-			return err
-		},
 		"Quarantine": func() error {
 			_, err := contract.Quarantine(ctx, UnitEventRequest{})
 			return err
@@ -231,5 +227,14 @@ func TestImplementedOperationsAreNotStubs(t *testing.T) {
 		testContext(stub, drogueriaMSP, RoleOperator),
 		UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial}); err != nil {
 		t.Fatalf("ReceiveTransfer deberia estar implementada: %v", err)
+	}
+
+	// T06, implementada por CC-4 (#17).
+	registerOrg(t, stub, farmaciaMSP, farmaciaGLN, domain.AgentPharmacy)
+	seedUnit(t, stub, domain.StateEnCustodia, "GLN:"+farmaciaGLN)
+	if _, err := contract.Dispense(
+		testContext(stub, farmaciaMSP, RoleOperator),
+		UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial}); err != nil {
+		t.Fatalf("Dispense deberia estar implementada: %v", err)
 	}
 }
