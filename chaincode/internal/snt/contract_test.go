@@ -153,18 +153,6 @@ func TestDeclaredOperationsReportTheirOwner(t *testing.T) {
 			_, err := contract.FinalDisposition(ctx, UnitEventRequest{})
 			return err
 		},
-		"ReadUnit": func() error {
-			_, err := contract.ReadUnit(ctx, validGTIN, validSerial)
-			return err
-		},
-		"GetUnitHistory": func() error {
-			_, err := contract.GetUnitHistory(ctx, validGTIN, validSerial)
-			return err
-		},
-		"QueryUnitsByGTIN": func() error {
-			_, err := contract.QueryUnitsByGTIN(ctx, validGTIN)
-			return err
-		},
 		"VerifyTrace": func() error {
 			_, err := contract.VerifyTrace(ctx, validGTIN, validSerial)
 			return err
@@ -236,5 +224,16 @@ func TestImplementedOperationsAreNotStubs(t *testing.T) {
 		testContext(stub, farmaciaMSP, RoleOperator),
 		UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial}); err != nil {
 		t.Fatalf("Dispense deberia estar implementada: %v", err)
+	}
+
+	// Operaciones de lectura, implementadas por CC-5 (#18).
+	if _, err := contract.ReadUnit(ctx, validGTIN, validSerial); err != nil {
+		t.Fatalf("ReadUnit deberia estar implementada: %v", err)
+	}
+	if _, err := contract.GetUnitHistory(ctx, validGTIN, validSerial); err != nil {
+		t.Fatalf("GetUnitHistory deberia estar implementada: %v", err)
+	}
+	if _, err := contract.QueryUnitsByGTIN(ctx, validGTIN); err != nil {
+		t.Fatalf("QueryUnitsByGTIN deberia estar implementada: %v", err)
 	}
 }

@@ -38,6 +38,10 @@ type mockStub struct {
 	validation  map[string][]byte            // clave publica -> politica de endoso serializada
 	events      map[string][]byte
 
+	// history emula el transaction log por clave que Fabric expone con
+	// GetHistoryForKey: cada escritura confirmada agrega una modificacion.
+	history map[string][]*queryresult.KeyModification
+
 	failGetState bool
 }
 
@@ -50,6 +54,7 @@ func newMockStub() *mockStub {
 		privateData: map[string]map[string][]byte{},
 		validation:  map[string][]byte{},
 		events:      map[string][]byte{},
+		history:     map[string][]*queryresult.KeyModification{},
 	}
 }
 
@@ -74,12 +79,28 @@ func (s *mockStub) GetState(key string) ([]byte, error) {
 
 func (s *mockStub) PutState(key string, value []byte) error {
 	s.state[key] = value
+	s.appendHistory(key, value, false)
 	return nil
 }
 
 func (s *mockStub) DelState(key string) error {
 	delete(s.state, key)
+	s.appendHistory(key, nil, true)
 	return nil
+}
+
+func (s *mockStub) appendHistory(key string, value []byte, isDelete bool) {
+	stored := append([]byte(nil), value...)
+	s.history[key] = append(s.history[key], &queryresult.KeyModification{
+		TxId:      s.txID,
+		Value:     stored,
+		Timestamp: timestamppb.New(s.timestamp),
+		IsDelete:  isDelete,
+	})
+}
+
+func (s *mockStub) GetHistoryForKey(key string) (shim.HistoryQueryIteratorInterface, error) {
+	return &mockHistoryIterator{items: s.history[key]}, nil
 }
 
 func (s *mockStub) GetPrivateData(collection, key string) ([]byte, error) {
@@ -118,9 +139,9 @@ func (s *mockStub) GetStateByPartialCompositeKey(objectType string, keys []strin
 	if err != nil {
 		return nil, err
 	}
-	// CreateCompositeKey cierra la clave con un separador final; para un
-	// prefijo parcial hay que quitarlo.
-	prefix = strings.TrimSuffix(prefix, "\x00")
+	// El prefijo CONSERVA el separador final que agrega CreateCompositeKey,
+	// igual que Fabric: por eso una consulta parcial por un GTIN no alcanza a
+	// las claves de otro GTIN que lo tenga como prefijo.
 
 	var matched []*queryresult.KV
 	for key, value := range s.state {
@@ -150,6 +171,25 @@ func (it *mockIterator) Next() (*queryresult.KV, error) {
 }
 
 func (it *mockIterator) Close() error { return nil }
+
+type mockHistoryIterator struct {
+	shim.HistoryQueryIteratorInterface
+	items []*queryresult.KeyModification
+	next  int
+}
+
+func (it *mockHistoryIterator) HasNext() bool { return it.next < len(it.items) }
+
+func (it *mockHistoryIterator) Next() (*queryresult.KeyModification, error) {
+	if !it.HasNext() {
+		return nil, errors.New("iterador de historial agotado")
+	}
+	item := it.items[it.next]
+	it.next++
+	return item, nil
+}
+
+func (it *mockHistoryIterator) Close() error { return nil }
 
 // mockIdentity simula la identidad del invocador: su MSP y sus atributos ABAC.
 type mockIdentity struct {

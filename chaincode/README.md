@@ -73,7 +73,7 @@ CC-1 (#14) entrega el scaffold. Las 25 operaciones del contrato están **declara
 | `RegisterUnit` | Implementada | CC-2 (#15) |
 | `DispatchTransfer`, `ReceiveTransfer`, `RejectTransfer` | Implementadas | CC-3 (#16) |
 | `Dispense` | Implementada | CC-4 (#17) |
-| `ReadUnit`, `GetUnitHistory`, `QueryUnitsByGTIN` | Declaradas | CC-5 (#18) |
+| `ReadUnit`, `GetUnitHistory`, `QueryUnitsByGTIN` | Implementadas | CC-5 (#18) |
 | `Quarantine`, `ReleaseQuarantine` | Declaradas | EXT-1 (#27) |
 | `ReportExpired` | Declarada | EXT-2 (#28) |
 | `ReportStolen`, `ReportLost`, `ReportDamaged` | Declaradas | EXT-3 (#29) |
