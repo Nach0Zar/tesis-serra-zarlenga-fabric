@@ -5,15 +5,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd -- "${script_dir}/../.." && pwd)"
 compose_file="${repository_root}/network/compose.yaml"
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo "ERROR: docker no está disponible en PATH." >&2
-  exit 1
-fi
-
-if ! docker info >/dev/null 2>&1; then
-  echo "ERROR: el daemon Docker no está disponible." >&2
-  exit 1
-fi
+"${script_dir}/validate-compose-prerequisites.sh" --measurement
 
 mapfile -t services < <(docker compose -f "${compose_file}" config --services)
 

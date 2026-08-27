@@ -47,21 +47,54 @@ de iniciar la red deben existir:
 Usar `cryptogen` como sustituto definitivo contradice ADR-007; solo se admite
 para pruebas locales descartables.
 
+La presencia del commit de NET-1 no implica que esos archivos locales existan.
+En cada checkout nuevo se generan y verifican antes de iniciar Compose:
+
+```bash
+./network/scripts/generate-crypto.sh
+./network/scripts/verify-crypto.sh
+```
+
+Los bind mounts criptográficos tienen `create_host_path: false`: si falta una
+ruta, Compose falla antes de crear un directorio vacío. No debe hacerse
+escribible un MSP ni agregarse un bootstrap por defecto para ocultar material
+ausente.
+
 ## Validación y salud
 
-La validación estática no requiere que el daemon esté iniciado:
+La sintaxis puede validarse sin iniciar los servicios:
 
 ```bash
 docker compose -f network/compose.yaml config --quiet
 ```
 
-Cuando NET-1 esté integrada y Docker disponible:
+Antes de cada arranque, el preflight comprueba Docker, los artefactos generados
+por NET-1 y que Compose conserve exactamente once servicios:
 
 ```bash
+./network/scripts/validate-compose-prerequisites.sh
 docker compose -f network/compose.yaml up --detach --wait --wait-timeout 180
 docker compose -f network/compose.yaml ps
+```
+
+Para una medición comparable entre hosts, aplicar primero
+`network/wslconfig.example` como `%UserProfile%\.wslconfig`, ejecutar
+`wsl --shutdown` desde PowerShell y reiniciar Docker Desktop. La medición exige
+el perfil efectivo de 6 CPU, 8 GiB de memoria y 4 GiB de swap:
+
+```bash
+./network/scripts/validate-compose-prerequisites.sh --measurement
 ./network/scripts/measure-resources.sh
 ```
+
+El margen de memoria del preflight contempla la memoria reservada por WSL2:
+acepta entre 7,5 y 8 GiB visibles para una configuración nominal de 8 GiB. El
+archivo `.wslconfig` pertenece al perfil de Windows, no a la raíz del checkout,
+y está ignorado allí para evitar que una copia local se versione por error.
+
+El modo de medición también exige que los archivos que gobiernan la corrida
+estén versionados y sin cambios staged o unstaged. Así, el commit informado
+identifica efectivamente la configuración ejecutada en ambos hosts.
 
 `up --wait` falla si alguno de los once contenedores no alcanza `healthy`.
 Los peers ejecutan `peer node status`; los orderers consultan `/healthz` del
