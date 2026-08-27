@@ -152,9 +152,10 @@ func (it *mockIterator) Close() error { return nil }
 
 // mockIdentity simula la identidad del invocador: su MSP y sus atributos ABAC.
 type mockIdentity struct {
-	mspID      string
-	attributes map[string]string
-	failMSPID  bool
+	mspID          string
+	attributes     map[string]string
+	failMSPID      bool
+	failAttributes bool
 }
 
 func (i *mockIdentity) GetID() (string, error) { return "x509::" + i.mspID, nil }
@@ -167,6 +168,9 @@ func (i *mockIdentity) GetMSPID() (string, error) {
 }
 
 func (i *mockIdentity) GetAttributeValue(name string) (string, bool, error) {
+	if i.failAttributes {
+		return "", false, errors.New("fallo simulado al leer atributos")
+	}
 	value, found := i.attributes[name]
 	return value, found, nil
 }
@@ -190,9 +194,15 @@ func testContext(stub *mockStub, mspID, role string) contractapi.TransactionCont
 	if role != "" {
 		attributes[roleAttribute] = role
 	}
+	return testContextWithIdentity(stub, &mockIdentity{mspID: mspID, attributes: attributes})
+}
+
+// testContextWithIdentity arma el contexto con una identidad ya construida, para
+// los tests que necesitan inyectar una falla de la API de identidad.
+func testContextWithIdentity(stub *mockStub, identity *mockIdentity) contractapi.TransactionContextInterface {
 	ctx := new(contractapi.TransactionContext)
 	ctx.SetStub(stub)
-	ctx.SetClientIdentity(&mockIdentity{mspID: mspID, attributes: attributes})
+	ctx.SetClientIdentity(identity)
 	return ctx
 }
 

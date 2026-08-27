@@ -119,18 +119,46 @@ func (i Invoker) requireAgentType(allowed ...domain.AgentType) error {
 // operaciones REGULATORY_ONLY.
 //
 // La condicion se deriva del registro (agentType=REGULATOR), nunca del nombre
-// de la MSP (ADR-010, punto 2). Todas las fallas devuelven REGULATORY_ONLY para
-// no filtrar, a un invocador no autorizado, si su organizacion existe en el
-// registro o cual es su agentType.
+// de la MSP (ADR-010, punto 2).
+//
+// Las fallas de AUTORIZACION devuelven siempre REGULATORY_ONLY, sin distinguir
+// entre ellas, para no filtrarle a un invocador no autorizado si su
+// organizacion figura en el registro, si esta habilitada o cual es su
+// agentType. Las fallas de INFRAESTRUCTURA se propagan intactas: ver
+// maskedByRegulatoryOnly.
 func resolveRegulator(ctx contractapi.TransactionContextInterface) (Invoker, error) {
 	invoker, err := resolveInvoker(ctx)
 	if err != nil {
-		return Invoker{}, regulatoryOnly()
+		if code, ok := cerr.CodeOf(err); ok && maskedByRegulatoryOnly[code] {
+			return Invoker{}, regulatoryOnly()
+		}
+		return Invoker{}, err
 	}
 	if invoker.Org.AgentType != domain.AgentRegulator || invoker.Role != RoleRegulatoryAdmin {
 		return Invoker{}, regulatoryOnly()
 	}
 	return invoker, nil
+}
+
+// maskedByRegulatoryOnly enumera los codigos que resolveRegulator sustituye por
+// REGULATORY_ONLY. Son exactamente los que revelarian, a un invocador que no
+// esta autorizado a saberlo, si su organizacion figura en el registro o si esta
+// habilitada.
+//
+// Todo lo demas se propaga sin tocar. Una falla de GetMSPID, de GetState, de
+// lectura del atributo ABAC o una entrada del registro con JSON corrupto son
+// INTERNAL_ERROR del catalogo del contrato (docs/api-contract.md): no son
+// fallas de autorizacion, y devolverlas como REGULATORY_ONLY haria que el
+// cliente y el operador leyeran una caida de la plataforma como una falta de
+// permisos, que es el diagnostico opuesto.
+//
+// La lista es un allowlist de lo que se enmascara, no de lo que se propaga:
+// un codigo nuevo en resolveInvoker sale a la luz en lugar de quedar
+// silenciosamente convertido en REGULATORY_ONLY. TestResolveRegulatorErrorMapping
+// cubre el conjunto completo de errores que resolveInvoker puede producir hoy.
+var maskedByRegulatoryOnly = map[cerr.Code]bool{
+	cerr.OrgNotRegistered: true,
+	cerr.OrgInactive:      true,
 }
 
 func regulatoryOnly() error {
