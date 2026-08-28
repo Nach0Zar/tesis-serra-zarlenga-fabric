@@ -68,6 +68,3 @@ docker-compose.override.yml
 # Claude Code local settings (personales, no del proyecto)
 .claude/settings.json
 .claude/settings.local.json
-
-
-*.local.md

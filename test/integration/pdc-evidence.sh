@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=network/network.sh
 source "${REPOSITORY_ROOT}/network/network.sh"
 
 readonly PROBE_NAME="pdc-probe"
@@ -54,13 +55,13 @@ probe_committed() {
   output="$(peer lifecycle chaincode querycommitted --channelID "${CHANNEL_NAME}" --name "${PROBE_NAME}" --output json 2>/dev/null)" || return 1
   jq -e --arg version "${PROBE_VERSION}" '.sequence == 1 and .version == $version and (.init_required // false) == false' <<<"${output}" >/dev/null || return 1
   approved="$(peer lifecycle chaincode queryapproved --channelID "${CHANNEL_NAME}" --name "${PROBE_NAME}" --sequence 1 --output json)"
-  jq -e --arg package "${PROBE_PACKAGE_ID}" '(.source.Type.LocalPackage.package_id // "") == $package' <<<"${approved}" >/dev/null || fail "committed probe uses a different package; reset the disposable test ledger"
+  document_package_id_matches "${approved}" "${PROBE_PACKAGE_ID}" || fail "committed probe uses a different package; reset the disposable test ledger"
 }
 
 install_probe() {
-  local msp_id slug peer_hostname agent_type id id_type active orderer_hostname
+  local msp_id slug peer_hostname _rest
   local installed
-  while IFS=$'\t' read -r msp_id slug peer_hostname agent_type id id_type active orderer_hostname; do
+  while IFS=$'\t' read -r msp_id slug peer_hostname _rest; do
     use_organization "${msp_id}" "${slug}" "${peer_hostname}" Admin
     installed="$(peer lifecycle chaincode queryinstalled --output json)"
     if ! jq -e --arg package "${PROBE_PACKAGE_ID}" 'any(.installed_chaincodes[]?; .package_id == $package)' <<<"${installed}" >/dev/null; then
@@ -216,8 +217,8 @@ verify_explicit_collection() {
   assert_query_value AnmatMSP "${private_ctor}" "${PRIVATE_VALUE}"
   assert_query_rejected DistribuidorMSP "${private_ctor}" >"${PROBE_EVIDENCE}/nonmember-read.txt"
 
-  local msp_id slug peer_hostname agent_type id id_type active orderer_hostname
-  while IFS=$'\t' read -r msp_id slug peer_hostname agent_type id id_type active orderer_hostname; do
+  local msp_id _slug _peer_hostname _rest
+  while IFS=$'\t' read -r msp_id _slug _peer_hostname _rest; do
     assert_query_value "${msp_id}" "${public_ctor}" "${PUBLIC_VALUE}"
   done < <(organization_rows)
 
@@ -230,6 +231,11 @@ verify_explicit_collection() {
   if grep -q "${PRIVATE_VALUE}" "${decoded_block}"; then
     fail "decoded block leaked the private payload"
   fi
+  python3 "${NETWORK_DIR}/scripts/sanitize-pdc-evidence.py" \
+    --input "${decoded_block}" \
+    --collection "${EXPLICIT_COLLECTION}" \
+    --forbidden-value "${PRIVATE_VALUE}" \
+    --output "${PROBE_EVIDENCE}/sanitized-block-excerpt.json"
   printf '%s\n' "${block_number}" >"${PROBE_EVIDENCE}/explicit-block-number.txt"
 }
 

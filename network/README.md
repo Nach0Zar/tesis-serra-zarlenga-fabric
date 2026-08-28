@@ -84,7 +84,11 @@ mTLS compartida.
 
 `down` conserva los volúmenes del ledger y todos los comandos detectan el
 estado ya alcanzado. Una definición, aprobación o paquete incompatible produce
-un error en lugar de reemplazarse. Para descartar también el ledger de una red
+un error en lugar de reemplazarse. La comparación lifecycle incluye secuencia,
+versión, `init-required`, política de endoso y la semántica completa de las
+colecciones; por eso una regeneración que cambie miembros o políticas exige una
+nueva secuencia y no puede pasar inadvertida en una reejecución. Para descartar
+también el ledger de una red
 de desarrollo debe ejecutarse de forma deliberada
 `docker compose -f network/compose.yaml down --volumes`; esa operación no
 forma parte del wrapper idempotente.
@@ -141,8 +145,10 @@ contrato `snt`:
 ./test/integration/pdc-evidence.sh
 ```
 
-La evidencia completa queda en `build/evidence/` y no se versiona. Los
-resúmenes sanitizados están en `network/evidence/`.
+La evidencia completa queda en `build/evidence/` y no se versiona. En cada
+ejecución el probe genera `sanitized-block-excerpt.json`, limitado al encabezado
+del bloque, identificadores y hashes del rwset. Los resúmenes sanitizados y un
+extracto citable de una ejecución verificada están en `network/evidence/`.
 
 Un onboarding que agregue una organización custodial requiere actualizar
 manifiesto y canal, regenerar las colecciones, reconstruir y bloquear el

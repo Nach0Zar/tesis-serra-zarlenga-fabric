@@ -24,10 +24,11 @@ Resultado: 10 colecciones explicitas deterministicas. Cada una representa un par
 - Drogueria, farmacia y ANMAT leyeron el dato privado; `DistribuidorMSP` recibio denegacion de lectura por no pertenecer a la coleccion.
 - La farmacia estuvo detenida durante el despacho. Tras reiniciarla obtuvo el dato privado mediante reconciliacion.
 - En los bloques 32, 36 y 40 decodificados aparece el nombre de la coleccion en claro y no aparece el payload privado; los dos ultimos corresponden a reejecuciones posteriores a reinicios de la red.
+- El extracto citable del bloque 40 se versiona en [`NET-5-block-40.json`](NET-5-block-40.json). Conserva numero y hashes de bloque, `txID`, timestamp, chaincode, nombre de coleccion, hashed rwset y hash del private rwset. SHA-256 del archivo: `4dba017c39ea34d9f8500a0bb18e66cad371e0cdaa74170d7399faf51b9acfe8`.
 - Una escritura endosada solamente por ANMAT fue invalidada con `ENDORSEMENT_POLICY_FAILURE` y no modifico el estado publico.
 - Las colecciones implicitas no aparecen en `collections_config.json`: una escritura del propietario fue valida, un tercero no pudo leerla y una escritura del no propietario fue invalidada con `ENDORSEMENT_POLICY_FAILURE`.
 
-Los bloques binarios, el bloque decodificado, payloads y salidas completas se conservan exclusivamente en `build/evidence/net-5/`. El informe no contiene certificados, claves, secretos ni el valor privado utilizado.
+Los bloques binarios, el bloque decodificado, payloads y salidas completas se conservan exclusivamente en `build/evidence/net-5/`. El script produce ademas `sanitized-block-excerpt.json` mediante una lista cerrada de campos. El informe y el extracto versionado no contienen certificados, claves, secretos ni el valor privado utilizado.
 
 ## Onboarding
 

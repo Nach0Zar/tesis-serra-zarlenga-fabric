@@ -43,8 +43,10 @@ Los binarios se resolvieron con `SNT_FABRIC_BIN_DIR` y el `core.yaml` de la mism
 - `RegisterOrganization` registro laboratorio, drogueria, distribuidor, farmacia, centro medico y financiador. El regulador fue sembrado por `Init`.
 - El ciclo `down -> up` preservo el canal, las instalaciones y el registro mediante los 10 volumenes nombrados. La reejecucion posterior omitio el estado ya alcanzado y acepto solamente los duplicados tipificados.
 - Tras `restart`, los tres orderers y los siete peers volvieron a estado saludable; `createChannel`, `deployCC` y `verify` pasaron nuevamente. El `down` final dejo cero servicios Compose y conservo los 10 volumenes.
+- La revision posterior de findings incorporo una comparacion semantica de la definicion: propiedades y politicas de las 10 colecciones, mas la politica de endoso del chaincode derivada de manifiesto y matriz. El comparador paso contra `querycommitted` de la secuencia 2 preservada y sus ocho pruebas unitarias cubrieron drift de escalares, membresia, endoso y orden.
+- El flujo limpio ahora guarda `pre-init-gate.txt` y exige que `ReadUnit` falle especificamente por `--init-required` antes de invocar `Init`. El ledger local preservado ya estaba inicializado al incorporar este control; su ejecucion limpia queda cubierta por el job de integracion que crea la red desde cero.
 
-Los JSON completos de `queryinstalled`, `queryapproved`, readiness y definiciones, junto con bloques y logs, se conservan solamente en `build/evidence/net-4/`.
+Los JSON completos de `queryinstalled`, `queryapproved`, readiness, politicas decodificadas y definiciones, junto con bloques y logs, se conservan solamente en `build/evidence/net-4/`.
 
 ## Recuperacion
 

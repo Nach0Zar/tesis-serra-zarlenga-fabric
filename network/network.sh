@@ -10,6 +10,7 @@ readonly COMPOSE_FILE="${SNT_COMPOSE_FILE:-${NETWORK_DIR}/compose.yaml}"
 readonly MANIFEST="${SNT_ORGANIZATIONS_MANIFEST:-${NETWORK_DIR}/organizations-manifest.json}"
 readonly MATRIX="${SNT_AUTHORIZED_TRANSFERS:-${REPOSITORY_ROOT}/domain/authorized-transfers.json}"
 readonly COLLECTIONS_CONFIG="${SNT_COLLECTIONS_CONFIG:-${NETWORK_DIR}/collections_config.json}"
+readonly DEFINITION_VERIFIER="${NETWORK_DIR}/scripts/verify-committed-definition.py"
 readonly PACKAGE_LOCK="${SNT_PACKAGE_LOCK:-${NETWORK_DIR}/chaincode-package.lock}"
 readonly CHANNEL_NAME="${SNT_CHANNEL_NAME:-snt-channel}"
 readonly CHAINCODE_NAME="${SNT_CHAINCODE_NAME:-snt}"
@@ -98,6 +99,8 @@ resolve_fabric_environment() {
   require_command peer
   require_command osnadmin
   require_command configtxgen
+  require_command configtxlator
+  require_command base64
   if [[ -n "${SNT_FABRIC_CFG_PATH:-}" ]]; then
     FABRIC_CLIENT_CFG_PATH="${SNT_FABRIC_CFG_PATH}"
   elif [[ -n "${FABRIC_CFG_PATH:-}" && -f "${FABRIC_CFG_PATH}/core.yaml" ]]; then
@@ -123,7 +126,11 @@ validate_sources() {
 }
 
 ensure_network_running() {
-  compose ps --status running --services | grep -qx 'peer0.anmat.snt.local' || fail "network is not running; execute ./network/network.sh up"
+  local running service
+  running="$(compose ps --status running --services)"
+  while IFS= read -r service; do
+    grep -Fqx -- "${service}" <<<"${running}" || fail "network service ${service} is not running; execute ./network/network.sh up"
+  done < <(jq -r '.organizations[].peerHostname, (.organizations[].ordererHostname // empty)' "${MANIFEST}")
 }
 
 use_organization() {
@@ -427,23 +434,59 @@ approval_matches() {
   local document="$1"
   local sequence="$2"
   local init_required="$3"
-  jq -e --argjson sequence "${sequence}" --arg version "${CHAINCODE_VERSION}" --arg package "${LOCK_PACKAGE_ID}" --argjson init_required "${init_required}" '
-    .sequence == $sequence
-    and .version == $version
-    and (.init_required // false) == $init_required
-    and (
+  local policy_kind="$4"
+  local artifact="$5"
+  document_package_id_matches "${document}" "${LOCK_PACKAGE_ID}" \
+    && definition_matches "${document}" "${sequence}" "${init_required}" "${policy_kind}" "${artifact}"
+}
+
+document_package_id_matches() {
+  local document="$1"
+  local expected_package_id="$2"
+  jq -e --arg package "${expected_package_id}" '
       (.package_id // "") == $package
       or (.source.local_package.package_id // "") == $package
       or (.source.LocalPackage.package_id // "") == $package
       or (.source.Type.LocalPackage.package_id // "") == $package
-    )
   ' <<<"${document}" >/dev/null
+}
+
+definition_matches() {
+  local document="$1"
+  local sequence="$2"
+  local init_required="$3"
+  local policy_kind="$4"
+  local artifact="$5"
+  local evidence="${EVIDENCE_DIR}/net-4/lifecycle/definition-checks"
+  local definition_file="${evidence}/${artifact}.json"
+  local policy_proto="${evidence}/${artifact}-policy.pb"
+  local policy_json="${evidence}/${artifact}-policy.json"
+  local validation_parameter
+  mkdir -p "${evidence}"
+  printf '%s\n' "${document}" >"${definition_file}"
+  validation_parameter="$(jq -er '.validation_parameter | select(type == "string" and length > 0)' <<<"${document}")" || {
+    printf 'ERROR: lifecycle definition has no validation parameter\n' >&2
+    return 1
+  }
+  printf '%s' "${validation_parameter}" | base64 --decode >"${policy_proto}" || return 1
+  configtxlator proto_decode --input "${policy_proto}" --type common.ApplicationPolicy --output "${policy_json}" || return 1
+  python3 "${DEFINITION_VERIFIER}" \
+    --definition "${definition_file}" \
+    --decoded-policy "${policy_json}" \
+    --collections "${COLLECTIONS_CONFIG}" \
+    --manifest "${MANIFEST}" \
+    --matrix "${MATRIX}" \
+    --sequence "${sequence}" \
+    --version "${CHAINCODE_VERSION}" \
+    --init-required "${init_required}" \
+    --policy-kind "${policy_kind}"
 }
 
 approve_sequence() {
   local sequence="$1"
   local policy="$2"
   local init_required="$3"
+  local policy_kind="$4"
   local evidence="${EVIDENCE_DIR}/net-4/lifecycle"
   local msp_id slug peer_hostname agent_type id id_type active orderer_hostname
   local approved status expected_count
@@ -455,13 +498,13 @@ approve_sequence() {
     status=$?
     set -e
     if [[ "${status}" -eq 0 ]]; then
-      approval_matches "${approved}" "${sequence}" "${init_required}" || fail "${msp_id} has an incompatible approval for sequence ${sequence}"
+      approval_matches "${approved}" "${sequence}" "${init_required}" "${policy_kind}" "approved-seq${sequence}-${slug}" || fail "${msp_id} has an incompatible approval for sequence ${sequence}; use a new lifecycle sequence for changed collections or policy"
       info "${msp_id} already approved sequence ${sequence}"
     else
       info "${msp_id} approving sequence ${sequence}"
       peer lifecycle chaincode approveformyorg "${ORDERER_ARGS[@]}" "${APPROVAL_FLAGS[@]}" --package-id "${LOCK_PACKAGE_ID}"
       approved="$(peer lifecycle chaincode queryapproved --channelID "${CHANNEL_NAME}" --name "${CHAINCODE_NAME}" --sequence "${sequence}" --output json)"
-      approval_matches "${approved}" "${sequence}" "${init_required}" || fail "${msp_id} approval for sequence ${sequence} is inconsistent"
+      approval_matches "${approved}" "${sequence}" "${init_required}" "${policy_kind}" "approved-seq${sequence}-${slug}" || fail "${msp_id} approval for sequence ${sequence} is inconsistent"
     fi
     printf '%s\n' "${approved}" >"${evidence}/queryapproved-seq${sequence}-${slug}.json"
   done < <(organization_rows)
@@ -484,17 +527,16 @@ committed_matches() {
   local document="$1"
   local sequence="$2"
   local init_required="$3"
-  jq -e --argjson sequence "${sequence}" --arg version "${CHAINCODE_VERSION}" --argjson init_required "${init_required}" '
-    .sequence == $sequence
-    and .version == $version
-    and (.init_required // false) == $init_required
-  ' <<<"${document}" >/dev/null
+  local policy_kind="$4"
+  local artifact="${5:-committed-seq${sequence}}"
+  definition_matches "${document}" "${sequence}" "${init_required}" "${policy_kind}" "${artifact}"
 }
 
 commit_sequence() {
   local sequence="$1"
   local policy="$2"
   local init_required="$3"
+  local policy_kind="$4"
   local evidence="${EVIDENCE_DIR}/net-4/lifecycle"
   local msp_id slug peer_hostname agent_type id id_type active orderer_hostname
   local committed
@@ -505,7 +547,22 @@ commit_sequence() {
   peer lifecycle chaincode commit "${ORDERER_ARGS[@]}" "${APPROVAL_FLAGS[@]}" "${ALL_PEER_TARGETS[@]}"
   committed="$(committed_definition)"
   printf '%s\n' "${committed}" >"${evidence}/committed-seq${sequence}.json"
-  committed_matches "${committed}" "${sequence}" "${init_required}" || fail "committed sequence ${sequence} is inconsistent"
+  committed_matches "${committed}" "${sequence}" "${init_required}" "${policy_kind}" "committed-seq${sequence}" || fail "committed sequence ${sequence} is inconsistent"
+}
+
+verify_pre_init_gate() {
+  local evidence="${EVIDENCE_DIR}/net-4/lifecycle"
+  local output status
+  set +e
+  output="$(peer chaincode query --channelID "${CHANNEL_NAME}" --name "${CHAINCODE_NAME}" --ctor '{"function":"ReadUnit","Args":["07791234567898","SN-0001-ABCD"]}' 2>&1)"
+  status=$?
+  set -e
+  printf '%s\n' "${output}" >"${evidence}/pre-init-gate.txt"
+  [[ "${status}" -ne 0 ]] || fail "peer accepted a non-Init transaction before registry initialization"
+  grep -Eqi 'must call as init first|requires initialization|has not been initialized' <<<"${output}" || {
+    printf '%s\n' "${output}" >&2
+    fail "pre-Init rejection was not caused by --init-required"
+  }
 }
 
 initialize_registry() {
@@ -524,6 +581,8 @@ initialize_registry() {
     info "Registry is already initialized"
     return
   fi
+
+  verify_pre_init_gate
 
   invoke_args=(
     "${ORDERER_ARGS[@]}"
@@ -598,7 +657,7 @@ verify_lifecycle() {
   read_package_lock
   committed="$(committed_definition)"
   printf '%s\n' "${committed}" >"${evidence}/committed-current.json"
-  committed_matches "${committed}" 2 false || fail "operational sequence 2 is not committed without init-required"
+  committed_matches "${committed}" 2 false operational committed-current || fail "operational sequence 2 differs from the versioned collections or policy; approve a new lifecycle sequence"
   while IFS=$'\t' read -r msp_id slug peer_hostname agent_type id id_type active orderer_hostname; do
     use_organization "${msp_id}" "${slug}" "${peer_hostname}" Admin
     installed="$(peer lifecycle chaincode queryinstalled --output json)"
@@ -606,7 +665,7 @@ verify_lifecycle() {
     jq -e --arg package "${LOCK_PACKAGE_ID}" 'any(.installed_chaincodes[]?; .package_id == $package)' <<<"${installed}" >/dev/null || fail "${LOCK_PACKAGE_ID} is missing on ${peer_hostname}"
     approved="$(peer lifecycle chaincode queryapproved --channelID "${CHANNEL_NAME}" --name "${CHAINCODE_NAME}" --sequence 2 --output json)"
     printf '%s\n' "${approved}" >"${evidence}/queryapproved-seq2-${slug}.json"
-    approval_matches "${approved}" 2 false || fail "${msp_id} lacks the expected sequence 2 approval"
+    approval_matches "${approved}" 2 false operational "approved-seq2-${slug}" || fail "${msp_id} lacks the expected sequence 2 approval"
   done < <(organization_rows)
   read -r msp_id slug peer_hostname agent_type id id_type active orderer_hostname < <(regulator_row)
   use_organization "${msp_id}" "${slug}" "${peer_hostname}" User1
@@ -647,23 +706,23 @@ deploy_chaincode() {
   fi
   case "${sequence}" in
     0)
-      approve_sequence 1 "${bootstrap_policy}" true
-      commit_sequence 1 "${bootstrap_policy}" true
+      approve_sequence 1 "${bootstrap_policy}" true bootstrap
+      commit_sequence 1 "${bootstrap_policy}" true bootstrap
       initialize_registry
       sequence=1
       ;;
     1)
-      committed_matches "${committed}" 1 true || fail "sequence 1 is incompatible; follow documented recovery"
+      committed_matches "${committed}" 1 true bootstrap || fail "sequence 1 is incompatible; follow documented recovery"
       initialize_registry
       ;;
     2)
-      committed_matches "${committed}" 2 false || fail "existing sequence 2 is incompatible"
+      committed_matches "${committed}" 2 false operational || fail "existing sequence 2 differs from the versioned collections or policy; approve a new lifecycle sequence"
       ;;
     *) fail "unsupported sequence ${sequence}; automatic downgrade is forbidden" ;;
   esac
   if [[ "${sequence}" -eq 1 ]]; then
-    approve_sequence 2 "${operational}" false
-    commit_sequence 2 "${operational}" false
+    approve_sequence 2 "${operational}" false operational
+    commit_sequence 2 "${operational}" false operational
   fi
   seed_organizations
   verify_lifecycle

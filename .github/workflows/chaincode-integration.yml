@@ -106,6 +106,13 @@ jobs:
         run: |
           ./network/network.sh deployCC
           ./test/integration/pdc-evidence.sh
+          jq -e '
+            .schemaVersion == "1.0.0"
+            and .channelId == "snt-channel"
+            and .chaincodeName == "pdc-probe"
+            and .assertions.collectionNameVisible == true
+            and .assertions.privatePayloadIncluded == false
+          ' build/evidence/net-5/sanitized-block-excerpt.json >/dev/null
 
       - name: Verify restart and idempotence
         shell: bash
