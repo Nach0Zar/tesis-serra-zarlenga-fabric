@@ -39,6 +39,15 @@ type mockStub struct {
 	validation  map[string][]byte            // clave publica -> politica de endoso serializada
 	events      map[string][]byte
 
+	// history emula el transaction log por clave que Fabric expone con
+	// GetHistoryForKey: cada escritura confirmada agrega una modificacion.
+	history map[string][]*queryresult.KeyModification
+
+	// failures inyecta fallas de plataforma por nombre de metodo del stub, para
+	// ejercitar las ramas que devuelven INTERNAL_ERROR sin las cuales una parte
+	// del manejo de errores quedaria sin probar.
+	failures map[string]error
+
 	// privateHash modela la OTRA capa que Fabric mantiene por cada escritura
 	// privada: el hash de clave y valor que queda en el estado publico del
 	// canal. Es legible desde cualquier peer, sea o no miembro de la
@@ -50,9 +59,12 @@ type mockStub struct {
 	// queda el hash, que es exactamente lo que ve un peer miembro que todavia
 	// no recibio el bloque privado.
 	privateHash map[string]map[string][]byte
-
-	failGetState bool
 }
+
+// failOn programa una falla de plataforma en el metodo indicado.
+func (s *mockStub) failOn(method string, err error) { s.failures[method] = err }
+
+func (s *mockStub) injected(method string) error { return s.failures[method] }
 
 func newMockStub() *mockStub {
 	return &mockStub{
@@ -64,36 +76,68 @@ func newMockStub() *mockStub {
 		privateHash: map[string]map[string][]byte{},
 		validation:  map[string][]byte{},
 		events:      map[string][]byte{},
+		history:     map[string][]*queryresult.KeyModification{},
+		failures:    map[string]error{},
 	}
 }
 
 func (s *mockStub) GetTxID() string { return s.txID }
 
 func (s *mockStub) GetTxTimestamp() (*timestamppb.Timestamp, error) {
+	if err := s.injected("GetTxTimestamp"); err != nil {
+		return nil, err
+	}
 	return timestamppb.New(s.timestamp), nil
 }
 
-func (s *mockStub) GetTransient() (map[string][]byte, error) { return s.transient, nil }
+func (s *mockStub) GetTransient() (map[string][]byte, error) {
+	if err := s.injected("GetTransient"); err != nil {
+		return nil, err
+	}
+	return s.transient, nil
+}
 
 func (s *mockStub) CreateCompositeKey(objectType string, attributes []string) (string, error) {
 	return shim.CreateCompositeKey(objectType, attributes)
 }
 
 func (s *mockStub) GetState(key string) ([]byte, error) {
-	if s.failGetState {
-		return nil, errors.New("fallo simulado del ledger")
+	if err := s.injected("GetState"); err != nil {
+		return nil, err
 	}
 	return s.state[key], nil
 }
 
 func (s *mockStub) PutState(key string, value []byte) error {
+	if err := s.injected("PutState"); err != nil {
+		return err
+	}
 	s.state[key] = value
+	s.appendHistory(key, value, false)
 	return nil
 }
 
 func (s *mockStub) DelState(key string) error {
 	delete(s.state, key)
+	s.appendHistory(key, nil, true)
 	return nil
+}
+
+func (s *mockStub) appendHistory(key string, value []byte, isDelete bool) {
+	stored := append([]byte(nil), value...)
+	s.history[key] = append(s.history[key], &queryresult.KeyModification{
+		TxId:      s.txID,
+		Value:     stored,
+		Timestamp: timestamppb.New(s.timestamp),
+		IsDelete:  isDelete,
+	})
+}
+
+func (s *mockStub) GetHistoryForKey(key string) (shim.HistoryQueryIteratorInterface, error) {
+	if err := s.injected("GetHistoryForKey"); err != nil {
+		return nil, err
+	}
+	return &mockHistoryIterator{items: s.history[key]}, nil
 }
 
 // errPvtdataNotAvailable reproduce el mensaje con el que Fabric rechaza la
@@ -116,6 +160,9 @@ const errPvtdataNotAvailable = "private data matching public hash version is not
 // mock reproduce la falla justamente para que el test no pueda pasar por esa
 // via.
 func (s *mockStub) GetPrivateData(collection, key string) ([]byte, error) {
+	if err := s.injected("GetPrivateData"); err != nil {
+		return nil, err
+	}
 	if value, ok := s.privateData[collection][key]; ok {
 		return value, nil
 	}
@@ -126,6 +173,9 @@ func (s *mockStub) GetPrivateData(collection, key string) ([]byte, error) {
 }
 
 func (s *mockStub) PutPrivateData(collection, key string, value []byte) error {
+	if err := s.injected("PutPrivateData"); err != nil {
+		return err
+	}
 	if s.privateData[collection] == nil {
 		s.privateData[collection] = map[string][]byte{}
 	}
@@ -144,6 +194,9 @@ func (s *mockStub) PutPrivateData(collection, key string, value []byte) error {
 // permanece en el ledger es el hash de la escritura ORIGINAL, en su bloque, no
 // una entrada viva del estado.
 func (s *mockStub) DelPrivateData(collection, key string) error {
+	if err := s.injected("DelPrivateData"); err != nil {
+		return err
+	}
 	delete(s.privateData[collection], key)
 	delete(s.privateHash[collection], key)
 	return nil
@@ -165,6 +218,9 @@ func (s *mockStub) hidePrivateData(collection, key string) []byte {
 }
 
 func (s *mockStub) SetStateValidationParameter(key string, ep []byte) error {
+	if err := s.injected("SetStateValidationParameter"); err != nil {
+		return err
+	}
 	s.validation[key] = ep
 	return nil
 }
@@ -174,18 +230,24 @@ func (s *mockStub) GetStateValidationParameter(key string) ([]byte, error) {
 }
 
 func (s *mockStub) SetEvent(name string, payload []byte) error {
+	if err := s.injected("SetEvent"); err != nil {
+		return err
+	}
 	s.events[name] = payload
 	return nil
 }
 
 func (s *mockStub) GetStateByPartialCompositeKey(objectType string, keys []string) (shim.StateQueryIteratorInterface, error) {
+	if err := s.injected("GetStateByPartialCompositeKey"); err != nil {
+		return nil, err
+	}
 	prefix, err := shim.CreateCompositeKey(objectType, keys)
 	if err != nil {
 		return nil, err
 	}
-	// CreateCompositeKey cierra la clave con un separador final; para un
-	// prefijo parcial hay que quitarlo.
-	prefix = strings.TrimSuffix(prefix, "\x00")
+	// El prefijo CONSERVA el separador final que agrega CreateCompositeKey,
+	// igual que Fabric: por eso una consulta parcial por un GTIN no alcanza a
+	// las claves de otro GTIN que lo tenga como prefijo.
 
 	var matched []*queryresult.KV
 	for key, value := range s.state {
@@ -215,6 +277,25 @@ func (it *mockIterator) Next() (*queryresult.KV, error) {
 }
 
 func (it *mockIterator) Close() error { return nil }
+
+type mockHistoryIterator struct {
+	shim.HistoryQueryIteratorInterface
+	items []*queryresult.KeyModification
+	next  int
+}
+
+func (it *mockHistoryIterator) HasNext() bool { return it.next < len(it.items) }
+
+func (it *mockHistoryIterator) Next() (*queryresult.KeyModification, error) {
+	if !it.HasNext() {
+		return nil, errors.New("iterador de historial agotado")
+	}
+	item := it.items[it.next]
+	it.next++
+	return item, nil
+}
+
+func (it *mockHistoryIterator) Close() error { return nil }
 
 // mockIdentity simula la identidad del invocador: su MSP y sus atributos ABAC.
 type mockIdentity struct {

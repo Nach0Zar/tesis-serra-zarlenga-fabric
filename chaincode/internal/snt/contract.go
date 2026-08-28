@@ -30,7 +30,7 @@ import (
 
 // ContractVersion es la version del contrato publico que implementa este
 // chaincode (docs/api-contract.md).
-const ContractVersion = "2.6.1"
+const ContractVersion = "2.6.2"
 
 // SNTContract es el contrato publico del chaincode `snt`.
 //

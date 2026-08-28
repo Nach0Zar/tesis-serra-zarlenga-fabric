@@ -109,10 +109,6 @@ func TestDeclaredOperationsReportTheirOwner(t *testing.T) {
 	contract := new(SNTContract)
 
 	pending := map[string]func() error{
-		"Dispense": func() error {
-			_, err := contract.Dispense(ctx, UnitRefRequest{})
-			return err
-		},
 		"Quarantine": func() error {
 			_, err := contract.Quarantine(ctx, UnitEventRequest{})
 			return err
@@ -155,18 +151,6 @@ func TestDeclaredOperationsReportTheirOwner(t *testing.T) {
 		},
 		"FinalDisposition": func() error {
 			_, err := contract.FinalDisposition(ctx, UnitEventRequest{})
-			return err
-		},
-		"ReadUnit": func() error {
-			_, err := contract.ReadUnit(ctx, validGTIN, validSerial)
-			return err
-		},
-		"GetUnitHistory": func() error {
-			_, err := contract.GetUnitHistory(ctx, validGTIN, validSerial)
-			return err
-		},
-		"QueryUnitsByGTIN": func() error {
-			_, err := contract.QueryUnitsByGTIN(ctx, validGTIN)
 			return err
 		},
 		"VerifyTrace": func() error {
@@ -231,5 +215,25 @@ func TestImplementedOperationsAreNotStubs(t *testing.T) {
 		testContext(stub, drogueriaMSP, RoleOperator),
 		UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial}); err != nil {
 		t.Fatalf("ReceiveTransfer deberia estar implementada: %v", err)
+	}
+
+	// T06, implementada por CC-4 (#17).
+	registerOrg(t, stub, farmaciaMSP, farmaciaGLN, domain.AgentPharmacy)
+	seedUnit(t, stub, domain.StateEnCustodia, "GLN:"+farmaciaGLN)
+	if _, err := contract.Dispense(
+		testContext(stub, farmaciaMSP, RoleOperator),
+		UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial}); err != nil {
+		t.Fatalf("Dispense deberia estar implementada: %v", err)
+	}
+
+	// Operaciones de lectura, implementadas por CC-5 (#18).
+	if _, err := contract.ReadUnit(ctx, validGTIN, validSerial); err != nil {
+		t.Fatalf("ReadUnit deberia estar implementada: %v", err)
+	}
+	if _, err := contract.GetUnitHistory(ctx, validGTIN, validSerial); err != nil {
+		t.Fatalf("GetUnitHistory deberia estar implementada: %v", err)
+	}
+	if _, err := contract.QueryUnitsByGTIN(ctx, validGTIN); err != nil {
+		t.Fatalf("QueryUnitsByGTIN deberia estar implementada: %v", err)
 	}
 }
