@@ -88,8 +88,8 @@ jobs:
           python3 network/scripts/validate-organizations-manifest.py
           python3 network/scripts/generate-collections.py --check
           python3 -m unittest discover -s network/tests -v
-          bash -n network/network.sh test/integration/pdc-evidence.sh
-          shellcheck network/network.sh test/integration/pdc-evidence.sh
+          bash -n network/network.sh test/integration/pdc-evidence.sh test/integration/endorsement-evidence.sh
+          shellcheck network/network.sh test/integration/pdc-evidence.sh test/integration/endorsement-evidence.sh
 
       - name: Generate cryptographic material
         shell: bash
@@ -101,9 +101,10 @@ jobs:
           ./network/network.sh up
           ./network/network.sh createChannel
 
-      - name: Deploy snt and execute PDC evidence
+      - name: Deploy snt and execute Core evidence
         shell: bash
         run: |
+          set -Eeuo pipefail
           ./network/network.sh deployCC
           ./test/integration/pdc-evidence.sh
           jq -e '
@@ -113,6 +114,16 @@ jobs:
             and .assertions.collectionNameVisible == true
             and .assertions.privatePayloadIncluded == false
           ' build/evidence/net-5/sanitized-block-excerpt.json >/dev/null
+
+          ./test/integration/endorsement-evidence.sh
+          mapfile -t NET6_RESULTS < <(find build/evidence/net-6 -mindepth 2 -maxdepth 2 -type f -name result.json)
+          test "${#NET6_RESULTS[@]}" -eq 1
+          jq -e '
+            .schemaVersion == "1.0.0"
+            and .channel == "snt-channel"
+            and .chaincode == "snt"
+            and all(.assertions[]; . == true)
+          ' "${NET6_RESULTS[0]}" >/dev/null
 
       - name: Verify restart and idempotence
         shell: bash

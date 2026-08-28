@@ -565,6 +565,97 @@ verify_pre_init_gate() {
   }
 }
 
+network_channel_height() {
+  local output
+  output="$(peer channel getinfo --channelID "${CHANNEL_NAME}")"
+  jq -r '.height' <<<"${output#Blockchain info: }"
+}
+
+wait_for_network_height() {
+  local previous="$1"
+  local current
+  for _ in {1..30}; do
+    current="$(network_channel_height)"
+    if [[ "${current}" -gt "${previous}" ]]; then
+      printf '%s\n' "${current}"
+      return
+    fi
+    sleep 1
+  done
+  fail "channel height did not advance after the bootstrap transaction"
+}
+
+verify_bootstrap_constraints() {
+  local evidence="${EVIDENCE_DIR}/net-6/bootstrap"
+  local msp_id slug peer_hostname agent_type id id_type active orderer_hostname
+  local output status before after raw decoded filter codes
+  local -a invoke_args
+  mkdir -p "${evidence}"
+  require_command od
+
+  read -r msp_id slug peer_hostname agent_type id id_type active orderer_hostname < <(regulator_row)
+  use_organization "${msp_id}" "${slug}" "${peer_hostname}" User1
+  before="$(network_channel_height)"
+  invoke_args=(
+    "${ORDERER_ARGS[@]}"
+    --channelID "${CHANNEL_NAME}"
+    --name "${CHAINCODE_NAME}"
+    --isInit
+    --ctor '{"function":"Init","Args":[]}'
+    --peerAddresses "${CORE_PEER_ADDRESS}"
+    --tlsRootCertFiles "${CORE_PEER_TLS_ROOTCERT_FILE}"
+    --waitForEvent
+    --waitForEventTimeout "${SNT_COMMIT_TIMEOUT:-180s}"
+  )
+  info "Proving that Init cannot commit with only the regulatory endorser"
+  set +e
+  output="$(peer chaincode invoke "${invoke_args[@]}" 2>&1)"
+  status=$?
+  set -e
+  printf '%s\n' "${output}" >"${evidence}/init-insufficient-endorsers.txt"
+  [[ "${status}" -ne 0 ]] || fail "Init unexpectedly committed without all founding organizations"
+  grep -q 'ENDORSEMENT_POLICY_FAILURE' <<<"${output}" || fail "insufficient Init endorsement did not produce ENDORSEMENT_POLICY_FAILURE"
+  wait_for_network_height "${before}" >/dev/null
+
+  raw="${evidence}/init-insufficient-endorsers-block-${before}.pb"
+  decoded="${evidence}/init-insufficient-endorsers-block-${before}.json"
+  peer channel fetch "${before}" "${raw}" --channelID "${CHANNEL_NAME}" "${ORDERER_ARGS[@]}" >"${evidence}/init-insufficient-endorsers-fetch.txt" 2>&1
+  configtxlator proto_decode --input "${raw}" --type common.Block --output "${decoded}"
+  filter="$(jq -er '.metadata.metadata[2]' "${decoded}")"
+  codes="$(printf '%s' "${filter}" | base64 --decode | od -An -t u1 | xargs)"
+  printf '%s\n' "${codes}" >"${evidence}/init-insufficient-endorsers-validation-codes.txt"
+  grep -qw '10' <<<"${codes}" || fail "bootstrap block does not contain Fabric validation code 10"
+
+  read -r msp_id slug peer_hostname agent_type id id_type active orderer_hostname < <(
+    organization_rows | awk -F '\t' '$4 != "REGULATOR" { print; exit }'
+  )
+  [[ -n "${msp_id}" ]] || fail "no non-regulatory organization is available for the Init identity test"
+  use_organization "${msp_id}" "${slug}" "${peer_hostname}" User1
+  before="$(network_channel_height)"
+  invoke_args=(
+    "${ORDERER_ARGS[@]}"
+    --channelID "${CHANNEL_NAME}"
+    --name "${CHAINCODE_NAME}"
+    --isInit
+    --ctor '{"function":"Init","Args":[]}'
+    "${ALL_PEER_TARGETS[@]}"
+    --waitForEvent
+    --waitForEventTimeout "${SNT_COMMIT_TIMEOUT:-180s}"
+  )
+  info "Proving that Init rejects a creator outside the embedded regulator"
+  set +e
+  output="$(peer chaincode invoke "${invoke_args[@]}" 2>&1)"
+  status=$?
+  set -e
+  printf '%s\n' "${output}" >"${evidence}/init-wrong-creator.txt"
+  [[ "${status}" -ne 0 ]] || fail "Init unexpectedly accepted a non-regulatory creator"
+  grep -q 'REGULATORY_ONLY' <<<"${output}" || fail "wrong Init creator did not return REGULATORY_ONLY"
+  sleep 2
+  after="$(network_channel_height)"
+  [[ "${after}" -eq "${before}" ]] || fail "the application-level Init rejection unexpectedly reached the ledger"
+  printf '%s\n' "${before}" >"${evidence}/init-wrong-creator-unchanged-height.txt"
+}
+
 initialize_registry() {
   local evidence="${EVIDENCE_DIR}/net-4/lifecycle"
   local msp_id slug peer_hostname agent_type id id_type active orderer_hostname
@@ -583,6 +674,7 @@ initialize_registry() {
   fi
 
   verify_pre_init_gate
+  verify_bootstrap_constraints
 
   invoke_args=(
     "${ORDERER_ARGS[@]}"
