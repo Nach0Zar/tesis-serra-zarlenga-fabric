@@ -1,6 +1,7 @@
 package snt
 
 import (
+	"crypto/sha256"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -38,6 +39,18 @@ type mockStub struct {
 	validation  map[string][]byte            // clave publica -> politica de endoso serializada
 	events      map[string][]byte
 
+	// privateHash modela la OTRA capa que Fabric mantiene por cada escritura
+	// privada: el hash de clave y valor que queda en el estado publico del
+	// canal. Es legible desde cualquier peer, sea o no miembro de la
+	// coleccion, y es lo que permite distinguir "el dato existe pero todavia
+	// no me llego" de "aca nunca se escribio nada".
+	//
+	// Separarlo de privateData es lo que hace que hidePrivateData pueda
+	// simular una diseminacion pendiente de forma fiel: se va el contenido y
+	// queda el hash, que es exactamente lo que ve un peer miembro que todavia
+	// no recibio el bloque privado.
+	privateHash map[string]map[string][]byte
+
 	failGetState bool
 }
 
@@ -48,6 +61,7 @@ func newMockStub() *mockStub {
 		transient:   map[string][]byte{},
 		state:       map[string][]byte{},
 		privateData: map[string]map[string][]byte{},
+		privateHash: map[string]map[string][]byte{},
 		validation:  map[string][]byte{},
 		events:      map[string][]byte{},
 	}
@@ -82,21 +96,72 @@ func (s *mockStub) DelState(key string) error {
 	return nil
 }
 
+// errPvtdataNotAvailable reproduce el mensaje con el que Fabric rechaza la
+// lectura privada de una clave cuyo hash publico esta confirmado pero cuyo
+// contenido este peer todavia no tiene. No es una invencion del mock: el query
+// helper del peer compara la version del hash con la del dato privado y, si
+// difieren, devuelve un ErrPvtdataNotAvailable con este texto.
+const errPvtdataNotAvailable = "private data matching public hash version is not available"
+
+// GetPrivateData reproduce la semantica REAL de Fabric, que no es la de un mapa:
+//
+//   - sin hash y sin contenido, la clave no existe y la lectura devuelve vacio
+//     sin error;
+//   - con hash confirmado en el estado publico y sin contenido en este peer, la
+//     lectura FALLA. Es el caso de la diseminacion pendiente de ADR-006 punto 1.
+//
+// Devolver (nil, nil) en el segundo caso -- como haria un mapa vacio -- dejaria
+// que el chaincode pareciera manejar la condicion transitoria cuando en la red
+// real nunca llegaria a ese camino: el error de lectura lo desviaria antes. El
+// mock reproduce la falla justamente para que el test no pueda pasar por esa
+// via.
 func (s *mockStub) GetPrivateData(collection, key string) ([]byte, error) {
-	return s.privateData[collection][key], nil
+	if value, ok := s.privateData[collection][key]; ok {
+		return value, nil
+	}
+	if len(s.privateHash[collection][key]) > 0 {
+		return nil, errors.New(errPvtdataNotAvailable)
+	}
+	return nil, nil
 }
 
 func (s *mockStub) PutPrivateData(collection, key string, value []byte) error {
 	if s.privateData[collection] == nil {
 		s.privateData[collection] = map[string][]byte{}
 	}
+	if s.privateHash[collection] == nil {
+		s.privateHash[collection] = map[string][]byte{}
+	}
 	s.privateData[collection][key] = value
+	digest := sha256.Sum256(value)
+	s.privateHash[collection][key] = digest[:]
 	return nil
 }
 
+// DelPrivateData borra el contenido Y su hash: la eliminacion se propaga al
+// estado publico como cualquier otra escritura del read-write set, de modo que
+// una operacion cerrada deja de tener hash vivo (ADR-006, punto 4). Lo que
+// permanece en el ledger es el hash de la escritura ORIGINAL, en su bloque, no
+// una entrada viva del estado.
 func (s *mockStub) DelPrivateData(collection, key string) error {
 	delete(s.privateData[collection], key)
+	delete(s.privateHash[collection], key)
 	return nil
+}
+
+// GetPrivateDataHash devuelve el hash que Fabric conserva en el estado publico
+// del canal. No exige membresia en la coleccion.
+func (s *mockStub) GetPrivateDataHash(collection, key string) ([]byte, error) {
+	return s.privateHash[collection][key], nil
+}
+
+// hidePrivateData simula que el peer todavia no recibio el contenido privado de
+// una clave que si esta escrita: se va el contenido y queda el hash. Devuelve el
+// contenido para poder reponerlo y simular la reconciliacion posterior.
+func (s *mockStub) hidePrivateData(collection, key string) []byte {
+	stored := s.privateData[collection][key]
+	delete(s.privateData[collection], key)
+	return stored
 }
 
 func (s *mockStub) SetStateValidationParameter(key string, ep []byte) error {

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
+	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 )
 
@@ -108,18 +109,6 @@ func TestDeclaredOperationsReportTheirOwner(t *testing.T) {
 	contract := new(SNTContract)
 
 	pending := map[string]func() error{
-		"DispatchTransfer": func() error {
-			_, err := contract.DispatchTransfer(ctx, DispatchTransferRequest{})
-			return err
-		},
-		"ReceiveTransfer": func() error {
-			_, err := contract.ReceiveTransfer(ctx, UnitRefRequest{})
-			return err
-		},
-		"RejectTransfer": func() error {
-			_, err := contract.RejectTransfer(ctx, UnitEventRequest{})
-			return err
-		},
 		"Dispense": func() error {
 			_, err := contract.Dispense(ctx, UnitRefRequest{})
 			return err
@@ -227,5 +216,20 @@ func TestImplementedOperationsAreNotStubs(t *testing.T) {
 	if _, err := contract.RegisterUnit(
 		testContext(stub, labMSP, RoleOperator), validRegisterUnitRequest()); err != nil {
 		t.Fatalf("RegisterUnit deberia estar implementada: %v", err)
+	}
+
+	// T02/T03, T04 y T05, implementadas por CC-3 (#16).
+	registerOrg(t, stub, drogueriaMSP, drogueriaGLN, domain.AgentDrugstore)
+	withTransient(stub, dispatchTransient("GLN:"+drogueriaGLN))
+	if _, err := contract.DispatchTransfer(
+		testContext(stub, labMSP, RoleOperator),
+		DispatchTransferRequest{GTIN: validGTIN, NumeroSerie: validSerial}); err != nil {
+		t.Fatalf("DispatchTransfer deberia estar implementada: %v", err)
+	}
+	stub.transient = map[string][]byte{}
+	if _, err := contract.ReceiveTransfer(
+		testContext(stub, drogueriaMSP, RoleOperator),
+		UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial}); err != nil {
+		t.Fatalf("ReceiveTransfer deberia estar implementada: %v", err)
 	}
 }

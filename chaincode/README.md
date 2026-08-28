@@ -99,7 +99,7 @@ Tres tests distintos custodian el congelamiento del contrato, y hacen falta los 
 | `RegisterOrganization`, `SetOrganizationActive` | Implementadas | CC-1 (#14) |
 | `AuthorizeLabIntervention`, `RevokeLabIntervention` | Implementadas | CC-1 (#14) |
 | `RegisterUnit` | Implementada | CC-2 (#15) |
-| `DispatchTransfer`, `ReceiveTransfer`, `RejectTransfer` | Declaradas | CC-3 (#16) |
+| `DispatchTransfer`, `ReceiveTransfer`, `RejectTransfer` | Implementadas | CC-3 (#16) |
 | `Dispense` | Declarada | CC-4 (#17) |
 | `ReadUnit`, `GetUnitHistory`, `QueryUnitsByGTIN` | Declaradas | CC-5 (#18) |
 | `Quarantine`, `ReleaseQuarantine` | Declaradas | EXT-1 (#27) |
@@ -119,6 +119,29 @@ Las operaciones declaradas devuelven `INTERNAL_ERROR` con el detalle `{"operacio
 
 - **State-based endorsement por clave** (`setKeyEndorsement`), para los requisitos derivables del estado confirmado. Con un solo `mspId` la política exige a esa organización; con varios, `statebased` construye la conjunción — la semántica que necesita `AND(emisor, receptor)` durante el tránsito. **Ninguna política de clave de unidad admite a la organización regulatoria como rama alternativa**: la política es de la clave y no de la función, y una rama disyuntiva agregada para un caso excepcional habilitaría con la misma fuerza todos los casos ordinarios.
 - **Marcador de participación** en la colección implícita de una organización, en sus dos variantes (`Unidad` y `Organizacion`). Es la única forma nativa de exigir el endoso de una organización que no es titular de la clave escrita, o de exigirlo en la **primera** escritura de una clave, donde SBE todavía no puede aplicarse. El `txId` va último en la clave: la hace única por transacción, sin contención MVCC.
+
+### Salida de `EN_TRANSITO` por evento extraordinario
+
+`CloseTransitForExtraordinaryEvent` es el mecanismo que CC-3 (#16) deja listo para las issues EXT, que implementan las operaciones (T09, T13–T16). Compone las **tres** piezas que ADR-007 exige, para que ninguna quede afuera por olvido:
+
+1. el **marcador de participación** en la colección implícita de la organización regulatoria, **sólo cuando es ella quien inicia el evento** (punto 6.d). Es el segundo uso del marcador —exigir el endoso de una organización que no es titular de la clave escrita—, distinto del que cierra la ventana de creación de una clave pública nueva (punto 6.g). Sin él, la participación de ANMAT descansaría en su firma de creador, que acredita identidad pero no prueba que ningún peer suyo haya ejecutado la lógica;
+2. el **cierre del registro de operación**: histórico + `DelPrivateData` de la clave activa;
+3. la **restauración de la política de reposo** hacia el emisor, que sigue siendo el custodio registrado porque el tránsito no se consumó (punto 6.c).
+
+Escribir el marcador siempre —y no sólo cuando invoca el regulador— convertiría a `AnmatMSP` en coendosante obligatoria de eventos que no inició, que es exactamente lo que DES-6 prohíbe. `TestExtraordinaryExitByCustodianWritesNoRegulatoryMarker` lo deja fijado.
+
+### Receptor equivocado vs. dato privado no diseminado
+
+Ambos casos se ven igual desde el contenido privado: la clave `TransferOpActive` no está. El chaincode los separa con el **hash público** que Fabric persiste por cada escritura privada (ADR-006, punto 6), legible con `GetPrivateDataHash` desde cualquier peer sin exigir membresía en la colección ni que el dato se haya diseminado:
+
+- **hay hash vivo** → la operación existe y su contenido todavía no llegó a este peer: `INTERNAL_ERROR` con `reintentable: true`, la falla transitoria que ADR-006 punto 1 obliga a contemplar;
+- **no hay hash** → en esa colección nunca hubo operación, de modo que el invocador no es el destinatario declarado: `RECEIVER_MISMATCH`, definitivo y no reintentable.
+
+Cerrar una operación elimina también esa entrada del estado público, así que un registro histórico no deja hash vivo y no puede confundirse con una operación en curso.
+
+**El orden de las dos consultas no es intercambiable, y por eso vive dentro de `readActiveTransferOperation` y no en cada llamador.** Fabric no se comporta como un mapa: el *query helper* del peer compara la versión del hash público con la del dato privado y, cuando difieren —hash confirmado, contenido todavía no reconciliado—, la lectura **falla** con `private data matching public hash version is not available`; no devuelve vacío. Consultar el hash *después* de una lectura privada que se asume vacía nunca llegaría a ejecutarse: el error sepultaría la condición transitoria bajo un `INTERNAL_ERROR` genérico, indistinguible de cualquier otra falla de plataforma. Por eso la función consulta primero el hash, sólo entonces lee el contenido, y convierte el fallo de esa lectura en la condición tipificada, conservando el mensaje original de Fabric en `details.causaSubyacente`.
+
+`TestMockStubReproducesFabricPrivateDataSemantics` fija esa semántica en el doble de prueba, porque de ella depende que los tests de la condición transitoria prueben algo: si el mock devolviera `(nil, nil)` con el hash presente, el chaincode podría apoyarse en un camino que en la red real no se recorre y los tests pasarían igual.
 
 `TestPublicKeyCreationWritesMarker` cubre la invariante de ADR-007 punto 6.j: toda operación que crea una clave pública nueva escribe también el marcador de la organización responsable. Hoy son exactamente tres — `RegisterUnit` (laboratorio invocante), `RegisterOrganization` y `AuthorizeLabIntervention` (organización regulatoria) — y el test las cubre a las tres. Mientras se cumpla, la política de chaincode `OR(custodiales, regulatoria)` no es una frontera de seguridad; una operación futura que cree una clave pública sin marcador reabriría una ventana de creación sin dueño.
 
