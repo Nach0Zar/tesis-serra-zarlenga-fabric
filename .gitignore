@@ -17,6 +17,10 @@ AGENTS.md
 *.out
 coverage.out
 
+# Python validation caches
+__pycache__/
+*.py[cod]
+
 # Artefactos de empaquetado del chaincode. `make package` construye el arbol
 # staged y el tar.gz FUERA de chaincode/, para que una segunda corrida no
 # empaquete el artefacto de la primera (ADR-008 punto 5, ADR-010 punto 4).

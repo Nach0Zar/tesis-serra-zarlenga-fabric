@@ -126,9 +126,11 @@ El campo `pendingOwner` de ese test es la maquinaria que CC-1 (#14) dejó para l
 
 `TestCompositeKeySchema` pinnea el esquema de claves compuestas que CC-1 fija para las issues que lo consumen: los tipos de objeto, el orden de los componentes y el `txId` al final en las dos variantes del marcador.
 
-## Smoke test sobre la TEST-NETWORK
+## Smoke test local sobre la TEST-NETWORK
 
-[`test/integration/chaincode-e2e.sh`](../test/integration/chaincode-e2e.sh) cubre los dos últimos criterios de aceptación de CC-1 (#14) —«despliega sobre la TEST-NETWORK» e «invocación dummy responde»— contra `fabric-samples/test-network`. Lo ejecuta el workflow `Chaincode Integration Test` en cada PR. Hace el ciclo de lifecycle completo a mano (`package`, `install`, `approveformyorg`, `commit`, `invoke`) en lugar de delegarlo en `network.sh deployCC`, porque esa vía no admite `--init-required` sin invocar además la función de init.
+[`test/integration/chaincode-e2e.sh`](../test/integration/chaincode-e2e.sh) conserva la cobertura histórica de CC-1 (#14) contra `fabric-samples/test-network` como prueba local opcional. Hace el ciclo de lifecycle completo a mano porque esa red no contiene `AnmatMSP` y solo puede comprobar el rechazo `REGULATORY_ONLY`.
+
+El workflow de integración principal usa ahora la red propia: `network/network.sh deployCC` ejecuta `Init` exitosamente sobre `snt-channel`, confirma las secuencias 1 y 2 y siembra el registro. [`test/integration/pdc-evidence.sh`](../test/integration/pdc-evidence.sh) agrega evidencia de plataforma sobre colecciones privadas mediante un probe separado del contrato productivo.
 
 **Qué se puede probar ahí, y por qué no más que eso.** El chaincode se despliega con `--init-required` (ADR-007, punto 5.c), de modo que la primera —y, mientras `Init` no tenga éxito, la única— transacción que el peer admite es `Init`. Y `Init` no acepta el `mspId` regulatorio como argumento: lo resuelve contra el manifiesto fundacional embebido, que declara `AnmatMSP` (ADR-010, punto 4). La `test-network` de fabric-samples tiene `Org1MSP` y `Org2MSP`.
 
@@ -142,7 +144,7 @@ El script comprueba, en orden:
 4. la plataforma **rechaza** cualquier función distinta de `Init` antes de inicializar — lo que distingue un despliegue con `--init-required` de uno sin él;
 5. la invocación dummy de `Init` responde con el error tipificado `REGULATORY_ONLY`.
 
-Un `Init` **exitoso** —y con él, el seed del registro y las operaciones de negocio— exige una red cuyas MSP sean las del manifiesto fundacional. Esa red la construye NET-4 (#23) sobre `snt-channel`; el escenario funcional completo sobre ella pertenece a CC-3 (#16).
+El `Init` **exitoso** —y con él, el seed del registro— se prueba en la red de NET-4. Las operaciones funcionales de transferencia sobre ella permanecen en CC-3 (#16).
 
 ## Desarrollo
 

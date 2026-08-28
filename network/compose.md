@@ -11,8 +11,9 @@
 - TLS en todos los endpoints peer y orderer;
 - healthchecks y límites de recursos reproducibles.
 
-El canal definitivo es `snt-channel` y el chaincode es `snt`. La creación del
-canal y el lifecycle no forman parte de este Compose.
+El canal definitivo es `snt-channel` y el chaincode es `snt`. El Compose
+solo declara servicios; `network/network.sh` implementa la creación del canal
+y el lifecycle de NET-4 sobre esos servicios.
 
 ## Versiones
 
@@ -106,10 +107,10 @@ Antes de crear y unir un canal, `healthy` sólo demuestra que los procesos y sus
 endpoints de operaciones responden. No demuestra que el consenter set de Raft
 haya formado quorum ni elegido líder.
 
-NET-4 es responsable de los wrappers idempotentes `up/down/restart`, de crear
-`snt-channel`, unir los nodos y ejecutar las dos secuencias de lifecycle. En
-ese contexto deberá verificar explícitamente que los tres orderers participen,
-formen quorum y elijan líder.
+`network/network.sh createChannel` verifica que los tres orderers sean
+consenters activos y que el ordering service entregue bloques, además de
+comprobar la membresía de los siete peers. `deployCC` ejecuta las dos
+secuencias de lifecycle y conserva la evidencia cruda bajo `build/evidence/`.
 
 Los endpoints administrativos de los orderers exigen mTLS y cada uno confía en
 la CA TLS de su propia organización. Por lo tanto, NET-4 no debe asumir una
@@ -151,7 +152,7 @@ Cada peer monta el socket Docker porque el runtime estándar de Fabric 2.5 crea
 los contenedores de chaincode. Ese acceso equivale a control del daemon y solo
 es aceptable en este prototipo local; no es una recomendación productiva.
 
-Este cambio no genera identidades (NET-1), no modifica `configtx.yaml` (NET-2),
-no crea canal ni despliega chaincode (NET-4), no genera
-`collections_config.json` (NET-5) y no implementa ni prueba políticas de
-endoso (NET-6).
+El Compose no genera identidades, no modifica `configtx.yaml`, no crea el
+canal y no despliega chaincode por sí solo. Esas operaciones se mantienen en
+scripts separados para conservar idempotencia y evidencia. La validación
+exhaustiva de SBE del chaincode productivo permanece en NET-6.
