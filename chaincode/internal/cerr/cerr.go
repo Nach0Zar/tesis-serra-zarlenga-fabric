@@ -9,6 +9,7 @@ package cerr
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -82,6 +83,21 @@ func Internal(err error, context string) *ContractError {
 		Code:    InternalError,
 		Message: fmt.Sprintf("%s: %v", context, err),
 	}
+}
+
+// CodeOf devuelve el codigo del error tipificado subyacente, si lo hay.
+//
+// Es la forma en que el propio chaincode ramifica sobre un codigo en tiempo de
+// ejecucion, y no debe confundirse con Parse: Parse reconstruye el error desde
+// su serializacion JSON -- el camino del cliente y de los tests --, mientras
+// que CodeOf recorre la cadena de errores con errors.As sin volver a
+// deserializar nada.
+func CodeOf(err error) (Code, bool) {
+	var typed *ContractError
+	if errors.As(err, &typed) {
+		return typed.Code, true
+	}
+	return "", false
 }
 
 // Parse recupera el error tipificado a partir de su serializacion. Existe para
