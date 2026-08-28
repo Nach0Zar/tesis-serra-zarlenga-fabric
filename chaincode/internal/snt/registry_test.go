@@ -365,11 +365,18 @@ func TestParticipationMarkerKeyPutsTxIDLast(t *testing.T) {
 // es una frontera de seguridad. Una operacion futura que cree una clave publica
 // sin marcador reabriria una ventana de creacion sin dueno.
 //
-// El test cubre las TRES operaciones que #14 enumera. `RegisterUnit` todavia es
-// un stub de CC-2 (#15): mientras lo sea, su caso comprueba que siga siendolo y
-// se marca como pendiente. El dia que CC-2 le ponga logica, el caso deja de
-// saltearse por si solo y exige el marcador. La invariante queda asi cubierta
-// por un test que no depende de que nadie se acuerde de agregarlo.
+// Hoy son exactamente tres, y el test las cubre a las tres sin saltearse
+// ninguna: RegisterUnit (laboratorio invocante), RegisterOrganization
+// (regulador) y AuthorizeLabIntervention (regulador).
+//
+// El campo `pendingOwner` es la maquinaria que CC-1 (#14) dejo para las
+// operaciones todavia no implementadas: mientras una operacion siga devolviendo
+// el error de stub de su issue duena, su caso se saltea; el dia que esa issue le
+// ponga logica, el caso deja de saltearse por si solo y exige el marcador. Con
+// `RegisterUnit` ya implementada por CC-2 (#15) ningun caso lo usa hoy, pero se
+// conserva para las operaciones que CC-3 (#16) y siguientes agreguen a la lista:
+// la invariante queda cubierta por un mecanismo y no por que alguien se acuerde
+// de agregar el caso.
 func TestPublicKeyCreationWritesMarker(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -383,21 +390,18 @@ func TestPublicKeyCreationWritesMarker(t *testing.T) {
 		pendingOwner string
 	}{
 		{
+			// Unica de las tres cuya organizacion responsable NO es la
+			// regulatoria: la clave de la unidad la crea el laboratorio.
 			name:        "RegisterUnit",
 			responsable: labMSP,
 			run: func(t *testing.T, stub *mockStub) error {
 				registerOrg(t, stub, labMSP, labGLN, domain.AgentLaboratory)
 				contract := new(SNTContract)
 				_, err := contract.RegisterUnit(
-					testContext(stub, labMSP, RoleOperator),
-					RegisterUnitRequest{
-						GTIN: validGTIN, NumeroSerie: validSerial,
-						Lote: "L2026-014", FechaVencimiento: "2027-12-31",
-					})
+					testContext(stub, labMSP, RoleOperator), validRegisterUnitRequest())
 				return err
 			},
 			markerOwnerOp: opRegisterUnit,
-			pendingOwner:  "CC-2 (#15)",
 		},
 		{
 			name:        "RegisterOrganization",
