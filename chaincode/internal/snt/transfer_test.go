@@ -468,6 +468,35 @@ func TestReceiveTransferRejections(t *testing.T) {
 		requireCode(t, err, cerr.ReceiverMismatch)
 	})
 
+	// El caso dificil: el invocador SI tiene coleccion definida con el emisor
+	// -- LABORATORY -> PHARMACY esta autorizado --, pero la operacion activa
+	// vive en la coleccion del par Lab/Drogueria. Mirando solo el contenido
+	// privado, la ausencia de la clave es indistinguible de una diseminacion
+	// pendiente; el hash publico la vuelve concluyente y el contrato exige
+	// RECEIVER_MISMATCH, no un INTERNAL_ERROR reintentable.
+	t.Run("invocador con par autorizado pero ajeno a la operacion activa", func(t *testing.T) {
+		stub, contract := transferFixture(t)
+		dispatchToDrugstore(t, stub, contract)
+
+		if !pairCollectionNameExistsForTest(t, stub, labMSP, farmaciaMSP) {
+			t.Fatal("el caso exige que ADR-006 defina coleccion para el par laboratorio/farmacia")
+		}
+
+		_, err := contract.ReceiveTransfer(
+			testContext(stub, farmaciaMSP, RoleOperator),
+			UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+		requireCode(t, err, cerr.ReceiverMismatch)
+
+		// Y no debe ofrecerse como reintentable: reintentar no lo va a arreglar.
+		parsed, ok := cerr.Parse(err)
+		if !ok {
+			t.Fatalf("error sin el formato del contrato: %v", err)
+		}
+		if parsed.Details["reintentable"] == true {
+			t.Fatalf("un receptor equivocado no debe marcarse como reintentable: %+v", parsed.Details)
+		}
+	})
+
 	t.Run("rol no habilitado", func(t *testing.T) {
 		stub, contract := transferFixture(t)
 		dispatchToDrugstore(t, stub, contract)
@@ -476,6 +505,24 @@ func TestReceiveTransferRejections(t *testing.T) {
 			UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial})
 		requireCode(t, err, cerr.UnauthorizedRole)
 	})
+}
+
+// pairCollectionNameExistsForTest confirma que la premisa del caso anterior se
+// sostiene: si la matriz dejara de autorizar LABORATORY -> PHARMACY, el test
+// pasaria por el camino equivocado y dejaria de probar lo que dice probar.
+func pairCollectionNameExistsForTest(t *testing.T, stub *mockStub, a, b string) bool {
+	t.Helper()
+	ctx := testContext(stub, a, RoleOperator)
+	orgA, foundA, err := readOrganization(ctx, a)
+	requireNoError(t, err)
+	orgB, foundB, err := readOrganization(ctx, b)
+	requireNoError(t, err)
+	if !foundA || !foundB {
+		t.Fatalf("las organizaciones %s y %s deben estar registradas", a, b)
+	}
+	exists, err := pairCollectionExists(orgA, orgB)
+	requireNoError(t, err)
+	return exists
 }
 
 // TestReceiveTransferRetriesOnUndisseminatedPrivateData cubre la falla
@@ -491,8 +538,11 @@ func TestReceiveTransferRetriesOnUndisseminatedPrivateData(t *testing.T) {
 	collection := pairCollectionName(labMSP, drogueriaMSP)
 	activeKey, err := transferOpActiveKey(stub, validGTIN, validSerial)
 	requireNoError(t, err)
-	stored := stub.privateData[collection][activeKey]
-	delete(stub.privateData[collection], activeKey)
+	// Se oculta SOLO el contenido: el hash sigue en el estado publico, que es
+	// exactamente lo que ve un peer miembro al que el bloque privado todavia no
+	// llego. Si se borrara tambien el hash, el chaincode concluiria -- con
+	// razon -- que no hay operacion y devolveria RECEIVER_MISMATCH.
+	stored := stub.hidePrivateData(collection, activeKey)
 
 	_, err = contract.ReceiveTransfer(
 		testContext(stub, drogueriaMSP, RoleOperator),
@@ -685,39 +735,39 @@ func TestExtraordinaryExitClosesOperationAndRestoresPolicy(t *testing.T) {
 	ctx := testContext(stub, anmatMSP, RoleRegulatoryAdmin)
 	regulator, err := resolveInvoker(ctx)
 	requireNoError(t, err)
-
 	unit, err := readUnit(ctx, validGTIN, validSerial)
 	requireNoError(t, err)
 
-	// La organizacion regulatoria es miembro de todas las colecciones del par,
-	// de modo que puede localizar la operacion activa sin conocer al
-	// destinatario declarado.
-	op, collection, found, err := findActiveTransferOperation(ctx, unit, regulator)
-	requireNoError(t, err)
-	if !found {
-		t.Fatal("la organizacion regulatoria deberia poder localizar la operacion activa")
-	}
-	if collection != pairCollectionName(labMSP, drogueriaMSP) {
-		t.Fatalf("coleccion localizada = %q", collection)
-	}
-
-	requireNoError(t, closeTransferOperation(ctx, collection, op, closureExtraordinary, nil))
-
-	// La custodia permanece en el emisor, de modo que la politica de reposo
-	// vuelve a su organizacion.
-	key, err := medicationUnitKey(stub, validGTIN, validSerial)
-	requireNoError(t, err)
-	emitterMSPID, err := mspIDForCanonicalID(ctx, unit.CustodioActual)
-	requireNoError(t, err)
-	requireNoError(t, restoreRestingEndorsement(ctx, key, emitterMSPID))
-
-	orgs := endorsingOrganizations(t, stub.validation[key])
-	if len(orgs) != 1 || orgs[0] != labMSP {
-		t.Fatalf("politica de reposo tras el cierre extraordinario = %v, se esperaba %s", orgs, labMSP)
-	}
-
+	collection := pairCollectionName(labMSP, drogueriaMSP)
 	activeKey, err := transferOpActiveKey(stub, validGTIN, validSerial)
 	requireNoError(t, err)
+	op, found, err := readActiveTransferOperation(ctx, collection, validGTIN, validSerial)
+	requireNoError(t, err)
+	if !found {
+		t.Fatal("el despacho deberia haber dejado una operacion activa")
+	}
+
+	requireNoError(t, CloseTransitForExtraordinaryEvent(ctx, unit, regulator, "Quarantine"))
+
+	// (1) Marcador regulatorio. Es lo que somete la transaccion a la politica de
+	// endoso de la coleccion implicita de ANMAT y convierte su participacion en
+	// un coendoso real de peer, en lugar de apoyarla en la firma de creador
+	// (ADR-007, punto 6.d).
+	marker := stub.privateData[implicitCollection(anmatMSP)]
+	markerKey, err := unitParticipationKey(stub, validGTIN, validSerial, stub.GetTxID())
+	requireNoError(t, err)
+	raw := marker[markerKey]
+	if raw == nil {
+		t.Fatal("el cierre extraordinario iniciado por el regulador debe escribir su marcador de participacion")
+	}
+	var decoded participationMarker
+	requireNoError(t, json.Unmarshal(raw, &decoded))
+	if decoded.Operacion != "Quarantine" || decoded.MSPID != anmatMSP {
+		t.Fatalf("marcador = %+v", decoded)
+	}
+
+	// (2) Cierre del registro: se conserva el historico y desaparece la clave
+	// activa, tambien del estado publico.
 	if stub.privateData[collection][activeKey] != nil {
 		t.Fatal("el cierre extraordinario debe eliminar la clave de operacion activa")
 	}
@@ -725,6 +775,54 @@ func TestExtraordinaryExitClosesOperationAndRestoresPolicy(t *testing.T) {
 	requireNoError(t, err)
 	if stub.privateData[collection][histKey] == nil {
 		t.Fatal("el cierre extraordinario debe conservar el registro historico")
+	}
+	var historical TransferOperation
+	requireNoError(t, json.Unmarshal(stub.privateData[collection][histKey], &historical))
+	if historical.MotivoCierre != closureExtraordinary {
+		t.Fatalf("motivo de cierre = %q", historical.MotivoCierre)
+	}
+
+	// (3) Politica de reposo hacia el EMISOR: el transito no se consumo, de modo
+	// que la custodia registrada sigue siendo la suya.
+	key, err := medicationUnitKey(stub, validGTIN, validSerial)
+	requireNoError(t, err)
+	orgs := endorsingOrganizations(t, stub.validation[key])
+	if len(orgs) != 1 || orgs[0] != labMSP {
+		t.Fatalf("politica de reposo tras el cierre extraordinario = %v, se esperaba %s", orgs, labMSP)
+	}
+}
+
+// TestExtraordinaryExitByCustodianWritesNoRegulatoryMarker es la contracara del
+// test anterior: el marcador regulatorio se escribe SOLO cuando el evento lo
+// inicia la organizacion regulatoria (ADR-007, punto 6.d, "cuando el invocador
+// es efectivamente la organizacion regulatoria"). Escribirlo siempre convertiria
+// a ANMAT en coendosante obligatoria de eventos que no inicio, que es
+// exactamente lo que DES-6 prohibe.
+func TestExtraordinaryExitByCustodianWritesNoRegulatoryMarker(t *testing.T) {
+	stub, contract := transferFixture(t)
+	dispatchToDrugstore(t, stub, contract)
+
+	ctx := testContext(stub, labMSP, RoleOperator)
+	emitter, err := resolveInvoker(ctx)
+	requireNoError(t, err)
+	unit, err := readUnit(ctx, validGTIN, validSerial)
+	requireNoError(t, err)
+
+	requireNoError(t, CloseTransitForExtraordinaryEvent(ctx, unit, emitter, "ReportDamaged"))
+
+	// La coleccion implicita regulatoria no esta vacia -- el alta de cada
+	// organizacion del fixture dejo su marcador de la variante `Organizacion` --,
+	// de modo que la asercion es sobre la clave de ESTE evento: la variante
+	// `Unidad` con el txId de esta transaccion.
+	markerKey, err := unitParticipationKey(stub, validGTIN, validSerial, stub.GetTxID())
+	requireNoError(t, err)
+	if stub.privateData[implicitCollection(anmatMSP)][markerKey] != nil {
+		t.Fatal("un evento que no inicia el regulador no debe escribir su marcador")
+	}
+	activeKey, err := transferOpActiveKey(stub, validGTIN, validSerial)
+	requireNoError(t, err)
+	if stub.privateData[pairCollectionName(labMSP, drogueriaMSP)][activeKey] != nil {
+		t.Fatal("el cierre debe eliminar la clave de operacion activa igualmente")
 	}
 }
 

@@ -219,10 +219,20 @@ func (c *SNTContract) ReceiveTransfer(
 		return nil, err
 	}
 	if !found {
-		// La unidad esta en EN_TRANSITO, de modo que por construccion existe un
-		// registro de operacion activa (ADR-004, regla 2). Que no sea legible
-		// desde este peer es una falla transitoria de diseminacion, no una
-		// regla de negocio.
+		// Que la clave no sea legible admite dos causas opuestas, y el contrato
+		// les asigna codigos distintos: o el contenido todavia no se disemino a
+		// este peer (transitorio, reintentable), o en esta coleccion nunca hubo
+		// operacion porque el invocador no es el destinatario declarado
+		// (RECEIVER_MISMATCH). El hash publico las separa: existe desde que el
+		// despacho se confirma, en todos los peers, sin depender de la
+		// diseminacion del contenido.
+		written, err := activeTransferOperationIsWritten(ctx, collection, unit.GTIN, unit.NumeroSerie)
+		if err != nil {
+			return nil, err
+		}
+		if !written {
+			return nil, receiverMismatchForPair(collection)
+		}
 		return nil, errPrivateDataNotDisseminated(unit.GTIN, unit.NumeroSerie, collection)
 	}
 	if operation.DestinatarioPendiente != invoker.CanonicalID() {
@@ -337,13 +347,22 @@ func (c *SNTContract) RejectTransfer(
 		// El emisor no conoce al destinatario declarado sin leer el registro:
 		// es un dato privado que, por decision de ADR-004, no esta en el estado
 		// publico. Hay que buscarlo entre las colecciones de las que es miembro.
-		var found bool
-		operation, collection, found, err = findActiveTransferOperation(ctx, unit, invoker)
+		var found, written bool
+		operation, collection, found, written, err = findActiveTransferOperation(ctx, unit, invoker)
 		if err != nil {
 			return nil, err
 		}
+		if !written {
+			// La unidad esta en EN_TRANSITO y el invocador es su custodio, de
+			// modo que por construccion existe una operacion activa en alguna
+			// de sus colecciones (ADR-004, regla 2). Que no haya hash en
+			// ninguna es una inconsistencia del ledger, no un caso de negocio.
+			return nil, cerr.New(cerr.InternalError,
+				"la unidad %s/%s esta en EN_TRANSITO sin registro de operacion activa",
+				unit.GTIN, unit.NumeroSerie)
+		}
 		if !found {
-			return nil, errPrivateDataNotDisseminated(unit.GTIN, unit.NumeroSerie, "")
+			return nil, errPrivateDataNotDisseminated(unit.GTIN, unit.NumeroSerie, collection)
 		}
 	} else {
 		emitter, err := lookupOrganizationByCanonicalID(ctx, unit.CustodioActual)
@@ -365,6 +384,13 @@ func (c *SNTContract) RejectTransfer(
 			return nil, err
 		}
 		if !found {
+			written, err := activeTransferOperationIsWritten(ctx, collection, unit.GTIN, unit.NumeroSerie)
+			if err != nil {
+				return nil, err
+			}
+			if !written {
+				return nil, receiverMismatchForPair(collection)
+			}
 			return nil, errPrivateDataNotDisseminated(unit.GTIN, unit.NumeroSerie, collection)
 		}
 		if operation.DestinatarioPendiente != invoker.CanonicalID() {
@@ -405,6 +431,83 @@ func (c *SNTContract) RejectTransfer(
 
 	view := MedicationUnitView(unit)
 	return &view, nil
+}
+
+// receiverMismatchForPair es el rechazo DEFINITIVO por destinatario: el ledger
+// publico no registra ninguna operacion activa de esta unidad en la coleccion
+// del par, de modo que el invocador no es el destinatario declarado. No es
+// reintentable.
+func receiverMismatchForPair(collection string) error {
+	return cerr.New(cerr.ReceiverMismatch,
+		"el invocador no es el destinatario declarado: no hay operacion activa de esta unidad entre ambas organizaciones").
+		WithDetails(map[string]any{"coleccion": collection})
+}
+
+// CloseTransitForExtraordinaryEvent compone la salida de EN_TRANSITO por un
+// evento extraordinario (T09, T13-T16) en las TRES piezas que ADR-007 exige, de
+// modo que las issues EXT no tengan que recomponerlas ni puedan olvidarse de
+// una:
+//
+//  1. el marcador de participacion en la coleccion implicita de la organizacion
+//     regulatoria, cuando es ella quien inicia el evento (punto 6.d). La firma
+//     de creador acredita identidad e iniciativa pero NO es un endoso de peer;
+//     el marcador es lo que somete la transaccion a la politica de esa
+//     coleccion y convierte la participacion del regulador en coendoso real.
+//     Es el segundo uso del marcador —exigir el endoso de una organizacion que
+//     no es titular de la clave escrita—, distinto del que cierra la ventana de
+//     creacion de una clave publica nueva (punto 6.g);
+//  2. el cierre del registro de operacion, que escribe el historico y elimina
+//     la clave activa (ADR-004, regla 4; ADR-006, punto 4);
+//  3. la restauracion de la politica de reposo hacia el EMISOR, que sigue
+//     siendo el custodio registrado porque el transito no llego a consumarse
+//     (punto 6.c).
+//
+// Omitir (3) dejaria la unidad bajo una politica que exige al receptor de un
+// despacho ya resuelto: bloqueo permanente. Omitir (1) haria que el evento
+// regulatorio se apoyara solo en la firma de creador, que es el error que la
+// version anterior de ADR-007 corrigio.
+//
+// No cambia el estado ni el custodio de la unidad: eso lo hace la operacion EXT
+// que la invoca, conforme la transicion de ADR-001 que corresponda.
+func CloseTransitForExtraordinaryEvent(
+	ctx contractapi.TransactionContextInterface,
+	unit MedicationUnit,
+	invoker Invoker,
+	operation string,
+) error {
+	op, collection, found, written, err := findActiveTransferOperation(ctx, unit, invoker)
+	if err != nil {
+		return err
+	}
+	if !written {
+		return cerr.New(cerr.InternalError,
+			"la unidad %s/%s esta en EN_TRANSITO sin registro de operacion activa",
+			unit.GTIN, unit.NumeroSerie)
+	}
+	if !found {
+		return errPrivateDataNotDisseminated(unit.GTIN, unit.NumeroSerie, collection)
+	}
+
+	if invoker.Org.AgentType == domain.AgentRegulator {
+		if err := writeUnitParticipationMarker(
+			ctx, invoker.MSPID, operation, invoker.MSPID, unit.GTIN, unit.NumeroSerie); err != nil {
+			return err
+		}
+	}
+
+	if err := closeTransferOperation(ctx, collection, op, closureExtraordinary, nil); err != nil {
+		return err
+	}
+
+	key, err := medicationUnitKey(ctx.GetStub(), unit.GTIN, unit.NumeroSerie)
+	if err != nil {
+		return cerr.Internal(err, "no se pudo construir la clave de la unidad")
+	}
+	emitterMSPID, err := mspIDForCanonicalID(ctx, unit.CustodioActual)
+	if err != nil {
+		return err
+	}
+	return restoreRestingEndorsement(ctx, key, emitterMSPID)
 }
 
 // restoreRestingEndorsement devuelve la clave de la unidad a la politica de
