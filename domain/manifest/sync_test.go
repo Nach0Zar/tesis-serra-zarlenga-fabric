@@ -17,11 +17,12 @@ import (
 // `make sync-manifest` desde chaincode/ y revisar el impacto sobre el
 // packageID versionado (ADR-008 punto 5, ADR-010 punto 4).
 func TestEmbeddedManifestMatchesCanonical(t *testing.T) {
-	// La ruta es una constante del paquete compuesta con la raiz del
-	// repositorio, no una entrada del usuario: no hay inclusion de archivo por
-	// variable que gosec deba vigilar aca.
-	//nolint:gosec // ruta constante, relativa al repositorio
-	canonical, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(CanonicalPath)))
+	repoRoot := filepath.Join("..", "..")
+
+	// La ruta no viene de una entrada externa: CanonicalPath es una constante
+	// del paquete y repoRoot es relativo al propio archivo de test.
+	// #nosec G304 -- ruta constante, no derivada de entrada del usuario
+	canonical, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(CanonicalPath)))
 	if err != nil {
 		t.Fatalf("no se pudo leer el manifiesto canonico %s: %v", CanonicalPath, err)
 	}

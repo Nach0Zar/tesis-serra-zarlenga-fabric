@@ -191,9 +191,10 @@ func (c *SNTContract) RegisterOrganization(
 		return nil, err
 	}
 
-	// La entrada del registro y el request son tipos espejo: la conversion
-	// directa deja de compilar si dejan de serlo, que es exactamente el aviso
-	// que se quiere.
+	// La entrada del registro y el request tienen los mismos campos: el alta no
+	// deriva nada. La conversion directa deja esa equivalencia comprobada por
+	// el compilador -- si una de las dos ganara un campo, esto dejaria de
+	// compilar en lugar de copiar en silencio una entrada incompleta.
 	record := OrganizationRecord(req)
 
 	for _, org := range existing {

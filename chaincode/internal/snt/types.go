@@ -121,8 +121,8 @@ type SetOrganizationActiveRequest struct {
 // un laboratorio no custodio.
 type LabInterventionOperation string
 
-// Las tres operaciones que DES-6 habilita a un laboratorio no custodio sobre
-// una unidad bajo custodia ajena.
+// Catalogo de operaciones habilitadas a un laboratorio no custodio: las tres
+// que DES-6 enumera y que ADR-007 punto 6.e somete a autorizacion previa.
 const (
 	LabOpWithdrawFromMarket LabInterventionOperation = "WITHDRAW_FROM_MARKET"
 	LabOpRestock            LabInterventionOperation = "RESTOCK"
@@ -134,8 +134,7 @@ const (
 // computa contra GetTxTimestamp() y que no borra la clave (ADR-007, punto 6.f).
 type LabInterventionState string
 
-// Estados persistidos de una autorizacion de intervencion. El vencimiento no
-// figura aca: es una condicion derivada del timestamp de la transaccion.
+// Catalogo de estados persistidos de una autorizacion de intervencion.
 const (
 	LabInterventionActiva   LabInterventionState = "ACTIVA"
 	LabInterventionConsumed LabInterventionState = "CONSUMIDA"

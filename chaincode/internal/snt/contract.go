@@ -34,13 +34,13 @@ const ContractVersion = "2.6.1"
 
 // SNTContract es el contrato publico del chaincode `snt`.
 //
-// El nombre lo fija docs/api-contract.md ("metodos de un contrato
-// `SNTContract`") y no es un detalle de estilo: contractapi deriva de el el
-// namespace de invocacion, de modo que renombrarlo cambiaria el nombre de
-// TODAS las transacciones que el cliente y la baseline invocan. Por eso se
-// silencia la regla de revive sobre el prefijo repetido del paquete.
+// El nombre lo congela docs/api-contract.md, que declara la firma de las 25
+// operaciones como metodos de `*SNTContract`. Por eso no se acepta la
+// sugerencia de revive de renombrarlo a `Contract` para evitar el stutter
+// `snt.SNTContract`: cambiarlo seria un cambio del contrato congelado, que
+// exige su propio PR con aprobacion explicita.
 //
-//nolint:revive // el nombre es parte del contrato publico congelado
+//nolint:revive // nombre fijado por el contrato congelado (docs/api-contract.md)
 type SNTContract struct {
 	contractapi.Contract
 }

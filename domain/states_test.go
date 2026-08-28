@@ -38,13 +38,15 @@ func TestTransitionTableMatchesADR001(t *testing.T) {
 			continue
 		}
 
+		// Columnas de la tabla de ADR-001 despues del ID:
+		// Desde | Evento | Hacia | Actor habilitado | Precondiciones.
 		cols := strings.Split(match[2], "|")
-		if len(cols) < 4 {
+		if len(cols) < 5 {
 			t.Fatalf("fila %s de ADR-001 mal formada", id)
 		}
-		from, event, to := cleanCell(cols[0]), cleanCell(cols[1]), cleanCell(cols[2])
+		from, event, to, actors := cleanCell(cols[0]), cleanCell(cols[1]), cleanCell(cols[2]), cleanCell(cols[3])
 
-		if got := strings.Join(statesToStrings(tr.From), " o "); !equivalentFrom(from, got) {
+		if got := strings.Join(statesToStrings(tr.From), " o "); !equivalentList(from, got) {
 			t.Errorf("%s: estados de origen ADR-001 %q vs paquete %q", id, from, got)
 		}
 		if string(tr.Event) != event {
@@ -52,6 +54,15 @@ func TestTransitionTableMatchesADR001(t *testing.T) {
 		}
 		if string(tr.To) != to {
 			t.Errorf("%s: estado destino ADR-001 %q vs paquete %q", id, to, tr.To)
+		}
+		// La columna "Actor habilitado" no es documental: ADR-001 ("Reglas de
+		// consumo") la declara fuente de verdad de quien puede detonar cada
+		// transicion, y de ella dependen las decisiones de autorizacion y de
+		// endoso posteriores. Si el paquete la reprodujera mal, el contrato
+		// habilitaria a un actor que la ADR no habilita -- o al reves -- sin
+		// que nada fallara.
+		if got := strings.Join(actorsToStrings(tr.Actors), " o "); !equivalentList(actors, got) {
+			t.Errorf("%s: actores habilitados ADR-001 %q vs paquete %q", id, actors, got)
 		}
 	}
 }
@@ -71,10 +82,18 @@ func statesToStrings(states []State) []string {
 	return out
 }
 
-// equivalentFrom compara las listas de estados de origen sin depender del
-// separador que use la redaccion de ADR-001, que mezcla ", " y " o " en la
-// misma celda.
-func equivalentFrom(adr, pkg string) bool {
+func actorsToStrings(actors []Actor) []string {
+	out := make([]string, len(actors))
+	for i, a := range actors {
+		out[i] = string(a)
+	}
+	return out
+}
+
+// equivalentList compara dos enumeraciones de una celda de ADR-001 -- estados
+// de origen o actores habilitados -- sin depender del separador que use la
+// redaccion, que mezcla ", " y " o " en la misma celda, ni del orden.
+func equivalentList(adr, pkg string) bool {
 	norm := func(s string) []string {
 		fields := strings.Fields(strings.ReplaceAll(s, ",", " "))
 		out := make([]string, 0, len(fields))

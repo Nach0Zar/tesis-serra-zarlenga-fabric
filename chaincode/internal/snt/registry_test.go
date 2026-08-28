@@ -365,33 +365,48 @@ func TestParticipationMarkerKeyPutsTxIDLast(t *testing.T) {
 // es una frontera de seguridad. Una operacion futura que cree una clave publica
 // sin marcador reabriria una ventana de creacion sin dueno.
 //
-// Hoy son exactamente tres: RegisterUnit (laboratorio invocante),
-// RegisterOrganization (regulador) y AuthorizeLabIntervention (regulador).
+// Hoy son exactamente tres, y el test las cubre a las tres sin saltearse
+// ninguna: RegisterUnit (laboratorio invocante), RegisterOrganization
+// (regulador) y AuthorizeLabIntervention (regulador).
+//
+// El campo `pendingOwner` es la maquinaria que CC-1 (#14) dejo para las
+// operaciones todavia no implementadas: mientras una operacion siga devolviendo
+// el error de stub de su issue duena, su caso se saltea; el dia que esa issue le
+// ponga logica, el caso deja de saltearse por si solo y exige el marcador. Con
+// `RegisterUnit` ya implementada por CC-2 (#15) ningun caso lo usa hoy, pero se
+// conserva para las operaciones que CC-3 (#16) y siguientes agreguen a la lista:
+// la invariante queda cubierta por un mecanismo y no por que alguien se acuerde
+// de agregar el caso.
 func TestPublicKeyCreationWritesMarker(t *testing.T) {
 	cases := []struct {
-		name          string
-		responsable   string
-		run           func(t *testing.T, stub *mockStub)
+		name        string
+		responsable string
+		run         func(t *testing.T, stub *mockStub) error
+		// markerOwnerOp es la operacion que debe figurar en el marcador.
 		markerOwnerOp string
+		// pendingOwner, si no es vacio, es la issue duena de la logica
+		// todavia no implementada. El caso se saltea SOLO mientras la
+		// operacion siga devolviendo el error de stub de esa issue.
+		pendingOwner string
 	}{
 		{
 			// Unica de las tres cuya organizacion responsable NO es la
 			// regulatoria: la clave de la unidad la crea el laboratorio.
 			name:        "RegisterUnit",
 			responsable: labMSP,
-			run: func(t *testing.T, stub *mockStub) {
+			run: func(t *testing.T, stub *mockStub) error {
 				registerOrg(t, stub, labMSP, labGLN, domain.AgentLaboratory)
 				contract := new(SNTContract)
 				_, err := contract.RegisterUnit(
 					testContext(stub, labMSP, RoleOperator), validRegisterUnitRequest())
-				requireNoError(t, err)
+				return err
 			},
 			markerOwnerOp: opRegisterUnit,
 		},
 		{
 			name:        "RegisterOrganization",
 			responsable: anmatMSP,
-			run: func(t *testing.T, stub *mockStub) {
+			run: func(_ *testing.T, stub *mockStub) error {
 				contract := new(SNTContract)
 				_, err := contract.RegisterOrganization(
 					testContext(stub, anmatMSP, RoleRegulatoryAdmin),
@@ -399,14 +414,14 @@ func TestPublicKeyCreationWritesMarker(t *testing.T) {
 						MSPID: farmaciaMSP, ID: farmaciaGLN, IDType: IDTypeGLN,
 						AgentType: domain.AgentPharmacy, Active: true,
 					})
-				requireNoError(t, err)
+				return err
 			},
 			markerOwnerOp: opRegisterOrganization,
 		},
 		{
 			name:        "AuthorizeLabIntervention",
 			responsable: anmatMSP,
-			run: func(t *testing.T, stub *mockStub) {
+			run: func(t *testing.T, stub *mockStub) error {
 				registerOrg(t, stub, labMSP, labGLN, domain.AgentLaboratory)
 				seedUnit(t, stub, domain.StateEnCustodia, "GLN:"+drogueriaGLN)
 				contract := new(SNTContract)
@@ -419,7 +434,7 @@ func TestPublicKeyCreationWritesMarker(t *testing.T) {
 						Motivo:      "Retiro de lote, expediente ANMAT 1234/2026.",
 						ExpiraEn:    "2026-09-30T00:00:00Z",
 					})
-				requireNoError(t, err)
+				return err
 			},
 			markerOwnerOp: opAuthorizeLabIntervent,
 		},
@@ -429,7 +444,13 @@ func TestPublicKeyCreationWritesMarker(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stub := newMockStub()
 			seedRegistry(t, stub)
-			tc.run(t, stub)
+			err := tc.run(t, stub)
+
+			if tc.pendingOwner != "" && isStubOf(err, tc.pendingOwner) {
+				t.Skipf("%s todavia es un stub de %s; este caso se activa solo cuando esa issue le ponga logica",
+					tc.name, tc.pendingOwner)
+			}
+			requireNoError(t, err)
 
 			collection := stub.privateData[implicitCollection(tc.responsable)]
 			found := false
@@ -448,4 +469,15 @@ func TestPublicKeyCreationWritesMarker(t *testing.T) {
 			}
 		})
 	}
+}
+
+// isStubOf informa si el error es el que devuelve una operacion declarada pero
+// todavia no implementada por la issue indicada (ver notImplemented).
+func isStubOf(err error, owner string) bool {
+	parsed, ok := cerr.Parse(err)
+	if !ok || parsed.Code != cerr.InternalError {
+		return false
+	}
+	issue, _ := parsed.Details["issue"].(string)
+	return issue == owner
 }

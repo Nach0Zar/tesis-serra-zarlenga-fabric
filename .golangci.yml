@@ -9,12 +9,16 @@ linters:
     - gosec
     - revive
 
-  # misspell queda deshabilitado a proposito. Es un corrector de ingles y la
-  # prosa de este repositorio -- ADRs, documentos de diseno y comentarios de
-  # codigo -- se redacta en espanol por convencion del proyecto
-  # (docs/adr/README.md, "Convenciones"), de modo que marca como error de
-  # tipeo practicamente cada palabra de cada comentario. No admite otra
-  # localizacion que en-US / en-GB.
+  # `misspell` NO se habilita. Solo trae diccionarios de ingles (en_US, en_UK,
+  # en_CA) y la prosa de este repositorio -- comentarios, mensajes de error y
+  # nombres de constantes de dominio -- esta en castellano por decision del
+  # proyecto. El resultado es ruido puro: `transaccion`, `organizacion`,
+  # `implementacion`, `participacion` o `EN_TRANSITO` se reportan como faltas
+  # de ortografia inglesas. Sobre el codigo actual daba mas de 150 hallazgos,
+  # todos falsos positivos, sobre 44 palabras castellanas distintas; la lista
+  # de `ignore-rules` necesaria crecería con cada comentario nuevo y dejaría el
+  # lint en rojo por escribir castellano correcto. `mode: restricted` tampoco
+  # alcanza: se probó y sigue reportando la mayoría.
 
 formatters:
   enable:
