@@ -214,26 +214,21 @@ func (c *SNTContract) ReceiveTransfer(
 	}
 
 	collection := pairCollectionName(emitter.MSPID, invoker.MSPID)
+	// Que la clave no sea legible admite dos causas opuestas, y el contrato les
+	// asigna codigos distintos: o el contenido todavia no se disemino a este
+	// peer (transitorio, reintentable), o en esta coleccion nunca hubo operacion
+	// porque el invocador no es el destinatario declarado (RECEIVER_MISMATCH).
+	// Las separa el hash publico, que existe desde que el despacho se confirma,
+	// en todos los peers y sin depender de la diseminacion del contenido:
+	// readActiveTransferOperation lo consulta ANTES de la lectura privada y
+	// devuelve la falla transitoria ya tipificada, de modo que aca found=false
+	// significa unicamente que no hay operacion.
 	operation, found, err := readActiveTransferOperation(ctx, collection, unit.GTIN, unit.NumeroSerie)
 	if err != nil {
 		return nil, err
 	}
 	if !found {
-		// Que la clave no sea legible admite dos causas opuestas, y el contrato
-		// les asigna codigos distintos: o el contenido todavia no se disemino a
-		// este peer (transitorio, reintentable), o en esta coleccion nunca hubo
-		// operacion porque el invocador no es el destinatario declarado
-		// (RECEIVER_MISMATCH). El hash publico las separa: existe desde que el
-		// despacho se confirma, en todos los peers, sin depender de la
-		// diseminacion del contenido.
-		written, err := activeTransferOperationIsWritten(ctx, collection, unit.GTIN, unit.NumeroSerie)
-		if err != nil {
-			return nil, err
-		}
-		if !written {
-			return nil, receiverMismatchForPair(collection)
-		}
-		return nil, errPrivateDataNotDisseminated(unit.GTIN, unit.NumeroSerie, collection)
+		return nil, receiverMismatchForPair(collection)
 	}
 	if operation.DestinatarioPendiente != invoker.CanonicalID() {
 		return nil, cerr.New(cerr.ReceiverMismatch,
@@ -347,12 +342,15 @@ func (c *SNTContract) RejectTransfer(
 		// El emisor no conoce al destinatario declarado sin leer el registro:
 		// es un dato privado que, por decision de ADR-004, no esta en el estado
 		// publico. Hay que buscarlo entre las colecciones de las que es miembro.
-		var found, written bool
-		operation, collection, found, written, err = findActiveTransferOperation(ctx, unit, invoker)
+		var found bool
+		operation, collection, found, err = findActiveTransferOperation(ctx, unit, invoker)
 		if err != nil {
+			// Incluye la falla TRANSITORIA por dato privado no diseminado, que
+			// findActiveTransferOperation devuelve ya tipificada cuando alguna
+			// coleccion candidata tiene hash pero su contenido no llego.
 			return nil, err
 		}
-		if !written {
+		if !found {
 			// La unidad esta en EN_TRANSITO y el invocador es su custodio, de
 			// modo que por construccion existe una operacion activa en alguna
 			// de sus colecciones (ADR-004, regla 2). Que no haya hash en
@@ -360,9 +358,6 @@ func (c *SNTContract) RejectTransfer(
 			return nil, cerr.New(cerr.InternalError,
 				"la unidad %s/%s esta en EN_TRANSITO sin registro de operacion activa",
 				unit.GTIN, unit.NumeroSerie)
-		}
-		if !found {
-			return nil, errPrivateDataNotDisseminated(unit.GTIN, unit.NumeroSerie, collection)
 		}
 	} else {
 		emitter, err := lookupOrganizationByCanonicalID(ctx, unit.CustodioActual)
@@ -384,14 +379,7 @@ func (c *SNTContract) RejectTransfer(
 			return nil, err
 		}
 		if !found {
-			written, err := activeTransferOperationIsWritten(ctx, collection, unit.GTIN, unit.NumeroSerie)
-			if err != nil {
-				return nil, err
-			}
-			if !written {
-				return nil, receiverMismatchForPair(collection)
-			}
-			return nil, errPrivateDataNotDisseminated(unit.GTIN, unit.NumeroSerie, collection)
+			return nil, receiverMismatchForPair(collection)
 		}
 		if operation.DestinatarioPendiente != invoker.CanonicalID() {
 			return nil, cerr.New(cerr.ReceiverMismatch,
@@ -475,17 +463,14 @@ func CloseTransitForExtraordinaryEvent(
 	invoker Invoker,
 	operation string,
 ) error {
-	op, collection, found, written, err := findActiveTransferOperation(ctx, unit, invoker)
+	op, collection, found, err := findActiveTransferOperation(ctx, unit, invoker)
 	if err != nil {
 		return err
 	}
-	if !written {
+	if !found {
 		return cerr.New(cerr.InternalError,
 			"la unidad %s/%s esta en EN_TRANSITO sin registro de operacion activa",
 			unit.GTIN, unit.NumeroSerie)
-	}
-	if !found {
-		return errPrivateDataNotDisseminated(unit.GTIN, unit.NumeroSerie, collection)
 	}
 
 	if invoker.Org.AgentType == domain.AgentRegulator {

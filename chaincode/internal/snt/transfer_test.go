@@ -2,6 +2,7 @@ package snt
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
@@ -561,12 +562,119 @@ func TestReceiveTransferRetriesOnUndisseminatedPrivateData(t *testing.T) {
 	if parsed.Details["causa"] != "PRIVATE_DATA_NOT_DISSEMINATED" {
 		t.Fatalf("causa = %v", parsed.Details["causa"])
 	}
+	// El diagnostico llega por el camino REAL de Fabric -- la lectura privada
+	// que falla contra un hash confirmado --, no por una lectura que devolvio
+	// vacio. La causa subyacente lo acredita: si el chaincode volviera a
+	// apoyarse en un (nil, nil) inexistente en la plataforma, este detalle no
+	// estaria.
+	if cause, _ := parsed.Details["causaSubyacente"].(string); !strings.Contains(cause, errPvtdataNotAvailable) {
+		t.Fatalf("causaSubyacente = %q; se esperaba el error de lectura privada de Fabric", cause)
+	}
 
 	// Tras la reconciliacion, el reintento tiene exito.
 	stub.privateData[collection][activeKey] = stored
 	_, err = contract.ReceiveTransfer(
 		testContext(stub, drogueriaMSP, RoleOperator),
 		UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+	requireNoError(t, err)
+}
+
+// TestMockStubReproducesFabricPrivateDataSemantics fija la fidelidad del doble
+// de prueba, porque de ella depende que el test anterior pruebe algo.
+//
+// Fabric no se comporta como un mapa: cuando el hash publico de una clave esta
+// confirmado y el contenido privado todavia no llego a este peer, GetPrivateData
+// NO devuelve (nil, nil), falla. Si el mock devolviera vacio, el chaincode
+// podria depender de un camino que en la red real nunca se recorre y los tests
+// de la condicion transitoria pasarian igual.
+func TestMockStubReproducesFabricPrivateDataSemantics(t *testing.T) {
+	stub := newMockStub()
+	const collection, key = "transfer_A_B", "clave"
+
+	// Clave inexistente: ni contenido ni hash. Fabric devuelve vacio sin error.
+	value, err := stub.GetPrivateData(collection, key)
+	if err != nil || value != nil {
+		t.Fatalf("clave inexistente: (%v, %v); se esperaba (nil, nil)", value, err)
+	}
+
+	requireNoError(t, stub.PutPrivateData(collection, key, []byte(`{"ok":true}`)))
+	value, err = stub.GetPrivateData(collection, key)
+	requireNoError(t, err)
+	if string(value) != `{"ok":true}` {
+		t.Fatalf("lectura tras la escritura = %q", value)
+	}
+
+	// Diseminacion pendiente: se va el contenido y queda el hash.
+	stored := stub.hidePrivateData(collection, key)
+	hash, err := stub.GetPrivateDataHash(collection, key)
+	requireNoError(t, err)
+	if len(hash) == 0 {
+		t.Fatal("el hash publico debe sobrevivir a la diseminacion pendiente")
+	}
+	if _, err := stub.GetPrivateData(collection, key); err == nil {
+		t.Fatal("con hash confirmado y contenido ausente, Fabric falla la lectura privada")
+	} else if !strings.Contains(err.Error(), errPvtdataNotAvailable) {
+		t.Fatalf("mensaje de error = %q", err.Error())
+	}
+
+	// Reconciliacion: vuelve el contenido y la lectura se normaliza.
+	requireNoError(t, stub.PutPrivateData(collection, key, stored))
+	value, err = stub.GetPrivateData(collection, key)
+	requireNoError(t, err)
+	if string(value) != string(stored) {
+		t.Fatalf("lectura tras la reconciliacion = %q", value)
+	}
+
+	// Cierre de la operacion: DelPrivateData borra contenido Y hash, de modo que
+	// una operacion cerrada no puede confundirse con una diseminacion pendiente.
+	requireNoError(t, stub.DelPrivateData(collection, key))
+	value, err = stub.GetPrivateData(collection, key)
+	if err != nil || value != nil {
+		t.Fatalf("clave eliminada: (%v, %v); se esperaba (nil, nil)", value, err)
+	}
+}
+
+// TestRejectTransferByEmitterRetriesOnUndisseminatedPrivateData cubre la misma
+// condicion transitoria en el OTRO camino de lectura: el del emisor, que no
+// conoce al destinatario declarado y recorre sus colecciones candidatas con
+// findActiveTransferOperation.
+//
+// Ahi la confusion seria peor que un INTERNAL_ERROR generico: una coleccion con
+// hash confirmado cuyo contenido no llego no debe descartarse como "no hay nada
+// aca" y hacer que el recorrido termine acusando una inconsistencia del ledger.
+func TestRejectTransferByEmitterRetriesOnUndisseminatedPrivateData(t *testing.T) {
+	stub, contract := transferFixture(t)
+	dispatchToDrugstore(t, stub, contract)
+
+	collection := pairCollectionName(labMSP, drogueriaMSP)
+	activeKey, err := transferOpActiveKey(stub, validGTIN, validSerial)
+	requireNoError(t, err)
+	stored := stub.hidePrivateData(collection, activeKey)
+
+	_, err = contract.RejectTransfer(
+		testContext(stub, labMSP, RoleOperator),
+		UnitEventRequest{GTIN: validGTIN, NumeroSerie: validSerial, Motivo: "Error de entrega."})
+
+	parsed, ok := cerr.Parse(err)
+	if !ok {
+		t.Fatalf("error sin el formato del contrato: %v", err)
+	}
+	if parsed.Code != cerr.InternalError {
+		t.Fatalf("codigo = %s", parsed.Code)
+	}
+	if parsed.Details["reintentable"] != true || parsed.Details["causa"] != "PRIVATE_DATA_NOT_DISSEMINATED" {
+		t.Fatalf("la falla transitoria del emisor no quedo tipificada: %+v; mensaje: %s",
+			parsed.Details, parsed.Message)
+	}
+	if parsed.Details["coleccion"] != collection {
+		t.Fatalf("coleccion = %v, se esperaba %s", parsed.Details["coleccion"], collection)
+	}
+
+	// Tras la reconciliacion, el reintento tiene exito.
+	requireNoError(t, stub.PutPrivateData(collection, activeKey, stored))
+	_, err = contract.RejectTransfer(
+		testContext(stub, labMSP, RoleOperator),
+		UnitEventRequest{GTIN: validGTIN, NumeroSerie: validSerial, Motivo: "Error de entrega."})
 	requireNoError(t, err)
 }
 

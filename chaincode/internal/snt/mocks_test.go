@@ -96,8 +96,33 @@ func (s *mockStub) DelState(key string) error {
 	return nil
 }
 
+// errPvtdataNotAvailable reproduce el mensaje con el que Fabric rechaza la
+// lectura privada de una clave cuyo hash publico esta confirmado pero cuyo
+// contenido este peer todavia no tiene. No es una invencion del mock: el query
+// helper del peer compara la version del hash con la del dato privado y, si
+// difieren, devuelve un ErrPvtdataNotAvailable con este texto.
+const errPvtdataNotAvailable = "private data matching public hash version is not available"
+
+// GetPrivateData reproduce la semantica REAL de Fabric, que no es la de un mapa:
+//
+//   - sin hash y sin contenido, la clave no existe y la lectura devuelve vacio
+//     sin error;
+//   - con hash confirmado en el estado publico y sin contenido en este peer, la
+//     lectura FALLA. Es el caso de la diseminacion pendiente de ADR-006 punto 1.
+//
+// Devolver (nil, nil) en el segundo caso -- como haria un mapa vacio -- dejaria
+// que el chaincode pareciera manejar la condicion transitoria cuando en la red
+// real nunca llegaria a ese camino: el error de lectura lo desviaria antes. El
+// mock reproduce la falla justamente para que el test no pueda pasar por esa
+// via.
 func (s *mockStub) GetPrivateData(collection, key string) ([]byte, error) {
-	return s.privateData[collection][key], nil
+	if value, ok := s.privateData[collection][key]; ok {
+		return value, nil
+	}
+	if len(s.privateHash[collection][key]) > 0 {
+		return nil, errors.New(errPvtdataNotAvailable)
+	}
+	return nil, nil
 }
 
 func (s *mockStub) PutPrivateData(collection, key string, value []byte) error {

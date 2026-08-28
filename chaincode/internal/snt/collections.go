@@ -129,9 +129,28 @@ func putActiveTransferOperation(
 }
 
 // readActiveTransferOperation lee el registro de la operacion activa de una
-// coleccion. Devuelve found=false cuando la clave no es legible desde este peer,
-// condicion que el llamador debe interpretar segun su contexto: ver
-// errPrivateDataNotDisseminated.
+// coleccion resolviendo, en el mismo paso, la ambiguedad que ADR-006 (punto 1)
+// obliga a distinguir:
+//
+//   - found=false con err nil: el ledger PUBLICO no registra ninguna escritura
+//     viva de la clave en esa coleccion. Es concluyente y vale en todos los
+//     peers: aca nunca hubo operacion activa. Que codigo del contrato
+//     corresponde a esa ausencia lo decide el llamador segun su contexto;
+//   - err = errPrivateDataNotDisseminated: el hash publico existe pero el
+//     contenido privado todavia no es legible desde este peer. Es la condicion
+//     TRANSITORIA y reintentable;
+//   - found=true: el registro esta disponible.
+//
+// El orden de las dos consultas no es intercambiable, y es la razon por la que
+// esta decision vive aca dentro y no en el llamador. Fabric NO devuelve
+// (nil, nil) cuando el hash esta confirmado y el dato privado todavia no llego:
+// el query helper del peer compara la version del hash publico con la del dato
+// privado y, si difieren, la lectura falla con `private data matching public
+// hash version is not available`. Consultar el hash DESPUES de una lectura
+// privada que se asumia vacia nunca llegaria a ejecutarse: el error de la
+// lectura sepultaria la condicion transitoria bajo un INTERNAL_ERROR generico,
+// indistinguible de cualquier otra falla de plataforma -- exactamente lo que
+// ADR-006 y esta issue exigen separar.
 func readActiveTransferOperation(
 	ctx contractapi.TransactionContextInterface,
 	collection, gtin, numeroSerie string,
@@ -140,13 +159,29 @@ func readActiveTransferOperation(
 	if err != nil {
 		return TransferOperation{}, false, cerr.Internal(err, "no se pudo construir la clave del registro de operacion activa")
 	}
-	raw, err := ctx.GetStub().GetPrivateData(collection, key)
+
+	written, err := activeTransferOperationIsWritten(ctx, collection, gtin, numeroSerie)
 	if err != nil {
-		return TransferOperation{}, false, cerr.Internal(err, "no se pudo leer el registro de operacion de la coleccion del par")
+		return TransferOperation{}, false, err
 	}
-	if raw == nil {
+	if !written {
 		return TransferOperation{}, false, nil
 	}
+
+	raw, err := ctx.GetStub().GetPrivateData(collection, key)
+	if err != nil {
+		// Hay hash confirmado en el estado publico y la lectura privada falla:
+		// desde este peer el contenido no esta disponible todavia. La causa
+		// subyacente viaja en los detalles para no perder diagnostico.
+		return TransferOperation{}, false, errPrivateDataNotDisseminated(gtin, numeroSerie, collection, err)
+	}
+	if raw == nil {
+		// Con el hash escrito Fabric no deberia devolver vacio sin error, pero
+		// si lo hiciera el significado seria el mismo: la operacion existe y
+		// este peer no la ve.
+		return TransferOperation{}, false, errPrivateDataNotDisseminated(gtin, numeroSerie, collection, nil)
+	}
+
 	var op TransferOperation
 	if err := json.Unmarshal(raw, &op); err != nil {
 		return TransferOperation{}, false, cerr.Internal(err, "registro de operacion corrupto")
@@ -210,6 +245,9 @@ func closeTransferOperation(
 // Es la pieza que permite distinguir dos situaciones que, mirando solo el
 // contenido privado, son indistinguibles: "la operacion existe pero su
 // contenido todavia no llego a este peer" y "aca nunca hubo ninguna operacion".
+// La consulta readActiveTransferOperation, que es la unica que la usa, la
+// ejecuta ANTES de la lectura privada, porque despues ya seria tarde: ver el
+// comentario de esa funcion.
 // Fabric persiste, por cada escritura privada, el hash de clave y valor en el
 // estado publico del canal (ADR-006, punto 6), y GetPrivateDataHash lo lee sin
 // exigir membresia en la coleccion ni que el dato se haya diseminado.
@@ -273,8 +311,10 @@ func pairCollectionExists(a, b OrganizationRecord) (bool, error) {
 // el hash existe desde que el despacho se confirma, en todos los peers y sin
 // depender de la diseminacion, de modo que la busqueda es determinística y
 // distingue "esta es la coleccion pero todavia no tengo el contenido" de "aca
-// no hay ninguna operacion". Devuelve `written` para que el llamador pueda
-// separar la falla transitoria del caso en que no existe operacion alguna.
+// no hay ninguna operacion". Esa separacion la resuelve
+// readActiveTransferOperation, que devuelve la falla transitoria ya tipificada;
+// aqui found=false significa unicamente que NINGUNA coleccion candidata
+// registra una operacion activa de la unidad.
 //
 // La recepcion NO usa esta funcion: ahi la contraparte se deriva del custodio
 // publico y basta una lectura, que es lo que corresponde en el camino que mide
@@ -283,10 +323,10 @@ func findActiveTransferOperation(
 	ctx contractapi.TransactionContextInterface,
 	unit MedicationUnit,
 	invoker Invoker,
-) (op TransferOperation, collection string, found, written bool, err error) {
+) (op TransferOperation, collection string, found bool, err error) {
 	orgs, listErr := listOrganizations(ctx)
 	if listErr != nil {
-		return TransferOperation{}, "", false, false, listErr
+		return TransferOperation{}, "", false, listErr
 	}
 	sort.Slice(orgs, func(i, j int) bool { return orgs[i].MSPID < orgs[j].MSPID })
 
@@ -317,7 +357,7 @@ func findActiveTransferOperation(
 		for i := range orgs {
 			for j := i + 1; j < len(orgs); j++ {
 				if err := addCandidate(orgs[i], orgs[j]); err != nil {
-					return TransferOperation{}, "", false, false, err
+					return TransferOperation{}, "", false, err
 				}
 			}
 		}
@@ -327,28 +367,26 @@ func findActiveTransferOperation(
 				continue
 			}
 			if err := addCandidate(invoker.Org, org); err != nil {
-				return TransferOperation{}, "", false, false, err
+				return TransferOperation{}, "", false, err
 			}
 		}
 	}
 
-	// Primera pasada sobre el estado publico: el hash dice en que coleccion vive
-	// la operacion, exista o no el contenido en este peer.
+	// Cada candidata se resuelve consultando primero el hash publico: una
+	// coleccion sin hash se descarta sin intentar la lectura privada, y una con
+	// hash cuyo contenido todavia no llego a este peer corta el recorrido con la
+	// falla transitoria tipificada en lugar de disfrazarse de "no hay nada aca".
 	for _, candidate := range candidates {
-		hasHash, err := activeTransferOperationIsWritten(ctx, candidate, unit.GTIN, unit.NumeroSerie)
-		if err != nil {
-			return TransferOperation{}, "", false, false, err
-		}
-		if !hasHash {
-			continue
-		}
 		stored, ok, err := readActiveTransferOperation(ctx, candidate, unit.GTIN, unit.NumeroSerie)
 		if err != nil {
-			return TransferOperation{}, "", false, false, err
+			return TransferOperation{}, candidate, false, err
 		}
-		return stored, candidate, ok, true, nil
+		if !ok {
+			continue
+		}
+		return stored, candidate, true, nil
 	}
-	return TransferOperation{}, "", false, false, nil
+	return TransferOperation{}, "", false, nil
 }
 
 // errPrivateDataNotDisseminated describe la falla TRANSITORIA que ADR-006
@@ -367,21 +405,29 @@ func findActiveTransferOperation(
 // INTERNAL_ERROR con el detalle `reintentable: true`, que es lo que distingue
 // este caso de RECEIVER_MISMATCH o NOT_IN_TRANSIT en logs y evidencia.
 //
-// El llamador debe haber comprobado antes, con activeTransferOperationIsWritten,
-// que el ledger publico registra la operacion en esa coleccion. Sin esa
-// comprobacion este error se devolveria tambien a un invocador que no es el
-// destinatario declarado -- su lectura tambien da vacio --, y el contrato exige
-// ahi RECEIVER_MISMATCH: un rechazo definitivo, no un reintento.
-func errPrivateDataNotDisseminated(gtin, numeroSerie, collection string) error {
+// Solo readActiveTransferOperation lo construye, y unicamente despues de haber
+// comprobado que el ledger publico registra la operacion en esa coleccion. Sin
+// esa comprobacion previa este error se devolveria tambien a un invocador que no
+// es el destinatario declarado -- su lectura tambien queda vacia --, y el
+// contrato exige ahi RECEIVER_MISMATCH: un rechazo definitivo, no un reintento.
+//
+// `cause` es el error de plataforma que provoco el diagnostico, cuando lo hubo.
+// Viaja en los detalles para no perder el mensaje original de Fabric: el cliente
+// ramifica sobre `causa`, que es estable, y el operador lee `causaSubyacente`.
+func errPrivateDataNotDisseminated(gtin, numeroSerie, collection string, cause error) error {
+	details := map[string]any{
+		"reintentable": true,
+		"causa":        "PRIVATE_DATA_NOT_DISSEMINATED",
+		"coleccion":    collection,
+		"gtin":         gtin,
+		"numeroSerie":  numeroSerie,
+	}
+	if cause != nil {
+		details["causaSubyacente"] = cause.Error()
+	}
 	return cerr.New(cerr.InternalError,
 		"el registro de la operacion de la unidad %s/%s todavia no es legible desde este peer; "+
 			"reintentar hasta que la diseminacion o la reconciliacion de datos privados lo entregue",
 		gtin, numeroSerie).
-		WithDetails(map[string]any{
-			"reintentable": true,
-			"causa":        "PRIVATE_DATA_NOT_DISSEMINATED",
-			"coleccion":    collection,
-			"gtin":         gtin,
-			"numeroSerie":  numeroSerie,
-		})
+		WithDetails(details)
 }
