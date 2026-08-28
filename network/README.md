@@ -4,7 +4,7 @@ Este directorio contiene la configuración de la red Hyperledger Fabric del prot
 
 ## Inventario de organizaciones
 
-`organizations-manifest.json` es el inventario versionado compartido por la configuración criptográfica y los futuros consumidores de privacidad y bootstrap, según [ADR-010](../docs/adr/010-non-custodial-identity.md). `organizations-manifest.schema.json` usa JSON Schema Draft 2020-12 y cierra el formato con `additionalProperties: false`.
+`organizations-manifest.json` es el inventario versionado compartido por la configuración criptográfica, la generación de colecciones y el bootstrap, según [ADR-010](../docs/adr/010-non-custodial-identity.md). `organizations-manifest.schema.json` usa JSON Schema Draft 2020-12 y cierra el formato con `additionalProperties: false`.
 
 | MSP | Slug | Identidad | Tipo de agente | Rol del usuario | Orderer |
 |---|---|---|---|---|---|
@@ -22,9 +22,10 @@ El validador aplica el schema y además comprueba unicidad de MSP, slugs, identi
 
 La generación requiere:
 
-- Bash, `jq`, OpenSSL, Python 3, GNU coreutils y utilidades POSIX usadas por los scripts;
+- Bash, `jq`, OpenSSL, Python 3, Go, GNU coreutils y utilidades POSIX usadas por los scripts;
 - los módulos Python `jsonschema` con soporte Draft 2020-12 y `PyYAML`;
 - `fabric-ca-server` y `fabric-ca-client` versión exacta `1.5.17`.
+- `peer`, `osnadmin`, `configtxgen` y `configtxlator` de Fabric `2.5.16`.
 
 Para las verificaciones de desarrollo también se usan `shellcheck` y `configtxgen`. El bloque de canal fue validado con Fabric `2.5.16`.
 
@@ -54,6 +55,99 @@ FABRIC_CFG_PATH="$PWD" configtxgen \
   -outputBlock /tmp/snt-channel.block
 configtxgen -inspectBlock /tmp/snt-channel.block
 ```
+
+## Operación de la red y lifecycle
+
+Los comandos de NET-4 se ejecutan desde la raíz. Si los binarios no están en
+`PATH`, se indican explícitamente; el segundo directorio debe contener
+`core.yaml`:
+
+```bash
+export SNT_FABRIC_BIN_DIR=/ruta/a/fabric-samples/bin
+export SNT_FABRIC_CFG_PATH=/ruta/a/fabric-samples/config
+
+./network/network.sh up
+./network/network.sh createChannel
+./network/network.sh deployCC
+./network/network.sh verify
+./network/network.sh restart
+./network/network.sh down
+```
+
+`up` valida manifiesto, colecciones, material criptográfico y Compose antes de
+esperar que los once servicios estén saludables. `createChannel` genera el
+bloque bajo `build/network/`, incorpora por separado los tres orderers con
+`osnadmin`, une los siete peers y verifica consenters activos, membresía y
+acceso al ordering service. Cada llamada administrativa usa el certificado TLS
+del orderer y la raíz de su propia organización; no presupone una identidad
+mTLS compartida.
+
+`down` conserva los volúmenes del ledger y todos los comandos detectan el
+estado ya alcanzado. Una definición, aprobación o paquete incompatible produce
+un error en lugar de reemplazarse. Para descartar también el ledger de una red
+de desarrollo debe ejecutarse de forma deliberada
+`docker compose -f network/compose.yaml down --volumes`; esa operación no
+forma parte del wrapper idempotente.
+
+### Paquete bloqueado y bootstrap
+
+`network/chaincode-package.lock` registra label, versión, `packageID` y
+SHA-256. `deployCC` construye una vez el paquete, verifica el lock, distribuye
+el mismo tar y guarda `queryinstalled` y `queryapproved` antes de `Init`.
+Cuando cambie legítimamente el contenido del paquete:
+
+```bash
+./network/network.sh package-lock
+git diff -- network/chaincode-package.lock
+```
+
+La actualización del lock es una decisión explícita de mantenimiento; no ocurre
+como efecto colateral de `deployCC`.
+
+El despliegue tiene dos definiciones:
+
+1. secuencia 1, versión `1.0`, las colecciones generadas,
+   `--init-required` y `AND` de las siete organizaciones;
+2. `Init` sin argumentos desde la identidad regulatoria y alta del seed;
+3. secuencia 2 con el mismo paquete y versión, sin `--init-required`, y
+   `OR` del regulador y las organizaciones custodiales derivadas de la
+   matriz;
+4. alta mediante `RegisterOrganization` de las otras seis organizaciones,
+   incluido el financiador.
+
+Si se confirmó una secuencia 1 con un paquete incorrecto antes de `Init`, se
+debe crear y bloquear un paquete nuevo y continuar con nuevas secuencias
+lifecycle. Si un `Init` incorrecto ya fue confirmado, hace falta reiniciar el
+ledger descartable o tomar una decisión de gobernanza; el script no sustituye
+al regulador.
+
+## Colecciones privadas y evidencia
+
+`collections_config.json` se genera exclusivamente desde el manifiesto y
+`domain/authorized-transfers.json`:
+
+```bash
+python3 network/scripts/generate-collections.py
+python3 network/scripts/generate-collections.py --check
+python3 -m unittest discover -s network/tests -v
+```
+
+El archivo actual contiene diez colecciones. No debe editarse manualmente. Para
+probar lectura pública, privacidad, reconciliación, endoso y filtración del
+nombre de colección en el bloque se usa un chaincode descartable, separado del
+contrato `snt`:
+
+```bash
+./test/integration/pdc-evidence.sh
+```
+
+La evidencia completa queda en `build/evidence/` y no se versiona. Los
+resúmenes sanitizados están en `network/evidence/`.
+
+Un onboarding que agregue una organización custodial requiere actualizar
+manifiesto y canal, regenerar las colecciones, reconstruir y bloquear el
+paquete, y aprobar una nueva secuencia lifecycle antes de ejecutar
+`RegisterOrganization`.
 
 ## Material generado
 
@@ -95,4 +189,7 @@ El proceso implementa el mecanismo `cafiles` soportado por Fabric CA: un único 
 
 ## Fuera de alcance
 
-NET-1 no define Docker Compose, puertos definitivos de peers u orderers, Private Data Collections, lifecycle de chaincode, bootstrap del ledger ni políticas de endoso. Esas responsabilidades permanecen en NET-3 a NET-6 y en sus ADR correspondientes.
+El probe de integración demuestra la semántica de PDC de la red, pero no
+implementa `DispatchTransfer`, `ReceiveTransfer` ni `RejectTransfer`;
+esas operaciones permanecen en CC-3. La evidencia exhaustiva de SBE y
+marcadores del chaincode productivo permanece en NET-6.

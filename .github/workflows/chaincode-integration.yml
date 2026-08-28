@@ -1,4 +1,4 @@
-name: Chaincode Integration Test
+name: Fabric Network Integration
 
 on:
   pull_request:
@@ -13,66 +13,29 @@ on:
     paths:
       - "chaincode/**"
       - "domain/**"
+      - "network/**"
       - "test/integration/**"
-      - "go.work"
-      - "go.work.sum"
+      - "test/fixtures/pdc-probe/**"
       - ".github/workflows/chaincode-integration.yml"
-
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: chaincode-integration-${{ github.event.pull_request.number || github.ref }}
+  group: fabric-network-integration-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
-  # Versiones fijadas para evitar que el pipeline cambie inesperadamente.
   FABRIC_VERSION: "2.5.16"
   FABRIC_CA_VERSION: "1.5.17"
-
-  # NET-4 (#23) migra este valor a "snt-channel" cuando la red propia del
-  # prototipo reemplace a fabric-samples/test-network (ADR-007, punto 4).
-  CHANNEL_NAME: "mychannel"
-  CHAINCODE_NAME: "snt"
-  CHAINCODE_VERSION: "1.0"
-  CHAINCODE_SEQUENCE: "1"
+  SNT_CHANNEL_NAME: "snt-channel"
 
 jobs:
-  preflight:
-    name: Detect chaincode module and e2e script
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      ready: ${{ steps.detect.outputs.ready }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      # Ambos artefactos los entrega CC-1 (#14): el modulo Go del chaincode y el
-      # smoke test de despliegue. El preflight se conserva para que el workflow
-      # no quede en rojo si alguna rama de trabajo todavia no los tiene.
-      - name: Detect prerequisites
-        id: detect
-        shell: bash
-        run: |
-          if [[ -f chaincode/go.mod && -f test/integration/chaincode-e2e.sh ]]; then
-            echo "ready=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "ready=false" >> "${GITHUB_OUTPUT}"
-            echo "::notice::Falta chaincode/go.mod o test/integration/chaincode-e2e.sh (CC-1, #14); el escenario de integracion se habilita solo cuando existan ambos."
-          fi
-
   integration-test:
-    needs: preflight
-    if: needs.preflight.outputs.ready == 'true'
-    name: Fabric network integration
+    name: snt-channel lifecycle and PDC
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
@@ -85,85 +48,80 @@ jobs:
         with:
           go-version-file: chaincode/go.mod
           cache: true
-          cache-dependency-path: chaincode/go.sum
+          cache-dependency-path: |
+            chaincode/go.sum
+            test/fixtures/pdc-probe/go.sum
+
+      - name: Install Python validators
+        run: python3 -m pip install --disable-pip-version-check jsonschema==4.25.1 PyYAML==6.0.2
 
       - name: Verify Docker
         run: |
           docker version
           docker compose version
 
-      - name: Download Fabric samples, binaries and images
+      - name: Download Fabric binaries, samples and images
         shell: bash
         run: |
           set -Eeuo pipefail
-
           FABRIC_DIR="${RUNNER_TEMP}/fabric"
           mkdir -p "${FABRIC_DIR}"
           cd "${FABRIC_DIR}"
-
-          curl \
-            --fail \
-            --silent \
-            --show-error \
-            --location \
-            --output install-fabric.sh \
-            "https://raw.githubusercontent.com/hyperledger/fabric/v${FABRIC_VERSION}/scripts/install-fabric.sh"
-
+          curl --fail --silent --show-error --location --output install-fabric.sh "https://raw.githubusercontent.com/hyperledger/fabric/v${FABRIC_VERSION}/scripts/install-fabric.sh"
           chmod +x install-fabric.sh
-
-          ./install-fabric.sh \
-            --fabric-version "${FABRIC_VERSION}" \
-            --ca-version "${FABRIC_CA_VERSION}" \
-            samples binary docker
-
-          test -x fabric-samples/test-network/network.sh
+          ./install-fabric.sh --fabric-version "${FABRIC_VERSION}" --ca-version "${FABRIC_CA_VERSION}" samples binary docker
           test -x fabric-samples/bin/peer
+          test -x fabric-samples/bin/osnadmin
+          test -x fabric-samples/bin/fabric-ca-server
 
-      - name: Start Fabric network and create channel
+      - name: Configure Fabric CLI
+        shell: bash
+        run: |
+          echo "${RUNNER_TEMP}/fabric/fabric-samples/bin" >> "${GITHUB_PATH}"
+          echo "SNT_FABRIC_BIN_DIR=${RUNNER_TEMP}/fabric/fabric-samples/bin" >> "${GITHUB_ENV}"
+          echo "SNT_FABRIC_CFG_PATH=${RUNNER_TEMP}/fabric/fabric-samples/config" >> "${GITHUB_ENV}"
+
+      - name: Validate generated inputs and scripts
         shell: bash
         run: |
           set -Eeuo pipefail
+          python3 network/scripts/validate-organizations-manifest.py
+          python3 network/scripts/generate-collections.py --check
+          python3 -m unittest discover -s network/tests -v
+          bash -n network/network.sh test/integration/pdc-evidence.sh
+          shellcheck network/network.sh test/integration/pdc-evidence.sh
 
-          TEST_NETWORK_DIR="${RUNNER_TEMP}/fabric/fabric-samples/test-network"
-
-          cd "${TEST_NETWORK_DIR}"
-
-          # Asegura un ambiente limpio ante cualquier estado residual.
-          ./network.sh down
-
-          ./network.sh up createChannel \
-            -c "${CHANNEL_NAME}"
-
-      # El ciclo de lifecycle NO se delega en `network.sh deployCC`: esa via no
-      # admite --init-required sin invocar ademas la funcion de init, y el
-      # smoke test necesita el despliegue con --init-required y una invocacion
-      # de Init cuyo rechazo tipificado es, precisamente, la evidencia buscada
-      # (ADR-007 punto 5.c; ADR-010 punto 4). El script hace package, install,
-      # approve, commit e invoke. Ver su encabezado.
-      - name: Deploy chaincode and run CC-1 smoke test
+      - name: Generate cryptographic material
         shell: bash
-        env:
-          TEST_NETWORK_DIR: ${{ runner.temp }}/fabric/fabric-samples/test-network
+        run: ./network/scripts/generate-crypto.sh
+
+      - name: Start network and create channel
+        shell: bash
         run: |
-          chmod +x test/integration/chaincode-e2e.sh
-          ./test/integration/chaincode-e2e.sh
+          ./network/network.sh up
+          ./network/network.sh createChannel
+
+      - name: Deploy snt and execute PDC evidence
+        shell: bash
+        run: |
+          ./network/network.sh deployCC
+          ./test/integration/pdc-evidence.sh
+
+      - name: Verify restart and idempotence
+        shell: bash
+        run: |
+          ./network/network.sh restart
+          ./network/network.sh createChannel
+          ./network/network.sh deployCC
+          ./network/network.sh verify
 
       - name: Show diagnostics on failure
         if: failure()
         shell: bash
         run: |
-          echo "=============================="
-          echo "Docker containers"
-          echo "=============================="
           docker ps --all || true
-
-          echo "=============================="
-          echo "Container logs"
-          echo "=============================="
-
           while read -r container_id; do
             if [[ -n "${container_id}" ]]; then
-              echo
               echo "----- ${container_id} -----"
               docker logs "${container_id}" || true
             fi
@@ -172,10 +130,4 @@ jobs:
       - name: Shut down Fabric network
         if: always()
         shell: bash
-        run: |
-          TEST_NETWORK_DIR="${RUNNER_TEMP}/fabric/fabric-samples/test-network"
-
-          if [[ -d "${TEST_NETWORK_DIR}" ]]; then
-            cd "${TEST_NETWORK_DIR}"
-            ./network.sh down || true
-          fi
+        run: ./network/network.sh down || true
