@@ -145,6 +145,12 @@ contrato `snt`:
 ./test/integration/pdc-evidence.sh
 ```
 
+Al detener temporalmente al receptor puede existir una ventana en la que
+gossip todavía lo considere disponible y el endorser rechace la diseminación
+privada. El probe reintenta de forma acotada solamente ese error transitorio;
+cualquier otro fallo aborta de inmediato. Todos los intentos y sus códigos de
+salida quedan en `build/evidence/net-5/explicit-dispatch.txt`.
+
 La evidencia completa queda en `build/evidence/` y no se versiona. En cada
 ejecución el probe genera `sanitized-block-excerpt.json`, limitado al encabezado
 del bloque, identificadores y hashes del rwset. Los resúmenes sanitizados y un

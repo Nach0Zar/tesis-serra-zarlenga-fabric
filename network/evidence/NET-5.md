@@ -23,6 +23,7 @@ Resultado: 10 colecciones explicitas deterministicas. Cada una representa un par
 - El estado publico minimo fue consultado desde las siete organizaciones.
 - Drogueria, farmacia y ANMAT leyeron el dato privado; `DistribuidorMSP` recibio denegacion de lectura por no pertenecer a la coleccion.
 - La farmacia estuvo detenida durante el despacho. Tras reiniciarla obtuvo el dato privado mediante reconciliacion.
+- En la validacion posterior del fix de CI, el bloque 44 reprodujo la carrera de gossip: el primer intento de despacho fallo por diseminacion privada y el segundo confirmo la transaccion. El reintento quedo limitado a ese error y ambos estados se conservaron en la evidencia cruda.
 - En los bloques 32, 36 y 40 decodificados aparece el nombre de la coleccion en claro y no aparece el payload privado; los dos ultimos corresponden a reejecuciones posteriores a reinicios de la red.
 - El extracto citable del bloque 40 se versiona en [`NET-5-block-40.json`](NET-5-block-40.json). Conserva numero y hashes de bloque, `txID`, timestamp, chaincode, nombre de coleccion, hashed rwset y hash del private rwset. SHA-256 del archivo: `4dba017c39ea34d9f8500a0bb18e66cad371e0cdaa74170d7399faf51b9acfe8`.
 - Una escritura endosada solamente por ANMAT fue invalidada con `ENDORSEMENT_POLICY_FAILURE` y no modifico el estado publico.

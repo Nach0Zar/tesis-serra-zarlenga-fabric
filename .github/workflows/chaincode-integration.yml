@@ -88,8 +88,9 @@ jobs:
           python3 network/scripts/validate-organizations-manifest.py
           python3 network/scripts/generate-collections.py --check
           python3 -m unittest discover -s network/tests -v
-          bash -n network/network.sh test/integration/pdc-evidence.sh
-          shellcheck network/network.sh test/integration/pdc-evidence.sh
+          ./network/tests/test-pdc-evidence-retry.sh
+          bash -n network/network.sh test/integration/pdc-evidence.sh network/tests/test-pdc-evidence-retry.sh
+          shellcheck network/network.sh test/integration/pdc-evidence.sh network/tests/test-pdc-evidence-retry.sh
 
       - name: Generate cryptographic material
         shell: bash

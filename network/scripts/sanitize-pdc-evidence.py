@@ -105,7 +105,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--collection", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--forbidden-value")
+    parser.add_argument("--forbidden-value", required=True)
     return parser.parse_args()
 
 
@@ -113,7 +113,7 @@ def main() -> int:
     args = parse_args()
     try:
         raw = args.input.read_text(encoding="utf-8")
-        if args.forbidden_value and args.forbidden_value in raw:
+        if args.forbidden_value in raw:
             raise SanitizationError("decoded block contains the forbidden private value")
         block = json.loads(raw)
         if not isinstance(block, dict):
