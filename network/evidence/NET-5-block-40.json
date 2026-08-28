@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0.0",
+  "channelId": "snt-channel",
+  "blockNumber": 40,
+  "blockDataHash": "l+7WdQMlyaw6wImX59NklfrqUJBe5eTwQrz/zsX5SFc=",
+  "previousBlockHash": "B8klzA318RXFCQogsuTdewz0dfFdzEMYW7npmvJ2oHE=",
+  "transactionId": "fa54e3d03423097a91a03c71f42feac0434be0c6710193125ced8ad8df1d8582",
+  "transactionTimestamp": "2026-08-28T12:04:05.505467759Z",
+  "chaincodeName": "pdc-probe",
+  "collectionName": "transfer_DrogueriaMSP_FarmaciaMSP",
+  "hashedReadWriteSet": "EkQKIJUAsH6Hp1kSjcUZ3yIuJeloMAk1fuopAGIFdBEQkLPuGiBT8I/gZ2QbHGzaDXDvYB6UbXg0Lx6tF0HKtVbW6hSeeg==",
+  "privateReadWriteSetHash": "RAiHD6MTNFfR9L5ClgUj1TSCYNIIHdKR2AuCDu3GGMU=",
+  "assertions": {
+    "collectionNameVisible": true,
+    "privatePayloadIncluded": false
+  }
+}
