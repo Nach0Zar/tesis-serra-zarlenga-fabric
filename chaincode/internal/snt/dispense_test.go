@@ -160,6 +160,67 @@ func TestDispenseAuthorizationRejections(t *testing.T) {
 	}
 }
 
+// TestDispenseRejectsInactiveDispenser cubre la condicion que #17 enuncia
+// explicitamente -- la organizacion dispensadora debe tener `active=true` -- y
+// que DES-6 impone a toda organizacion custodial.
+//
+// Tiene test propio, y no queda subsumido en la tabla de rechazos de
+// autorizacion, por dos razones. La primera es que es un criterio de aceptacion
+// declarado de CC-4, no una rama interna cubierta de rebote. La segunda es que
+// el escenario solo es concluyente si la desactivacion ocurre por la VIA REAL:
+// una farmacia registrada, habilitada, custodia de la unidad y con rol
+// operador, a la que la organizacion regulatoria da de baja con
+// SetOrganizationActive. Marcar `active=false` escribiendo el registro a mano
+// probaria que readOrganization lee un booleano, no que el circuito de baja
+// regulatoria efectivamente inhabilita a dispensar.
+//
+// Se verifica ademas que el rechazo NO deje escritura sobre la unidad: una
+// dispensa rechazada no puede haber mutado el estado ni la ultima
+// actualizacion.
+func TestDispenseRejectsInactiveDispenser(t *testing.T) {
+	stub, contract := dispenseFixture(t, "GLN:"+farmaciaGLN)
+
+	before, err := readUnit(testContext(stub, farmaciaMSP, RoleOperator), validGTIN, validSerial)
+	requireNoError(t, err)
+	if before.Estado != domain.StateEnCustodia {
+		t.Fatalf("la premisa del caso exige la unidad en EN_CUSTODIA, esta en %s", before.Estado)
+	}
+
+	// Baja por el circuito regulatorio, no escribiendo el registro a mano.
+	if _, err := contract.SetOrganizationActive(
+		testContext(stub, anmatMSP, RoleRegulatoryAdmin),
+		SetOrganizationActiveRequest{MSPID: farmaciaMSP, Active: false}); err != nil {
+		t.Fatalf("SetOrganizationActive: %v", err)
+	}
+
+	_, err = contract.Dispense(
+		testContext(stub, farmaciaMSP, RoleOperator),
+		UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+	requireCode(t, err, cerr.OrgInactive)
+
+	after, err := readUnit(testContext(stub, anmatMSP, RoleRegulatoryAdmin), validGTIN, validSerial)
+	requireNoError(t, err)
+	if after != before {
+		t.Fatalf("la dispensa rechazada dejo escritura sobre la unidad:\n  antes:   %+v\n  despues: %+v",
+			before, after)
+	}
+
+	// Rehabilitada por la misma via, la dispensa procede: lo que bloqueaba era
+	// la habilitacion y no un efecto colateral del intento fallido.
+	if _, err := contract.SetOrganizationActive(
+		testContext(stub, anmatMSP, RoleRegulatoryAdmin),
+		SetOrganizationActiveRequest{MSPID: farmaciaMSP, Active: true}); err != nil {
+		t.Fatalf("SetOrganizationActive (rehabilitacion): %v", err)
+	}
+	view, err := contract.Dispense(
+		testContext(stub, farmaciaMSP, RoleOperator),
+		UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+	requireNoError(t, err)
+	if view.Estado != domain.StateDispensado {
+		t.Fatalf("estado tras rehabilitar = %s", view.Estado)
+	}
+}
+
 // TestDispenseRejectsBlockingAndNonCustodyStates recorre TODOS los estados de
 // ADR-001 distintos de EN_CUSTODIA y exige que ninguno admita T06. Una unidad
 // vencida, en cuarentena, retirada, prohibida, robada, extraviada, deteriorada

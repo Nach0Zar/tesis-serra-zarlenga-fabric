@@ -180,6 +180,14 @@ CC-6 (#19) es dueña de la batería:
 
 Los mocks embeben la interfaz de Fabric en lugar de implementarla entera: un método que un test use sin estar implementado entra en pánico de forma evidente, en vez de devolver un cero silencioso.
 
+### Lo que la implementación devuelve vs. lo que el contrato declara
+
+`TestProducedErrorsAreDeclaredByTheContract` cierra un hueco que las otras comprobaciones dejaban abierto entre sí: `TestErrorCatalogIsCovered` exige que cada código del catálogo tenga **algún** escenario, sin mirar de qué operación sale, y `TestContractSignaturesMatchFrozenContract` compara firmas, no errores. Entre las dos, una operación podía devolver de forma estable un código que su sección del contrato no nombraba.
+
+Es exactamente lo que le pasaba a `Dispense` y a `RejectTransfer` con `ORG_NOT_REGISTERED` y `ORG_INACTIVE` hasta la v2.6.2: ambas resuelven la identidad del invocador contra el registro de ADR-003 —lo exigen #17 y DES-6— y por lo tanto pueden rechazar porque la organización no tiene entrada o no está habilitada, pero sus listas de errores no lo declaraban. El test recorre las cinco operaciones custodiales, produce las dos condiciones transversales de DES-6 y falla si el contrato no las declara para esa operación. `INTERNAL_ERROR` queda deliberadamente fuera: el catálogo lo define como el error no clasificable de cualquier operación y el contrato no lo repite en cada lista.
+
+`TestContractVersionMatchesFrozenContract` impide, por lo mismo, que `ContractVersion` y el encabezado del documento se separen: esa constante viaja al peer como `Info.Version` y aparece en los mensajes de los tests de firma, de modo que si citara una versión inexistente todo el andamiaje de congelamiento estaría hablando de un contrato que no existe.
+
 ## Desarrollo
 
 ```bash
