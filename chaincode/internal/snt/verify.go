@@ -1,8 +1,6 @@
 package snt
 
 import (
-	"time"
-
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
@@ -173,9 +171,10 @@ func (c *SNTContract) VerifyUnit(
 	// resultado posible de esta operacion: decirle a quien esta por adquirir que
 	// un producto vencido es apto, con la fecha que lo desmiente en el mismo
 	// estado publico que la verificacion ya esta leyendo (ADR-013,
-	// comprobacion 4; ADR-002 lo enuncia como el caso testigo de la visibilidad
-	// del estado minimo, y ADR-001 lo trata como condicion independiente en la
-	// precondicion de T06).
+	// comprobacion 4; ADR-002 lo enuncia como el caso testigo de la
+	// visibilidad del estado minimo). Dispense aplica la misma comparacion, por
+	// coherencia: seria contradictorio que esta operacion respondiera
+	// VENCIDO_POR_FECHA sobre una unidad que T06 deja dispensar.
 	switch {
 	case domain.IsTerminalState(unit.Estado):
 		verdict.fail(3, verdictTerminalState, string(unit.Estado))
@@ -196,41 +195,6 @@ func (c *SNTContract) VerifyUnit(
 		verdict.Autentica = true
 	}
 	return verdict, nil
-}
-
-// unitExpiredByDate informa si la fecha de vencimiento de la unidad ya paso al
-// momento de la transaccion.
-//
-// `fechaVencimiento` es una fecha YYYY-MM-DD (modelo-datos.md §3.2) y se
-// interpreta como el ULTIMO DIA OPERABLE, conforme el uso corriente de la fecha
-// de vencimiento de un medicamento: con fechaVencimiento 2026-08-28, una
-// consulta del 28 la considera apta y una del 29 vencida.
-//
-// El instante sale SIEMPRE de GetTxTimestamp() y nunca del reloj local: el
-// reloj local da un valor distinto en cada peer endosante y, ademas de romper
-// el determinismo, volveria el veredicto irreproducible para un auditor. Es el
-// mismo criterio que ADR-007 punto 6.f fija para el vencimiento de las
-// autorizaciones de intervencion.
-func unitExpiredByDate(
-	ctx contractapi.TransactionContextInterface,
-	unit MedicationUnit,
-) (bool, error) {
-	if unit.FechaVencimiento == "" {
-		// RegisterUnit la exige, de modo que solo un estado corrupto llegaria
-		// aca. No se inventa un veredicto por eso: la unidad no esta vencida
-		// segun un dato que no existe.
-		return false, nil
-	}
-	expiry, err := time.Parse(expirationDateForm, unit.FechaVencimiento)
-	if err != nil {
-		return false, cerr.Internal(err, "la fecha de vencimiento persistida no es una fecha valida")
-	}
-	now, err := txTime(ctx)
-	if err != nil {
-		return false, err
-	}
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	return today.After(expiry), nil
 }
 
 // pass y fail mantienen la invariante de la forma del veredicto: `motivo` es el

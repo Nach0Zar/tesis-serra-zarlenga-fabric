@@ -244,6 +244,7 @@ func (c *SNTContract) Dispense(ctx contractapi.TransactionContextInterface, req 
 - **Endoso**: peer de la organización dispensadora, que es el custodio actual y la única rama de la política de reposo de la clave (ADR-007, punto 6.a).
 - **Request**: `UnitRefRequest` (`gtin`, `numeroSerie`). **No** se envían datos del paciente (Ley 25.326; ADR-005; CC-4).
 - **Response**: `MedicationUnitView` con `estado=DISPENSADO`.
+- **Vigencia por fecha**: la dispensación se rechaza también cuando `fechaVencimiento` ya pasó, aunque el evento `INFORMAR_VENCIMIENTO` todavía no se haya registrado y el estado siga siendo `EN_CUSTODIA`. Es la misma comparación que aplica `VerifyUnit` —`fechaVencimiento` es el último día operable, contra la fecha calendario UTC de `GetTxTimestamp()`— y comparten implementación: lo contrario dejaría al contrato afirmando que una unidad no es apta para adquirirse y admitiendo a la vez que se dispense ([ADR-013](adr/013-acquirer-authenticity-verification.md), Consecuencias). El rechazo usa `INVALID_STATE_TRANSITION`, con `details.causa = "VENCIDO_POR_FECHA"`.
 - **Errores**: `INVALID_REQUEST`, `UNIT_NOT_FOUND`, `UNAUTHORIZED_CUSTODIAN`, `UNAUTHORIZED_AGENT_TYPE`, `UNAUTHORIZED_ROLE`, `ORG_NOT_REGISTERED`, `ORG_INACTIVE`, `INVALID_STATE_TRANSITION`.
 
 ## Operaciones de eventos extraordinarios y de resolución

@@ -100,6 +100,49 @@ func validateExpirationDate(value string) error {
 	return nil
 }
 
+// unitExpiredByDate informa si la fecha de vencimiento de la unidad ya paso al
+// momento de la transaccion.
+//
+// Vive aca y no en verify.go porque tiene DOS consumidores con la misma
+// semantica: VerifyUnit, que la reporta como el veredicto VENCIDO_POR_FECHA, y
+// Dispense, que la rechaza. Que sean la misma comparacion no es una comodidad:
+// si divergieran, el prototipo diria dos cosas distintas sobre la misma unidad
+// -- la verificacion previa a la compra la marcaria vencida y la dispensacion
+// la entregaria igual (ADR-013, "Para Dispense (T06), y por coherencia del
+// sistema").
+//
+// `fechaVencimiento` es una fecha YYYY-MM-DD (modelo-datos.md §3.2) y se
+// interpreta como el ULTIMO DIA OPERABLE, conforme el uso corriente de la fecha
+// de vencimiento de un medicamento: con fechaVencimiento 2026-08-28, el 28 esta
+// vigente y el 29 vencida.
+//
+// El instante sale SIEMPRE de GetTxTimestamp() y nunca del reloj local: el
+// reloj local da un valor distinto en cada peer endosante y, ademas de romper
+// el determinismo del endoso, volveria el resultado irreproducible para un
+// auditor. Es el mismo criterio que ADR-007 punto 6.f fija para el vencimiento
+// de las autorizaciones de intervencion.
+func unitExpiredByDate(
+	ctx contractapi.TransactionContextInterface,
+	unit MedicationUnit,
+) (bool, error) {
+	if unit.FechaVencimiento == "" {
+		// RegisterUnit la exige, de modo que solo un estado corrupto llegaria
+		// aca. No se inventa un rechazo por eso: la unidad no esta vencida
+		// segun un dato que no existe.
+		return false, nil
+	}
+	expiry, err := time.Parse(expirationDateForm, unit.FechaVencimiento)
+	if err != nil {
+		return false, cerr.Internal(err, "la fecha de vencimiento persistida no es una fecha valida")
+	}
+	now, err := txTime(ctx)
+	if err != nil {
+		return false, err
+	}
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	return today.After(expiry), nil
+}
+
 // validateUnitRef valida la referencia a una unidad comun a casi todas las
 // operaciones del contrato.
 func validateUnitRef(gtin, numeroSerie string) error {
