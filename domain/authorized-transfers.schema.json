@@ -1,0 +1,274 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pfi-snt:authorized-transfers:schema:1.0.0",
+  "title": "PFI SNT Authorized Transfers",
+  "description": "Valida la matriz regulatoria de pares origen-destino permitidos para transferencias ordinarias de custodia.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "rulesetId",
+    "title",
+    "transferScope",
+    "jurisdiction",
+    "regulatorySnapshot",
+    "defaultDecision",
+    "agentTypes",
+    "normativeReferences",
+    "authorizedTransfers",
+    "prohibitedTransfers"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "rulesetId": {
+      "const": "PFI_SNT_AUTHORIZED_TRANSFERS"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "transferScope": {
+      "const": "ORDINARY_CUSTODY_TRANSFER"
+    },
+    "jurisdiction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "countryCode",
+        "country",
+        "authority"
+      ],
+      "properties": {
+        "countryCode": {
+          "const": "AR"
+        },
+        "country": {
+          "const": "Argentina"
+        },
+        "authority": {
+          "const": "ANMAT"
+        }
+      }
+    },
+    "regulatorySnapshot": {
+      "type": "string",
+      "format": "date"
+    },
+    "defaultDecision": {
+      "const": "DENY"
+    },
+    "agentTypes": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/agentType"
+      }
+    },
+    "normativeReferences": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/normativeReference"
+      }
+    },
+    "authorizedTransfers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/authorizedTransfer"
+      }
+    },
+    "prohibitedTransfers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/prohibitedTransfer"
+      }
+    }
+  },
+  "$defs": {
+    "agentCode": {
+      "enum": [
+        "LABORATORY",
+        "DISTRIBUTOR",
+        "LOGISTICS_OPERATOR",
+        "DRUGSTORE",
+        "PHARMACY",
+        "HEALTHCARE_FACILITY"
+      ]
+    },
+    "agentType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "label"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/agentCode"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "referenceId": {
+      "type": "string",
+      "pattern": "^[A-Z0-9][A-Z0-9_]+$"
+    },
+    "ruleId": {
+      "type": "string",
+      "pattern": "^[A-Z0-9][A-Z0-9_-]+$"
+    },
+    "normativeReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "number",
+        "title",
+        "locator",
+        "sourceUrl",
+        "summary"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/referenceId"
+        },
+        "type": {
+          "enum": [
+            "DECREE",
+            "ANMAT_DISPOSITION",
+            "ANMAT_GUIDANCE"
+          ]
+        },
+        "number": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "authorizedTransfer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "origin",
+        "destination",
+        "allowed",
+        "normativeReferences",
+        "rationale"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ruleId"
+        },
+        "origin": {
+          "$ref": "#/$defs/agentCode"
+        },
+        "destination": {
+          "$ref": "#/$defs/agentCode"
+        },
+        "allowed": {
+          "const": true
+        },
+        "normativeReferences": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/referenceId"
+          }
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "agentSelector": {
+      "oneOf": [
+        {
+          "const": "*"
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/agentCode"
+          }
+        }
+      ]
+    },
+    "prohibitedTransfer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "origins",
+        "destinations",
+        "allowed",
+        "normativeReferences",
+        "reason"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ruleId"
+        },
+        "origins": {
+          "$ref": "#/$defs/agentSelector"
+        },
+        "destinations": {
+          "$ref": "#/$defs/agentSelector"
+        },
+        "allowed": {
+          "const": false
+        },
+        "normativeReferences": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/referenceId"
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
