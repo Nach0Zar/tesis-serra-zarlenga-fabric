@@ -192,6 +192,20 @@ type TraceVerdict struct {
 	Verificaciones []TraceCheck `json:"verificaciones"`
 }
 
+// UnitVerdict es el veredicto estructurado de VerifyUnit: la verificacion de
+// autenticidad que ADR-013 fija para el miembro de la cadena que adquiere.
+//
+// Comparte la forma con TraceVerdict y agrega `estado`, que es el "booleano +
+// estado" que la operacion necesita: al adquirente no le alcanza con saber que
+// la unidad no es apta, necesita saber POR QUE para decidir si rechaza la
+// recepcion a la espera de una resolucion o la rechaza en firme.
+type UnitVerdict struct {
+	Autentica      bool         `json:"autentica"`
+	Motivo         string       `json:"motivo"`
+	Estado         domain.State `json:"estado"`
+	Verificaciones []TraceCheck `json:"verificaciones"`
+}
+
 // TraceCheck es una comprobacion individual de la checklist de ADR-011.
 type TraceCheck struct {
 	Check     string `json:"check"`

@@ -11,7 +11,7 @@ import (
 )
 
 // contractOperations es la superficie publica congelada por
-// docs/api-contract.md (v2.6.1). Es la lista completa: agregar, quitar o
+// docs/api-contract.md (v2.7.0). Es la lista completa: agregar, quitar o
 // renombrar una operacion es un cambio del contrato que exige su propio PR con
 // aprobacion explicita, nunca un efecto colateral de una issue de
 // implementacion.
@@ -46,6 +46,7 @@ var contractOperations = []string{
 	"ReadUnit",
 	"GetUnitHistory",
 	"QueryUnitsByGTIN",
+	"VerifyUnit",
 	"VerifyTrace",
 }
 
@@ -235,5 +236,10 @@ func TestImplementedOperationsAreNotStubs(t *testing.T) {
 	}
 	if _, err := contract.QueryUnitsByGTIN(ctx, validGTIN); err != nil {
 		t.Fatalf("QueryUnitsByGTIN deberia estar implementada: %v", err)
+	}
+
+	// Verificacion de autenticidad del adquirente, implementada por CC-7 (#61).
+	if _, err := contract.VerifyUnit(ctx, validGTIN, validSerial); err != nil {
+		t.Fatalf("VerifyUnit deberia estar implementada: %v", err)
 	}
 }

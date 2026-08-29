@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
@@ -347,5 +348,87 @@ func TestDispenseDoesNotHardenEndorsementPolicy(t *testing.T) {
 	}
 	if len(before) != len(after) || before[0] != after[0] {
 		t.Fatalf("la dispensacion no debe modificar la politica de la clave: %v -> %v", before, after)
+	}
+}
+
+// TestDispenseRejectsUnitExpiredByDate cubre la mitad de la aptitud que el
+// estado no expresa: la FECHA.
+//
+// El paso del tiempo no ejecuta transacciones -- VENCIDO se alcanza por
+// T11/T12/T13, que alguien tiene que invocar --, de modo que una unidad cuya
+// fecha ya paso sigue registrada como EN_CUSTODIA hasta que alguien lo informe.
+// Sin esta comprobacion se le entrega a un paciente un medicamento cuya
+// caducidad el propio ledger registra.
+//
+// La condicion se comparte con VerifyUnit (ADR-013): el test verifica ademas
+// que las dos operaciones coincidan sobre la MISMA unidad, porque una
+// divergencia dejaria al prototipo contradiciendose consigo mismo -- la
+// verificacion previa a la compra marcandola vencida y la dispensacion
+// entregandola igual.
+func TestDispenseRejectsUnitExpiredByDate(t *testing.T) {
+	stub, contract := dispenseFixture(t, "GLN:"+farmaciaGLN)
+	// validRegisterUnitRequest persiste fechaVencimiento 2027-12-31.
+	stub.timestamp = time.Date(2028, 1, 1, 9, 0, 0, 0, time.UTC)
+
+	before, err := readUnit(testContext(stub, farmaciaMSP, RoleOperator), validGTIN, validSerial)
+	requireNoError(t, err)
+
+	_, err = contract.Dispense(
+		testContext(stub, farmaciaMSP, RoleOperator),
+		UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+	requireCode(t, err, cerr.InvalidStateTransition)
+
+	parsed, ok := cerr.Parse(err)
+	if !ok {
+		t.Fatalf("error sin el formato del contrato: %v", err)
+	}
+	if parsed.Details["causa"] != "VENCIDO_POR_FECHA" {
+		t.Fatalf("el rechazo debe distinguirse de un estado invalido: %+v", parsed.Details)
+	}
+
+	after, err := readUnit(testContext(stub, farmaciaMSP, RoleOperator), validGTIN, validSerial)
+	requireNoError(t, err)
+	if after != before {
+		t.Fatalf("la dispensa rechazada dejo escritura sobre la unidad:\n  antes:   %+v\n  despues: %+v",
+			before, after)
+	}
+
+	// Y las dos operaciones coinciden sobre la misma unidad.
+	verdict, err := contract.VerifyUnit(
+		testContext(stub, farmaciaMSP, RoleOperator), validGTIN, validSerial)
+	requireNoError(t, err)
+	if verdict.Autentica {
+		t.Fatal("VerifyUnit y Dispense deben coincidir: la unidad no es apta")
+	}
+}
+
+// TestDispenseExpiryBoundary fija el mismo limite que TestVerifyUnitExpiryBoundary
+// y por la misma razon: `fechaVencimiento` es el ULTIMO DIA OPERABLE. Que las dos
+// operaciones lo prueben por separado es deliberado -- comparten
+// implementacion, y este par de tests es lo que hace fallar cualquier intento
+// futuro de separarlas.
+func TestDispenseExpiryBoundary(t *testing.T) {
+	cases := []struct {
+		name    string
+		at      time.Time
+		permite bool
+	}{
+		{"el ultimo dia operable", time.Date(2027, 12, 31, 23, 59, 59, 0, time.UTC), true},
+		{"el dia siguiente", time.Date(2028, 1, 1, 0, 0, 1, 0, time.UTC), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stub, contract := dispenseFixture(t, "GLN:"+farmaciaGLN)
+			stub.timestamp = tc.at
+
+			_, err := contract.Dispense(
+				testContext(stub, farmaciaMSP, RoleOperator),
+				UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+			if tc.permite {
+				requireNoError(t, err)
+				return
+			}
+			requireCode(t, err, cerr.InvalidStateTransition)
+		})
 	}
 }

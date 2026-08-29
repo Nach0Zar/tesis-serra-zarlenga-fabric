@@ -57,6 +57,31 @@ func (c *SNTContract) GetUnitHistory(
 		return nil, err
 	}
 
+	entries, err := readUnitHistory(ctx, gtin, numeroSerie)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(entries) == 0 {
+		return nil, cerr.New(cerr.UnitNotFound,
+			"la unidad %s/%s no existe", gtin, numeroSerie).
+			WithDetails(map[string]any{"gtin": gtin, "numeroSerie": numeroSerie})
+	}
+	return entries, nil
+}
+
+// readUnitHistory devuelve las modificaciones CONFIRMADAS de la clave de una
+// unidad, en el orden en que Fabric las entrega.
+//
+// Existe como helper y no dentro de GetUnitHistory porque tiene dos consumidores
+// con reglas distintas sobre el mismo dato: la operacion de lectura, que
+// convierte el historial vacio en UNIT_NOT_FOUND, y la verificacion de
+// autenticidad de ADR-013, que lo convierte en el veredicto NO_ENCONTRADA. La
+// decision de que significa "vacio" es del llamador; leer el historial, no.
+func readUnitHistory(
+	ctx contractapi.TransactionContextInterface,
+	gtin, numeroSerie string,
+) ([]UnitHistoryEntry, error) {
 	key, err := medicationUnitKey(ctx.GetStub(), gtin, numeroSerie)
 	if err != nil {
 		return nil, cerr.Internal(err, "no se pudo construir la clave de la unidad")
@@ -89,12 +114,6 @@ func (c *SNTContract) GetUnitHistory(
 			entry.Value = &unit
 		}
 		entries = append(entries, entry)
-	}
-
-	if len(entries) == 0 {
-		return nil, cerr.New(cerr.UnitNotFound,
-			"la unidad %s/%s no existe", gtin, numeroSerie).
-			WithDetails(map[string]any{"gtin": gtin, "numeroSerie": numeroSerie})
 	}
 	return entries, nil
 }

@@ -69,6 +69,39 @@ func (c *SNTContract) Dispense(
 		return nil, err
 	}
 
+	// La otra mitad de la aptitud: la FECHA. El estado no alcanza, porque el
+	// paso del tiempo no ejecuta transacciones -- VENCIDO se alcanza por
+	// T11/T12/T13, que alguien tiene que invocar --, de modo que una unidad
+	// cuya fecha ya paso sigue registrada como EN_CUSTODIA hasta que alguien lo
+	// informe. Sin esta comprobacion se puede dispensar a un paciente un
+	// medicamento cuya caducidad el propio ledger registra.
+	//
+	// La comparacion es LA MISMA que usa VerifyUnit (ADR-013): que la
+	// verificacion previa a la compra responda VENCIDO_POR_FECHA sobre una
+	// unidad que T06 deja dispensar seria una contradiccion del prototipo
+	// consigo mismo. La cláusula "la unidad esta apta para dispensacion" de la
+	// precondicion de T06 en ADR-001 es la que habilita la lectura: la lista de
+	// estados que sigue -- "no esta vencida, en cuarentena, retirada..." -- son
+	// los ocho ESTADOS y ya la cubre requireTransition.
+	//
+	// El codigo es INVALID_STATE_TRANSITION, con el que el contrato ya expresa
+	// que T06 no es admisible para esta unidad; no se agrega ningun codigo al
+	// catalogo.
+	expired, err := unitExpiredByDate(ctx, unit)
+	if err != nil {
+		return nil, err
+	}
+	if expired {
+		return nil, cerr.New(cerr.InvalidStateTransition,
+			"la unidad no es dispensable: su fecha de vencimiento %s ya paso",
+			unit.FechaVencimiento).
+			WithDetails(map[string]any{
+				"estado":           string(unit.Estado),
+				"fechaVencimiento": unit.FechaVencimiento,
+				"causa":            "VENCIDO_POR_FECHA",
+			})
+	}
+
 	timestamp, err := txTimestamp(ctx)
 	if err != nil {
 		return nil, err
