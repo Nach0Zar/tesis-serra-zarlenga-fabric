@@ -2,7 +2,9 @@ package snt
 
 import (
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
@@ -500,4 +502,272 @@ func TestVerifyCustodyChainPropagatesUnregisteredCustodian(t *testing.T) {
 
 	_, err = verifyCustodyChain(ctx, history)
 	requireCode(t, err, cerr.OrgNotRegistered)
+}
+
+// --- Acoplamiento estado-custodia de ADR-004 --------------------------------
+
+// TestVerifyCustodyChainEnforcesADR004Coupling cubre las invariantes que ADR-004
+// impone sobre el PAR (estado, custodia) y que ni ADR-001 ni la matriz de
+// ADR-008 expresan por separado.
+//
+// Cada caso construye un historial cuyas dos proyecciones son individualmente
+// validas -- los estados forman un camino declarado y los pares de agentes
+// estan autorizados por la matriz -- y que sin embargo describe una vida
+// imposible de la unidad. Son exactamente los historiales que una verificacion
+// hecha de dos comprobaciones independientes deja pasar.
+func TestVerifyCustodyChainEnforcesADR004Coupling(t *testing.T) {
+	cases := []struct {
+		name string
+		// seed recibe el stub con la unidad ya registrada en EN_LABORATORIO bajo
+		// custodia del laboratorio, y fabrica el resto del historial.
+		seed func(t *testing.T, stub *mockStub)
+	}{
+		{
+			// T02 lleva la unidad a EN_TRANSITO SIN mover la custodia. Este
+			// historial la mueve en el mismo paso: el par de estados es una
+			// transicion declarada y LABORATORY -> DRUGSTORE esta autorizado
+			// por la matriz, pero durante el transito el custodio registrado
+			// todavia debe ser el laboratorio.
+			name: "cambio de custodio en el despacho (T02)",
+			seed: func(t *testing.T, stub *mockStub) {
+				stub.txID = "tx-despacho-con-custodia"
+				seedUnit(t, stub, domain.StateEnTransito, "GLN:"+drogueriaGLN)
+			},
+		},
+		{
+			// Una transferencia consumada sin haber pasado nunca por
+			// EN_TRANSITO. Sin la invariante que exige que TODA escritura
+			// corresponda a una transicion declarada, el par de estados ni
+			// siquiera se examina -- son iguales -- y el cambio de custodio
+			// pasa por el solo hecho de que la matriz autorice el par.
+			name: "transferencia sin transito (EN_CUSTODIA -> EN_CUSTODIA)",
+			seed: func(t *testing.T, stub *mockStub) {
+				stub.txID = "tx-transito"
+				seedUnit(t, stub, domain.StateEnTransito, "GLN:"+labGLN)
+				stub.txID = "tx-custodia-drogueria"
+				seedUnit(t, stub, domain.StateEnCustodia, "GLN:"+drogueriaGLN)
+				stub.txID = "tx-salto-a-farmacia"
+				seedUnit(t, stub, domain.StateEnCustodia, "GLN:"+farmaciaGLN)
+			},
+		},
+		{
+			// La contracara de la equivalencia: T04 DEBE mover la custodia.
+			// DispatchTransfer rechaza que el destino sea la propia
+			// organizacion emisora, de modo que una recepcion que no la mueve
+			// no es una recepcion.
+			name: "recepcion que no mueve la custodia (T04)",
+			seed: func(t *testing.T, stub *mockStub) {
+				stub.txID = "tx-transito"
+				seedUnit(t, stub, domain.StateEnTransito, "GLN:"+labGLN)
+				stub.txID = "tx-recepcion-sin-cambio"
+				seedUnit(t, stub, domain.StateEnCustodia, "GLN:"+labGLN)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stub, contract := transferFixture(t)
+			tc.seed(t, stub)
+
+			verdict, err := contract.VerifyUnit(
+				testContext(stub, farmaciaMSP, RoleOperator), validGTIN, validSerial)
+			requireNoError(t, err)
+			requireVerdict(t, verdict, false, verdictInvalidSequence, checkCustodyChain)
+
+			if got := checkByName(t, verdict, checkCustodyChain); got.Detalle == "" {
+				t.Fatal("el detalle debe explicar que invariante se rompio")
+			}
+		})
+	}
+}
+
+// TestVerifyCustodyChainRequiresLaboratoryOrigin cubre la invariante del primer
+// custodio, que no es redundante con la del primer estado: T01 habilita
+// unicamente al actor LABORATORY y RegisterUnit persiste al laboratorio
+// invocante como custodio, de modo que un historial que arranca en
+// EN_LABORATORIO bajo custodia de una farmacia describe un alta que ADR-001 no
+// habilita.
+func TestVerifyCustodyChainRequiresLaboratoryOrigin(t *testing.T) {
+	stub := newMockStub()
+	seedRegistry(t, stub)
+	registerOrg(t, stub, labMSP, labGLN, domain.AgentLaboratory)
+	registerOrg(t, stub, farmaciaMSP, farmaciaGLN, domain.AgentPharmacy)
+	contract := new(SNTContract)
+
+	stub.txID = "tx-alta-apocrifa"
+	seedUnit(t, stub, domain.StateEnLaboratorio, "GLN:"+farmaciaGLN)
+
+	verdict, err := contract.VerifyUnit(
+		testContext(stub, farmaciaMSP, RoleOperator), validGTIN, validSerial)
+	requireNoError(t, err)
+	requireVerdict(t, verdict, false, verdictInvalidSequence, checkCustodyChain)
+
+	if got := checkByName(t, verdict, checkCustodyChain); !strings.Contains(got.Detalle, "LABORATORY") {
+		t.Fatalf("el detalle deberia nombrar el actor que T01 habilita: %q", got.Detalle)
+	}
+}
+
+// TestVerifyCustodyChainAcceptsTheRealChain es el control negativo de los dos
+// tests anteriores: el mismo helper, sobre un historial producido por las
+// operaciones REALES del contrato, no encuentra ninguna violacion. Sin este
+// caso, unas invariantes demasiado estrictas pasarian inadvertidas -- rechazar
+// todo tambien hace pasar los tests de rechazo.
+func TestVerifyCustodyChainAcceptsTheRealChain(t *testing.T) {
+	stub, contract := verifyFixture(t)
+	ctx := testContext(stub, farmaciaMSP, RoleOperator)
+
+	// Se agrega una segunda transferencia y una dispensa, para que el historial
+	// recorra dos T04 consecutivas y termine en un estado terminal.
+	stub.txID = "tx-despacho-2"
+	withTransient(stub, dispatchTransient("GLN:"+farmaciaGLN))
+	_, err := contract.DispatchTransfer(
+		testContext(stub, drogueriaMSP, RoleOperator),
+		DispatchTransferRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+	requireNoError(t, err)
+	stub.transient = map[string][]byte{}
+	stub.txID = "tx-recepcion-2"
+	_, err = contract.ReceiveTransfer(
+		testContext(stub, farmaciaMSP, RoleOperator),
+		UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+	requireNoError(t, err)
+	stub.txID = "tx-dispensa"
+	_, err = contract.Dispense(
+		testContext(stub, farmaciaMSP, RoleOperator),
+		UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+	requireNoError(t, err)
+
+	history, err := readUnitHistory(ctx, validGTIN, validSerial)
+	requireNoError(t, err)
+	if len(history) != 6 {
+		t.Fatalf("el historial deberia tener seis escrituras y tiene %d", len(history))
+	}
+
+	result, err := verifyCustodyChain(ctx, history)
+	requireNoError(t, err)
+	if !result.OK {
+		t.Fatalf("la cadena producida por las operaciones reales debe ser legitima: %+v", result)
+	}
+}
+
+// --- Vencimiento por fecha --------------------------------------------------
+
+// TestVerifyUnitDetectsExpiryByDate cubre la comprobacion que ADR-013 agrega
+// sobre `fechaVencimiento`.
+//
+// El caso importa porque el paso del tiempo NO ejecuta transacciones: VENCIDO
+// se alcanza por T11/T12/T13, que alguien tiene que invocar, y hasta entonces
+// una unidad cuya fecha ya paso sigue registrada como EN_CUSTODIA o
+// EN_TRANSITO. Una verificacion que mirara solo el estado la declararia apta:
+// el peor resultado posible de esta operacion.
+func TestVerifyUnitDetectsExpiryByDate(t *testing.T) {
+	for _, state := range []domain.State{domain.StateEnCustodia, domain.StateEnTransito} {
+		t.Run(string(state), func(t *testing.T) {
+			stub, contract := verifyFixture(t)
+			if state == domain.StateEnTransito {
+				stub.txID = "tx-despacho-2"
+				withTransient(stub, dispatchTransient("GLN:"+farmaciaGLN))
+				_, err := contract.DispatchTransfer(
+					testContext(stub, drogueriaMSP, RoleOperator),
+					DispatchTransferRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+				requireNoError(t, err)
+				stub.transient = map[string][]byte{}
+			}
+
+			// La consulta ocurre despues de la fecha de vencimiento de la
+			// unidad, sin que nadie haya informado el vencimiento.
+			stub.timestamp = time.Date(2028, 1, 1, 9, 0, 0, 0, time.UTC)
+
+			verdict, err := contract.VerifyUnit(
+				testContext(stub, farmaciaMSP, RoleOperator), validGTIN, validSerial)
+			requireNoError(t, err)
+			requireVerdict(t, verdict, false, verdictExpiredByDate, checkOperableState)
+
+			// El estado observado sigue siendo el registrado: el veredicto no
+			// inventa una transicion que el ledger no tiene.
+			if verdict.Estado != state {
+				t.Fatalf("estado = %s, se esperaba %s", verdict.Estado, state)
+			}
+			// Y la cadena de custodia no tiene nada de malo.
+			if got := checkByName(t, verdict, checkCustodyChain); got.Resultado != checkOK {
+				t.Fatalf("la cadena deberia ser legitima y figura como %s", got.Resultado)
+			}
+		})
+	}
+}
+
+// TestVerifyUnitExpiryBoundary fija la semantica exacta de la comparacion, que
+// ADR-013 define y el contrato declara: `fechaVencimiento` es el ULTIMO DIA
+// OPERABLE, de modo que la unidad vence al dia siguiente. Sin este test, la
+// eleccion entre "vence ese dia" y "vence al dia siguiente" quedaria como un
+// detalle de implementacion que nadie fijo.
+func TestVerifyUnitExpiryBoundary(t *testing.T) {
+	// validRegisterUnitRequest persiste fechaVencimiento 2027-12-31.
+	cases := []struct {
+		name      string
+		at        time.Time
+		autentica bool
+	}{
+		{"un dia antes", time.Date(2027, 12, 30, 23, 0, 0, 0, time.UTC), true},
+		{"el ultimo dia operable", time.Date(2027, 12, 31, 23, 59, 59, 0, time.UTC), true},
+		{"el dia siguiente", time.Date(2028, 1, 1, 0, 0, 1, 0, time.UTC), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stub, contract := verifyFixture(t)
+			stub.timestamp = tc.at
+
+			verdict, err := contract.VerifyUnit(
+				testContext(stub, farmaciaMSP, RoleOperator), validGTIN, validSerial)
+			requireNoError(t, err)
+			if verdict.Autentica != tc.autentica {
+				t.Fatalf("autentica = %v, se esperaba %v (motivo: %q)",
+					verdict.Autentica, tc.autentica, verdict.Motivo)
+			}
+		})
+	}
+}
+
+// TestVerifyUnitExpiryDoesNotOverrideRecordedState deja fijado el orden de la
+// comprobacion 4: si el ledger YA registro un estado bloqueante o terminal, ese
+// es el veredicto, aunque la fecha tambien haya pasado. El adquirente necesita
+// saber que hay una causa registrada, no que la fecha vencio.
+func TestVerifyUnitExpiryDoesNotOverrideRecordedState(t *testing.T) {
+	stub, contract := verifyFixture(t)
+	stub.txID = "tx-cuarentena"
+	seedUnit(t, stub, domain.StateEnCuarentena, "GLN:"+drogueriaGLN)
+	stub.timestamp = time.Date(2028, 1, 1, 9, 0, 0, 0, time.UTC)
+
+	verdict, err := contract.VerifyUnit(
+		testContext(stub, farmaciaMSP, RoleOperator), validGTIN, validSerial)
+	requireNoError(t, err)
+	requireVerdict(t, verdict, false, verdictBlockingState, checkOperableState)
+}
+
+// TestVerifyCustodyChainRejectsWriteWithoutTransition aisla la invariante 3 de
+// ADR-013: TODA escritura de la clave debe corresponder a una transicion
+// declarada, incluidas las que dejan el estado igual.
+//
+// Tiene test propio porque el caso que la motiva -- una transferencia consumada
+// sin transito -- lo atrapa tambien el acoplamiento estado-custodia, de modo que
+// aquel test pasaria igual si esta invariante se relajara. El caso que SOLO esta
+// invariante detecta es la escritura que no cambia nada: mismo estado, mismo
+// custodio. ADR-001 no declara transiciones sobre si mismas, asi que una
+// segunda escritura identica no corresponde a ninguna transicion y es una
+// escritura que la maquina de estados no sanciona.
+func TestVerifyCustodyChainRejectsWriteWithoutTransition(t *testing.T) {
+	stub, contract := verifyFixture(t)
+
+	// Misma unidad, mismo estado, mismo custodio: solo cambia el timestamp.
+	stub.txID = "tx-reescritura"
+	seedUnit(t, stub, domain.StateEnCustodia, "GLN:"+drogueriaGLN)
+
+	verdict, err := contract.VerifyUnit(
+		testContext(stub, farmaciaMSP, RoleOperator), validGTIN, validSerial)
+	requireNoError(t, err)
+	requireVerdict(t, verdict, false, verdictInvalidSequence, checkCustodyChain)
+
+	if got := checkByName(t, verdict, checkCustodyChain); !strings.Contains(got.Detalle, "EN_CUSTODIA") {
+		t.Fatalf("el detalle deberia nombrar el par de estados observado: %q", got.Detalle)
+	}
 }

@@ -1,6 +1,8 @@
 package snt
 
 import (
+	"time"
+
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
@@ -48,6 +50,15 @@ const (
 	verdictTransferNotAuthorized = "TRANSFERENCIA_NO_AUTORIZADA"
 	verdictBlockingState         = "ESTADO_BLOQUEANTE"
 	verdictTerminalState         = "ESTADO_TERMINAL"
+
+	// VENCIDO_POR_FECHA tiene veredicto propio y no se reporta como
+	// ESTADO_BLOQUEANTE porque exige del adquirente una accion distinta: ante un
+	// estado bloqueante el ledger ya registro la causa y hay un proceso en
+	// curso; aca el ledger todavia no registro nada, el adquirente esta
+	// descubriendo una condicion no informada y corresponde ademas detonar
+	// ReportExpired (T13). Reportarlo como ESTADO_BLOQUEANTE afirmaria que el
+	// ledger bloquea la unidad cuando el ledger no dice nada de ella.
+	verdictExpiredByDate = "VENCIDO_POR_FECHA"
 )
 
 // VerifyUnit implementa la verificacion de autenticidad del adquirente
@@ -145,24 +156,81 @@ func (c *SNTContract) VerifyUnit(
 	}
 	verdict.pass(2, "")
 
-	// 4. Estado apto para operar. Es la ultima porque es la unica que puede
-	// fallar sobre una unidad de traza impecable, que es el caso mas frecuente
-	// del uso real: producto legitimo, retirado del mercado.
+	// 4. Aptitud para operar. Es la ultima porque es la unica que puede fallar
+	// sobre una unidad de traza impecable, que es el caso mas frecuente del uso
+	// real: producto legitimo, retirado del mercado o vencido.
 	//
 	// Bloqueante y terminal son veredictos distintos y no es cosmetico: un
 	// estado bloqueante puede resolverse -- ADR-001 les conserva transiciones de
 	// salida -- y uno terminal no. Para el adquirente son dos decisiones
 	// distintas: rechazar a la espera de una resolucion, o rechazar en firme.
+	//
+	// El vencimiento POR FECHA es una tercera condicion y no un caso del estado
+	// bloqueante. El paso del tiempo no ejecuta transacciones: VENCIDO se
+	// alcanza por T11/T12/T13, que alguien tiene que invocar, y hasta entonces
+	// una unidad cuya fecha ya paso sigue registrada como EN_CUSTODIA o
+	// EN_TRANSITO. Mirar solo el estado la declararia apta, que es el peor
+	// resultado posible de esta operacion: decirle a quien esta por adquirir que
+	// un producto vencido es apto, con la fecha que lo desmiente en el mismo
+	// estado publico que la verificacion ya esta leyendo (ADR-013,
+	// comprobacion 4; ADR-002 lo enuncia como el caso testigo de la visibilidad
+	// del estado minimo, y ADR-001 lo trata como condicion independiente en la
+	// precondicion de T06).
 	switch {
 	case domain.IsTerminalState(unit.Estado):
 		verdict.fail(3, verdictTerminalState, string(unit.Estado))
 	case domain.IsBlockingState(unit.Estado):
 		verdict.fail(3, verdictBlockingState, string(unit.Estado))
 	default:
+		expired, err := unitExpiredByDate(ctx, unit)
+		if err != nil {
+			return nil, err
+		}
+		if expired {
+			verdict.fail(3, verdictExpiredByDate,
+				"la fecha de vencimiento "+unit.FechaVencimiento+
+					" ya paso y el evento INFORMAR_VENCIMIENTO todavia no se registro")
+			return verdict, nil
+		}
 		verdict.pass(3, string(unit.Estado))
 		verdict.Autentica = true
 	}
 	return verdict, nil
+}
+
+// unitExpiredByDate informa si la fecha de vencimiento de la unidad ya paso al
+// momento de la transaccion.
+//
+// `fechaVencimiento` es una fecha YYYY-MM-DD (modelo-datos.md §3.2) y se
+// interpreta como el ULTIMO DIA OPERABLE, conforme el uso corriente de la fecha
+// de vencimiento de un medicamento: con fechaVencimiento 2026-08-28, una
+// consulta del 28 la considera apta y una del 29 vencida.
+//
+// El instante sale SIEMPRE de GetTxTimestamp() y nunca del reloj local: el
+// reloj local da un valor distinto en cada peer endosante y, ademas de romper
+// el determinismo, volveria el veredicto irreproducible para un auditor. Es el
+// mismo criterio que ADR-007 punto 6.f fija para el vencimiento de las
+// autorizaciones de intervencion.
+func unitExpiredByDate(
+	ctx contractapi.TransactionContextInterface,
+	unit MedicationUnit,
+) (bool, error) {
+	if unit.FechaVencimiento == "" {
+		// RegisterUnit la exige, de modo que solo un estado corrupto llegaria
+		// aca. No se inventa un veredicto por eso: la unidad no esta vencida
+		// segun un dato que no existe.
+		return false, nil
+	}
+	expiry, err := time.Parse(expirationDateForm, unit.FechaVencimiento)
+	if err != nil {
+		return false, cerr.Internal(err, "la fecha de vencimiento persistida no es una fecha valida")
+	}
+	now, err := txTime(ctx)
+	if err != nil {
+		return false, err
+	}
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	return today.After(expiry), nil
 }
 
 // pass y fail mantienen la invariante de la forma del veredicto: `motivo` es el
@@ -227,66 +295,147 @@ func verifyCustodyChain(
 		return custodyChainResult{}, err
 	}
 
-	var (
-		previousState     domain.State
-		previousCustodian string
-		seen              bool
-	)
+	var previous *MedicationUnit
 	for _, entry := range history {
 		if entry.Value == nil {
 			continue
 		}
-		state := entry.Value.Estado
-		custodian := entry.Value.CustodioActual
+		current := entry.Value
 
-		if !seen {
-			if state != domain.InitialState {
-				return custodyChainResult{
-					OK:      false,
-					Verdict: verdictInvalidSequence,
-					Detail: "el historial arranca en " + string(state) +
-						" y el unico estado inicial de ADR-001 es " + string(domain.InitialState),
-				}, nil
+		if previous == nil {
+			result, err := verifyChainOrigin(*current, agentTypes)
+			if err != nil || !result.OK {
+				return result, err
 			}
-			previousState, previousCustodian, seen = state, custodian, true
+			previous = current
 			continue
 		}
 
-		if state != previousState {
-			if !domain.IsDeclaredStatePair(previousState, state) {
-				return custodyChainResult{
-					OK:      false,
-					Verdict: verdictInvalidSequence,
-					Detail:  string(previousState) + " -> " + string(state),
-				}, nil
-			}
-			previousState = state
+		// Invariante 3: TODA escritura de la clave debe corresponder a una
+		// transicion declarada, incluidas las que dejan el estado igual. ADR-001
+		// no declara transiciones sobre si mismas, de modo que una segunda
+		// escritura con el mismo estado no corresponde a ninguna transicion.
+		// Saltearlas -- como hacia la version anterior de esta funcion -- deja
+		// pasar una transferencia consumada sin transito: EN_CUSTODIA/A ->
+		// EN_CUSTODIA/B ni siquiera llegaba a examinarse.
+		if !domain.IsDeclaredStatePair(previous.Estado, current.Estado) {
+			return custodyChainResult{
+				OK:      false,
+				Verdict: verdictInvalidSequence,
+				Detail:  string(previous.Estado) + " -> " + string(current.Estado),
+			}, nil
 		}
 
-		if custodian != previousCustodian {
-			origin, ok := agentTypes[previousCustodian]
-			if !ok {
-				return custodyChainResult{}, unregisteredCustodian(previousCustodian)
-			}
-			destination, ok := agentTypes[custodian]
-			if !ok {
-				return custodyChainResult{}, unregisteredCustodian(custodian)
-			}
-			decision, err := domain.DecideTransfer(origin, destination)
-			if err != nil {
-				return custodyChainResult{}, cerr.Internal(err, "no se pudo evaluar la matriz de transferencias")
-			}
-			if !decision.Allowed {
-				return custodyChainResult{
-					OK:      false,
-					Verdict: verdictTransferNotAuthorized,
-					Detail:  string(origin) + " -> " + string(destination),
-				}, nil
-			}
-			previousCustodian = custodian
+		result, err := verifyCustodyHandover(*previous, *current, agentTypes)
+		if err != nil || !result.OK {
+			return result, err
 		}
+		previous = current
 	}
 
+	return custodyChainResult{OK: true}, nil
+}
+
+// verifyChainOrigin comprueba las dos invariantes del primer snapshot: la
+// unidad nace en EN_LABORATORIO y su primer custodio es un LABORATORY.
+//
+// La segunda no es redundante con la primera: T01 habilita unicamente al actor
+// LABORATORY y RegisterUnit persiste al laboratorio invocante como custodio, de
+// modo que un historial que arrancara en EN_LABORATORIO bajo custodia de una
+// farmacia describe un alta que ADR-001 no habilita.
+func verifyChainOrigin(
+	first MedicationUnit,
+	agentTypes map[string]domain.AgentType,
+) (custodyChainResult, error) {
+	if first.Estado != domain.InitialState {
+		return custodyChainResult{
+			OK:      false,
+			Verdict: verdictInvalidSequence,
+			Detail: "el historial arranca en " + string(first.Estado) +
+				" y el unico estado inicial de ADR-001 es " + string(domain.InitialState),
+		}, nil
+	}
+	agentType, ok := agentTypes[first.CustodioActual]
+	if !ok {
+		return custodyChainResult{}, unregisteredCustodian(first.CustodioActual)
+	}
+	if agentType != domain.AgentLaboratory {
+		return custodyChainResult{
+			OK:      false,
+			Verdict: verdictInvalidSequence,
+			Detail: "el primer custodio es " + string(agentType) +
+				" y T01 solo habilita a LABORATORY",
+		}, nil
+	}
+	return custodyChainResult{OK: true}, nil
+}
+
+// verifyCustodyHandover comprueba el ACOPLAMIENTO entre estado y custodia que
+// fija ADR-004, y que ni ADR-001 ni la matriz de ADR-008 expresan por separado.
+//
+// La regla es una equivalencia, no dos condiciones sueltas: `CustodioActual`
+// cambia si y solo si la transicion observada es EN_TRANSITO -> EN_CUSTODIA
+// (T04). El despacho (T02/T03) lleva la unidad a EN_TRANSITO SIN mover la
+// custodia, y ninguna otra transicion de ADR-001 la mueve: ADR-009 (punto 1) lo
+// confirma para las cuatro vias hacia DEVUELTO y descarta expresamente la
+// alternativa que la cambiaba, porque "viola el principio establecido por
+// ADR-004 de que ningun cambio de custodia se asienta sin un acto propio del
+// receptor".
+//
+// Verificar las dos proyecciones por separado -- estados validos por un lado,
+// pares autorizados por otro -- deja pasar historiales que violan el
+// acoplamiento aunque ambas proyecciones sean validas. El caso testigo es
+// EN_LABORATORIO/laboratorio -> EN_TRANSITO/drogueria: T02 es una transicion
+// declarada y LABORATORY -> DRUGSTORE esta autorizado, pero durante el transito
+// la custodia registrada todavia es la del laboratorio.
+func verifyCustodyHandover(
+	previous, current MedicationUnit,
+	agentTypes map[string]domain.AgentType,
+) (custodyChainResult, error) {
+	changed := current.CustodioActual != previous.CustodioActual
+	isReception := previous.Estado == domain.StateEnTransito &&
+		current.Estado == domain.StateEnCustodia
+
+	switch {
+	case changed && !isReception:
+		return custodyChainResult{
+			OK:      false,
+			Verdict: verdictInvalidSequence,
+			Detail: "la custodia cambio en " + string(previous.Estado) + " -> " +
+				string(current.Estado) + ", y solo la recepcion (T04) la mueve",
+		}, nil
+	case !changed && isReception:
+		// La contracara: DispatchTransfer rechaza que el destino sea la propia
+		// organizacion emisora, de modo que una recepcion siempre mueve la
+		// custodia. Una que no la mueve no es una recepcion.
+		return custodyChainResult{
+			OK:      false,
+			Verdict: verdictInvalidSequence,
+			Detail:  "EN_TRANSITO -> EN_CUSTODIA sin cambio de custodio",
+		}, nil
+	case !changed:
+		return custodyChainResult{OK: true}, nil
+	}
+
+	origin, ok := agentTypes[previous.CustodioActual]
+	if !ok {
+		return custodyChainResult{}, unregisteredCustodian(previous.CustodioActual)
+	}
+	destination, ok := agentTypes[current.CustodioActual]
+	if !ok {
+		return custodyChainResult{}, unregisteredCustodian(current.CustodioActual)
+	}
+	decision, err := domain.DecideTransfer(origin, destination)
+	if err != nil {
+		return custodyChainResult{}, cerr.Internal(err, "no se pudo evaluar la matriz de transferencias")
+	}
+	if !decision.Allowed {
+		return custodyChainResult{
+			OK:      false,
+			Verdict: verdictTransferNotAuthorized,
+			Detail:  string(origin) + " -> " + string(destination),
+		}, nil
+	}
 	return custodyChainResult{OK: true}, nil
 }
 
