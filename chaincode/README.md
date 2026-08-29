@@ -149,6 +149,21 @@ El campo `pendingOwner` de ese test es la maquinaria que CC-1 (#14) dejó para l
 
 `TestCompositeKeySchema` pinnea el esquema de claves compuestas que CC-1 fija para las issues que lo consumen: los tipos de objeto, el orden de los componentes y el `txId` al final en las dos variantes del marcador.
 
+## Verificación de autenticidad del adquirente (`VerifyUnit`)
+
+`VerifyUnit` ([`internal/snt/verify.go`](internal/snt/verify.go)) materializa la obligación que la Disposición ANMAT 3683/2011 impone al miembro de la cadena que adquiere. Su semántica la fija [ADR-013](../docs/adr/013-acquirer-authenticity-verification.md): cuatro comprobaciones determinísticas evaluadas en orden —existencia, unicidad, cadena de custodia legítima y aptitud del estado actual— con un veredicto estructurado.
+
+**No es `VerifyTrace` con otro nombre**, y la distinción es la razón de que exista. La checklist de [ADR-011](../docs/adr/011-financier-trace-verification.md) exige que la unidad esté `DISPENSADO` y devuelve `NO_DISPENSADA` en cualquier otro caso: es correcta para el financiador, cuya condición de pago nace de una dispensa ya ocurrida, e inservible para el adquirente, que consulta **antes** de aceptar la custodia —cuando la unidad está justamente en `EN_TRANSITO` o `EN_CUSTODIA`—. Aplicarle la checklist del financiador respondería `NO_DISPENSADA` en el 100 % de sus consultas legítimas.
+
+Lo que **sí** comparten son las dos comprobaciones de cadena de custodia (camino de estados contra ADR-001 y pares autorizados contra la matriz de ADR-008), y por eso están implementadas **una sola vez**, en `verifyCustodyChain`. CC-8 (#62) debe consumir ese helper, no reescribirlo: dos implementaciones de la misma regla divergirían en silencio, y el día que lo hicieran el adquirente y el financiador darían veredictos distintos sobre la misma unidad. `TestVerifyCustodyChainIsSharedWithVerifyTrace` ejercita el helper directamente para dejar constancia de que es una pieza con contrato propio.
+
+Dos propiedades que el código sostiene y los tests verifican en lugar de afirmar:
+
+- **No lee datos privados.** El veredicto se computa solo sobre el estado mínimo de trazabilidad que ADR-002 declara de visibilidad amplia. `TestVerifyUnitReadsNoPrivateData` inyecta una falla en toda lectura privada del stub y exige que la operación siga funcionando: si algún día tocara una colección, el test lo dice.
+- **La autorización no finge ser una barrera.** Se exige invocador registrado y habilitado, pero **no** `agentType` ni `snt.role`, a diferencia de `VerifyTrace`. Restringirlo sería aparente: la misma información es alcanzable con `ReadUnit` y `GetUnitHistory`, que no autorizan en absoluto porque ADR-005 declara que la lectura del estado público no es restringible por chaincode. Una barrera que no detiene nada es peor que ninguna, porque induce a confiar en ella.
+
+Y un límite que conviene repetir donde se lea el código, porque la palabra «autenticidad» sugiere más de lo que el ledger puede acreditar: **un envase falsificado que reproduzca un GTIN + serie legítimo obtiene `autentica: true`**. La verificación acredita la traza registrada, no el envase. La lista completa está en «Límites de la verificación» de ADR-013.
+
 ## Smoke test local sobre la TEST-NETWORK
 
 [`test/integration/chaincode-e2e.sh`](../test/integration/chaincode-e2e.sh) conserva la cobertura histórica de CC-1 (#14) contra `fabric-samples/test-network` como prueba local opcional. Hace el ciclo de lifecycle completo a mano porque esa red no contiene `AnmatMSP` y solo puede comprobar el rechazo `REGULATORY_ONLY`.

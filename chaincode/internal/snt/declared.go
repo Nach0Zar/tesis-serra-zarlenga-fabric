@@ -2,7 +2,7 @@ package snt
 
 import "github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 
-// Este archivo declara las operaciones que docs/api-contract.md (v2.6.1) congela
+// Este archivo declara las operaciones que docs/api-contract.md (v2.7.0) congela
 // y que CC-1 (#14) exige tener declaradas en el scaffold, pero cuya logica
 // pertenece a otra issue.
 //

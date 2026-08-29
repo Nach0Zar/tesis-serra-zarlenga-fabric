@@ -16,7 +16,7 @@ import (
 // Code es un identificador estable del catalogo de errores del contrato.
 type Code string
 
-// Catalogo de codigos de error de docs/api-contract.md (v2.6.1). Esta lista es
+// Catalogo de codigos de error de docs/api-contract.md (v2.7.0). Esta lista es
 // exhaustiva: agregar un codigo es un cambio MINOR del contrato y no puede
 // hacerse desde una issue de implementacion.
 const (

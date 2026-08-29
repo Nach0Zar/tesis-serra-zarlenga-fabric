@@ -123,6 +123,9 @@ func TestHappyPathInventory(t *testing.T) {
 	if _, err := contract.QueryUnitsByGTIN(regulatorCtx, validGTIN); err != nil {
 		t.Fatalf("QueryUnitsByGTIN: %v", err)
 	}
+	if _, err := contract.VerifyUnit(regulatorCtx, validGTIN, validSerial); err != nil {
+		t.Fatalf("VerifyUnit: %v", err)
+	}
 }
 
 // --- Completitud del catalogo de errores ------------------------------------
