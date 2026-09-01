@@ -585,6 +585,32 @@ wait_for_network_height() {
   fail "channel height did not advance after the bootstrap transaction"
 }
 
+# Los bloques obtenidos del orderer no incluyen TRANSACTIONS_FILTER: ese
+# metadata lo agrega cada peer al validar y confirmar el bloque. QSCC consulta
+# el ledger local ya validado. La CLI agrega un salto de linea al payload
+# binario en su modo printable, por lo que se lo retira de forma controlada.
+fetch_peer_block_from_ledger() {
+  local block_number="$1"
+  local output="$2"
+  local diagnostics="$3"
+  local temporary="${output}.query"
+  local ctor last_byte
+  require_command head
+  require_command tail
+  require_command od
+  require_command xargs
+  ctor="$(jq -cn --arg channel "${CHANNEL_NAME}" --arg number "${block_number}" '{Args:["GetBlockByNumber",$channel,$number]}')"
+  peer chaincode query \
+    --channelID "${CHANNEL_NAME}" \
+    --name qscc \
+    --ctor "${ctor}" \
+    >"${temporary}" 2>"${diagnostics}"
+  last_byte="$(tail -c 1 "${temporary}" | od -An -t u1 | xargs)"
+  [[ "${last_byte}" == "10" ]] || fail "QSCC block output did not end with the expected CLI newline"
+  head -c -1 "${temporary}" >"${output}"
+  rm -f -- "${temporary}"
+}
+
 verify_bootstrap_constraints() {
   local evidence="${EVIDENCE_DIR}/net-6/bootstrap"
   local msp_id slug peer_hostname agent_type id id_type active orderer_hostname
@@ -619,7 +645,7 @@ verify_bootstrap_constraints() {
 
   raw="${evidence}/init-insufficient-endorsers-block-${before}.pb"
   decoded="${evidence}/init-insufficient-endorsers-block-${before}.json"
-  peer channel fetch "${before}" "${raw}" --channelID "${CHANNEL_NAME}" "${ORDERER_ARGS[@]}" >"${evidence}/init-insufficient-endorsers-fetch.txt" 2>&1
+  fetch_peer_block_from_ledger "${before}" "${raw}" "${evidence}/init-insufficient-endorsers-fetch.txt"
   configtxlator proto_decode --input "${raw}" --type common.Block --output "${decoded}"
   filter="$(jq -er '.metadata.metadata[2]' "${decoded}")"
   codes="$(printf '%s' "${filter}" | base64 --decode | od -An -t u1 | xargs)"
@@ -675,6 +701,10 @@ initialize_registry() {
 
   verify_pre_init_gate
   verify_bootstrap_constraints
+
+  # La prueba negativa termina con la identidad de otra organizacion activa.
+  # El Init valido debe volver a ser creado por el regulador embebido.
+  use_organization "${msp_id}" "${slug}" "${peer_hostname}" User1
 
   invoke_args=(
     "${ORDERER_ARGS[@]}"

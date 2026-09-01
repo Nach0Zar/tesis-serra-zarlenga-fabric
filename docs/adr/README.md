@@ -19,6 +19,7 @@ Este directorio contiene las decisiones de arquitectura que guían el diseño y 
 | [`010-non-custodial-identity.md`](010-non-custodial-identity.md) | Propuesto | ADR-010: identidad de ANMAT y financiadores mediante `agentType` no custodiales en el registro; bootstrap regulatorio en la init del chaincode. |
 | [`011-financier-trace-verification.md`](011-financier-trace-verification.md) | Propuesto | ADR-011: checklist determinística de cinco comprobaciones y veredicto estructurado para la verificación de traza del financiador. |
 | [`012-baseline-design.md`](012-baseline-design.md) | Propuesto | ADR-012: baseline centralizada en Go + PostgreSQL con paquete compartido; checklist normativo de paridad funcional. |
+| [`013-acquirer-authenticity-verification.md`](013-acquirer-authenticity-verification.md) | Propuesto | ADR-013: checklist determinística de cuatro comprobaciones y veredicto estructurado para la verificación de autenticidad del adquirente; comparte con ADR-011 las comprobaciones de cadena de custodia. |
 
 ## Convenciones
 

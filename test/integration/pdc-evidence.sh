@@ -21,6 +21,8 @@ readonly EXPLICIT_COLLECTION="transfer_DrogueriaMSP_FarmaciaMSP"
 readonly PUBLIC_KEY="probe-dispatch-net5"
 readonly PUBLIC_VALUE='{"operationId":"probe-dispatch-net5","status":"DISPATCHED"}'
 readonly PRIVATE_VALUE='private-commercial-net5'
+readonly DISSEMINATION_RETRY_ATTEMPTS=6
+readonly DISSEMINATION_RETRY_DELAY_SECONDS=5
 
 PROBE_PACKAGE_ID=""
 
@@ -148,6 +150,38 @@ invoke_probe() {
   peer chaincode invoke "${args[@]}"
 }
 
+invoke_probe_with_dissemination_retry() {
+  local msp_id="$1"
+  local ctor="$2"
+  local private_value="$3"
+  local evidence_file="$4"
+  local attempt output status
+  : >"${evidence_file}"
+  for ((attempt = 1; attempt <= DISSEMINATION_RETRY_ATTEMPTS; attempt++)); do
+    set +e
+    output="$(invoke_probe "${msp_id}" "${ctor}" "${private_value}" 2>&1)"
+    status=$?
+    set -e
+    {
+      printf 'attempt=%d status=%d\n' "${attempt}" "${status}"
+      printf '%s\n' "${output}"
+    } >>"${evidence_file}"
+    if [[ "${status}" -eq 0 ]]; then
+      printf '%s\n' "${output}"
+      return 0
+    fi
+    if ! grep -Eqi 'failed to distribute private collection|failed disseminating .*private|private dissemination plans' <<<"${output}"; then
+      printf '%s\n' "${output}" >&2
+      return "${status}"
+    fi
+    if [[ "${attempt}" -lt "${DISSEMINATION_RETRY_ATTEMPTS}" ]]; then
+      sleep "${DISSEMINATION_RETRY_DELAY_SECONDS}"
+    fi
+  done
+  printf '%s\n' "${output}" >&2
+  return "${status}"
+}
+
 channel_height() {
   local output
   select_organization DrogueriaMSP User1
@@ -200,7 +234,7 @@ wait_for_receiver_private_data() {
 
 verify_explicit_collection() {
   local block_number dispatch_key
-  local put_ctor public_ctor private_ctor output
+  local put_ctor public_ctor private_ctor output status
   local raw_block decoded_block
   block_number="$(channel_height)"
   dispatch_key="${PUBLIC_KEY}-${block_number}"
@@ -211,8 +245,14 @@ verify_explicit_collection() {
   info "Stopping the receiver to force private-data reconciliation"
   compose stop peer0.farmacia.snt.local >/dev/null
   trap restart_receiver EXIT
-  output="$(invoke_probe DrogueriaMSP "${put_ctor}" "${PRIVATE_VALUE}" 2>&1)"
-  printf '%s\n' "${output}" >"${PROBE_EVIDENCE}/explicit-dispatch.txt"
+  set +e
+  output="$(invoke_probe_with_dissemination_retry DrogueriaMSP "${put_ctor}" "${PRIVATE_VALUE}" "${PROBE_EVIDENCE}/explicit-dispatch.txt" 2>&1)"
+  status=$?
+  set -e
+  if [[ "${status}" -ne 0 ]]; then
+    printf '%s\n' "${output}" >&2
+    fail "explicit PDC dispatch failed after bounded dissemination retries"
+  fi
   restart_receiver
   trap - EXIT
 
@@ -328,4 +368,6 @@ main() {
   printf 'OK: NET-5 PDC evidence completed; raw artifacts are under %s\n' "${PROBE_EVIDENCE}"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

@@ -147,7 +147,7 @@ capture_block() {
   local decoded="${RUN_DIR}/${label}-block-${block_number}.json"
   local filter codes
   select_identity AnmatMSP Admin
-  peer channel fetch "${block_number}" "${raw}" --channelID "${CHANNEL_NAME}" "${ORDERER_ARGS[@]}"     >"${RUN_DIR}/${label}-block-fetch.txt" 2>&1
+  fetch_peer_block_from_ledger "${block_number}" "${raw}" "${RUN_DIR}/${label}-block-fetch.txt"
   configtxlator proto_decode --input "${raw}" --type common.Block --output "${decoded}"
   filter="$(jq -er '.metadata.metadata[2]' "${decoded}")"
   codes="$(printf '%s' "${filter}" | base64 --decode | od -An -t u1 | xargs)"
@@ -179,10 +179,9 @@ sanitize_captured_block() {
 assert_block_sbe() {
   local label="$1"
   shift
-  local decoded policy_value policy_pb policy_json principal role_pb
-  local expected_sorted actual_sorted index field_role peer_role field_msp msp_length byte_count
+  local decoded policy_value policy_pb policy_json expected_sorted actual_sorted
   local -a expected=("$@")
-  local -a principals=() actual=()
+  local -a actual=()
   [[ "${#expected[@]}" -gt 0 ]] || fail "assert_block_sbe requires at least one MSP"
   decoded="$(captured_block_json "${label}")"
   policy_pb="${RUN_DIR}/${label}-sbe.pb"
@@ -200,23 +199,12 @@ assert_block_sbe() {
   ' "${decoded}")"
   printf '%s' "${policy_value}" | base64 --decode >"${policy_pb}"
   configtxlator proto_decode --input "${policy_pb}" --type common.SignaturePolicyEnvelope --output "${policy_json}"
-  mapfile -t principals < <(jq -er '.identities[].principal' "${policy_json}")
-  jq -e 'all(.identities[]; .principal_classification == "ROLE")' "${policy_json}" >/dev/null \
-    || fail "${label} SBE contains a non-role principal"
-  [[ "${#principals[@]}" -eq "${#expected[@]}" ]] \
+  mapfile -t actual < <(jq -er '.identities[].principal.msp_identifier' "${policy_json}")
+  jq -e 'all(.identities[];
+    .principal_classification == "ROLE" and .principal.role == "PEER")' "${policy_json}" >/dev/null \
+    || fail "${label} SBE contains a principal other than an MSP peer role"
+  [[ "${#actual[@]}" -eq "${#expected[@]}" ]] \
     || fail "${label} SBE has an unexpected number of principals"
-  for index in "${!principals[@]}"; do
-    principal="${principals[${index}]}"
-    role_pb="${RUN_DIR}/${label}-sbe-role-${index}.pb"
-    printf '%s' "${principal}" | base64 --decode >"${role_pb}"
-    read -r field_role peer_role field_msp msp_length < <(od -An -t u1 -N4 "${role_pb}")
-    [[ "${field_role}" -eq 8 && "${peer_role}" -eq 3 && "${field_msp}" -eq 18 ]] \
-      || fail "${label} SBE principal is not an MSP peer role"
-    byte_count="$(wc -c <"${role_pb}")"
-    [[ "${msp_length}" -lt 128 && "${byte_count}" -eq $((4 + msp_length)) ]] \
-      || fail "${label} SBE principal has an unexpected protobuf encoding"
-    actual+=("$(tail -c +5 "${role_pb}")")
-  done
   expected_sorted="$(printf '%s\n' "${expected[@]}" | sort)"
   actual_sorted="$(printf '%s\n' "${actual[@]}" | sort)"
   [[ "${actual_sorted}" == "${expected_sorted}" ]] \
@@ -245,9 +233,10 @@ expect_valid_with_block() {
   local transient="$4"
   shift 4
   local before
-  select_identity "${creator_msp}" User1
+  select_identity AnmatMSP Admin
   before="$(current_height)"
   expect_valid "${label}" "${creator_msp}" "${ctor}" "${transient}" "$@"
+  select_identity AnmatMSP Admin
   wait_for_height "${before}" >/dev/null
   capture_block "${label}" "${before}"
 }
@@ -259,11 +248,14 @@ expect_platform_rejection() {
   local transient="$4"
   shift 4
   local before codes
-  select_identity "${creator_msp}" User1
+  select_identity AnmatMSP Admin
   before="$(current_height)"
   run_invoke "${label}" "${creator_msp}" "${ctor}" "${transient}" "$@"
   [[ "${LAST_STATUS}" -ne 0 ]] || fail "${label} unexpectedly committed"
   grep -q 'ENDORSEMENT_POLICY_FAILURE' <<<"${LAST_OUTPUT}"     || fail "${label} did not report ENDORSEMENT_POLICY_FAILURE"
+  # Un owner de PDC puede demorar el commit mientras intenta reconciliar el
+  # dato privado de una transaccion invalida. ANMAT observa el bloque sin esa espera.
+  select_identity AnmatMSP Admin
   wait_for_height "${before}" >/dev/null
   capture_block "${label}" "${before}"
   codes="$(<"${RUN_DIR}/${label}-validation-codes.txt")"
@@ -350,8 +342,8 @@ verify_core_implementations() {
   assert_not_stub ReadUnit AnmatMSP "${request}" INVALID_REQUEST
   request="$(read_ctor GetUnitHistory "" "")"
   assert_not_stub GetUnitHistory AnmatMSP "${request}" INVALID_REQUEST
-  request="$(read_ctor VerifyTrace "" "")"
-  assert_not_stub VerifyTrace FinanciadorMSP "${request}" INVALID_REQUEST
+  request="$(read_ctor VerifyUnit "" "")"
+  assert_not_stub VerifyUnit AnmatMSP "${request}" INVALID_REQUEST
 }
 
 verify_regulatory_registry_write() {
@@ -373,14 +365,15 @@ verify_register_unit_endorsement() {
   ctor="$(request_ctor RegisterUnit "${request}")"
   expect_platform_rejection register-unit-regulator-only LabMSP "${ctor}" "" AnmatMSP
   expect_valid_with_block register-unit-lab LabMSP "${ctor}" "" LabMSP
-  sanitize_captured_block register-unit-lab _implicit_org_LabMSP register-unit-marker-sanitized.json "${SERIAL_RECEIVE}"
+  sanitize_captured_block register-unit-lab _implicit_org_LabMSP register-unit-marker-sanitized.json \
+    '{"operacion":"RegisterUnit","mspId":"LabMSP","timestamp":"'
   assert_block_sbe register-unit-lab LabMSP
   expect_logic_rejection register-unit-duplicate UNIT_ALREADY_EXISTS LabMSP "${ctor}" "" LabMSP
   assert_unit_state register-unit "${SERIAL_RECEIVE}" EN_LABORATORIO
 }
 
 verify_receive_and_dispense() {
-  local request ctor transient destination marker
+  local request ctor transient destination marker output
 
   destination="$(canonical_id DrogueriaMSP)"
   marker="NET6-COMMERCIAL-${RUN_TOKEN}-A"
@@ -403,6 +396,14 @@ verify_receive_and_dispense() {
   transient="$(dispatch_transient "${destination}" "${marker}")"
   expect_valid dispatch-drugstore-pharmacy DrogueriaMSP "${ctor}" "${transient}" DrogueriaMSP
 
+  ctor="$(read_ctor VerifyUnit "${GTIN}" "${SERIAL_RECEIVE}")"
+  select_identity FarmaciaMSP User1
+  output="$(peer chaincode query --channelID "${CHANNEL_NAME}" --name "${CHAINCODE_NAME}" --ctor "${ctor}")"
+  printf '%s\n' "${output}" >"${RUN_DIR}/core-unit-verdict.json"
+  jq -e '.autentica == true and .motivo == "" and .estado == "EN_TRANSITO"
+    and (.verificaciones | length == 4) and all(.verificaciones[]; .resultado == "OK")' <<<"${output}" >/dev/null \
+    || fail "VerifyUnit did not accept the in-transit Core trace"
+
   ctor="$(request_ctor ReceiveTransfer "${request}")"
   expect_platform_rejection receive-without-sender FarmaciaMSP "${ctor}" "" FarmaciaMSP AnmatMSP
   expect_valid_with_block receive-drugstore-pharmacy FarmaciaMSP "${ctor}" "" DrogueriaMSP FarmaciaMSP
@@ -424,13 +425,6 @@ verify_core_queries() {
   printf '%s\n' "${output}" >"${RUN_DIR}/core-history.json"
   jq -e 'length >= 6 and all(.[]; .isDelete == false and .value != null)' <<<"${output}" >/dev/null \
     || fail "Core history does not contain the complete successful flow"
-
-  ctor="$(read_ctor VerifyTrace "${GTIN}" "${SERIAL_RECEIVE}")"
-  select_identity FinanciadorMSP User1
-  output="$(peer chaincode query --channelID "${CHANNEL_NAME}" --name "${CHAINCODE_NAME}" --ctor "${ctor}")"
-  printf '%s\n' "${output}" >"${RUN_DIR}/core-trace-verdict.json"
-  jq -e '.legitima == true and .motivo == ""' <<<"${output}" >/dev/null \
-    || fail "VerifyTrace did not accept the completed Core trace"
 }
 
 verify_reject_restoration() {
@@ -603,7 +597,7 @@ write_result() {
         matrixDivergenceRejected:true,
         platformAndLogicRejectionsSeparated:true,
         coreQueriesCompleted:true,
-        coreTraceVerified:true
+        coreAuthenticityVerified:true
       }
     }
   ' >"${RUN_DIR}/result.json"

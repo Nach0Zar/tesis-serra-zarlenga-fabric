@@ -8,10 +8,25 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
+	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
+	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 )
 
 // contractDocPath es el contrato congelado, relativo a este paquete.
 const contractDocPath = "../../../docs/api-contract.md"
+
+// readContractDoc lee el contrato congelado. La ruta es una constante del
+// paquete, no una entrada externa.
+func readContractDoc(t *testing.T) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.FromSlash(contractDocPath))
+	if err != nil {
+		t.Fatalf("no se pudo leer el contrato congelado: %v", err)
+	}
+	return string(raw)
+}
 
 // TestContractSignaturesMatchFrozenContract contrasta la firma REAL de cada
 // operacion contra la firma que docs/api-contract.md declara.
@@ -73,11 +88,7 @@ var eventFunctionRE = regexp.MustCompile("(?m)^\\| `([A-Z]\\w*)` \\| T\\d\\d")
 func parseDocumentedSignatures(t *testing.T) map[string]string {
 	t.Helper()
 
-	raw, err := os.ReadFile(filepath.FromSlash(contractDocPath))
-	if err != nil {
-		t.Fatalf("no se pudo leer el contrato congelado: %v", err)
-	}
-	doc := string(raw)
+	doc := readContractDoc(t)
 
 	// Las once operaciones de eventos extraordinarios y de resolucion no
 	// repiten su firma: el contrato la escribe una vez con `<Nombre>` y las
@@ -205,5 +216,145 @@ func TestDocumentedOperationsMatchDeclaredSurface(t *testing.T) {
 	if !reflect.DeepEqual(expected, names) {
 		t.Fatalf("operaciones documentadas distintas de las declaradas\n  documentadas: %v\n  declaradas:   %v",
 			names, expected)
+	}
+}
+
+// --- Version declarada y errores declarados ---------------------------------
+
+// TestContractVersionMatchesFrozenContract impide que la constante del paquete
+// y el encabezado del contrato se separen. ContractVersion viaja al peer como
+// Info.Version del chaincode y aparece en los mensajes de los tests de firma:
+// si dijera una version que el documento ya no tiene, todo el andamiaje de
+// congelamiento estaria citando un contrato inexistente.
+func TestContractVersionMatchesFrozenContract(t *testing.T) {
+	raw := readContractDoc(t)
+
+	match := regexp.MustCompile(
+		`(?m)^- \*\*Versi.n del contrato\*\*: ` + "`" + `([0-9]+\.[0-9]+\.[0-9]+)` + "`").FindStringSubmatch(raw)
+	if match == nil {
+		t.Fatal("no se pudo leer la version declarada en el encabezado de docs/api-contract.md")
+	}
+	if match[1] != ContractVersion {
+		t.Fatalf("el documento declara la version %s y el paquete %s", match[1], ContractVersion)
+	}
+}
+
+// docErrorsRE captura la lista de errores que el contrato declara para cada
+// operacion. La seccion de una operacion abre con `### ` + su nombre entre
+// backticks, y su linea de errores es un item `- **Errores**:` con los codigos
+// entre backticks.
+var docErrorsRE = regexp.MustCompile(
+	`(?m)^### ` + "`" + `([A-Za-z]\w*)` + "`" + `$|^- \*\*Errores\*\*: (.+)$`)
+
+// codeRE captura cada codigo del catalogo dentro de una linea de errores.
+var codeRE = regexp.MustCompile("`([A-Z][A-Z_]+)`")
+
+// parseDocumentedErrors devuelve, por operacion, el conjunto de codigos que el
+// contrato declara para ella.
+func parseDocumentedErrors(t *testing.T) map[string]map[cerr.Code]bool {
+	t.Helper()
+
+	documented := map[string]map[cerr.Code]bool{}
+	current := ""
+	for _, match := range docErrorsRE.FindAllStringSubmatch(readContractDoc(t), -1) {
+		if match[1] != "" {
+			current = match[1]
+			continue
+		}
+		if current == "" {
+			continue
+		}
+		codes := map[cerr.Code]bool{}
+		for _, code := range codeRE.FindAllStringSubmatch(match[2], -1) {
+			codes[cerr.Code(code[1])] = true
+		}
+		documented[current] = codes
+	}
+	return documented
+}
+
+// TestProducedErrorsAreDeclaredByTheContract cierra el hueco entre lo que una
+// operacion PUEDE devolver y lo que su contrato DECLARA que devuelve.
+//
+// El resto de la bateria comprueba las dos mitades por separado y ninguna
+// detecta que se separen: TestErrorCatalogIsCovered exige que cada codigo del
+// catalogo tenga algun escenario, sin mirar de que operacion sale, y
+// TestContractSignaturesMatchFrozenContract compara firmas, no errores. Una
+// operacion podia asi devolver de forma estable un codigo que su seccion del
+// contrato no nombraba -- que es exactamente lo que le pasaba a `Dispense` y a
+// `RejectTransfer` con ORG_NOT_REGISTERED y ORG_INACTIVE hasta la v2.6.2.
+//
+// El caso cubierto es el de las dos condiciones TRANSVERSALES de DES-6: toda
+// operacion que resuelve la identidad del invocador contra el registro de
+// ADR-003 puede rechazar porque la organizacion no tiene entrada o porque no
+// esta habilitada. Son las que se olvidan, precisamente porque no son propias
+// de ninguna operacion.
+//
+// INTERNAL_ERROR queda deliberadamente fuera: el catalogo lo define como el
+// error no clasificable de cualquier operacion y el contrato no lo repite en
+// cada lista.
+func TestProducedErrorsAreDeclaredByTheContract(t *testing.T) {
+	documented := parseDocumentedErrors(t)
+
+	// Cada operacion custodial, con la invocacion que la alcanza sobre una
+	// unidad en el estado del que parte. El mspId lo elige el caso.
+	operations := map[string]func(contract *SNTContract, ctx contractapi.TransactionContextInterface) error{
+		"RegisterUnit": func(c *SNTContract, ctx contractapi.TransactionContextInterface) error {
+			_, err := c.RegisterUnit(ctx, validRegisterUnitRequest())
+			return err
+		},
+		"DispatchTransfer": func(c *SNTContract, ctx contractapi.TransactionContextInterface) error {
+			_, err := c.DispatchTransfer(ctx, DispatchTransferRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+			return err
+		},
+		"ReceiveTransfer": func(c *SNTContract, ctx contractapi.TransactionContextInterface) error {
+			_, err := c.ReceiveTransfer(ctx, UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+			return err
+		},
+		"RejectTransfer": func(c *SNTContract, ctx contractapi.TransactionContextInterface) error {
+			_, err := c.RejectTransfer(ctx,
+				UnitEventRequest{GTIN: validGTIN, NumeroSerie: validSerial, Motivo: "Motivo documentado."})
+			return err
+		},
+		"Dispense": func(c *SNTContract, ctx contractapi.TransactionContextInterface) error {
+			_, err := c.Dispense(ctx, UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+			return err
+		},
+	}
+
+	for name, invoke := range operations {
+		t.Run(name, func(t *testing.T) {
+			declared, ok := documented[name]
+			if !ok {
+				t.Fatalf("docs/api-contract.md no declara errores para %s", name)
+			}
+
+			t.Run(string(cerr.OrgNotRegistered), func(t *testing.T) {
+				stub, contract := transferFixture(t)
+				seedUnit(t, stub, domain.StateEnCustodia, "GLN:"+farmaciaGLN)
+				err := invoke(contract, testContext(stub, "OrgFantasmaMSP", RoleOperator))
+				requireCode(t, err, cerr.OrgNotRegistered)
+				if !declared[cerr.OrgNotRegistered] {
+					t.Fatalf("%s devuelve %s y el contrato v%s no lo declara para esa operacion",
+						name, cerr.OrgNotRegistered, ContractVersion)
+				}
+			})
+
+			t.Run(string(cerr.OrgInactive), func(t *testing.T) {
+				stub, contract := transferFixture(t)
+				seedUnit(t, stub, domain.StateEnCustodia, "GLN:"+farmaciaGLN)
+				if _, err := contract.SetOrganizationActive(
+					testContext(stub, anmatMSP, RoleRegulatoryAdmin),
+					SetOrganizationActiveRequest{MSPID: farmaciaMSP, Active: false}); err != nil {
+					t.Fatalf("SetOrganizationActive: %v", err)
+				}
+				err := invoke(contract, testContext(stub, farmaciaMSP, RoleOperator))
+				requireCode(t, err, cerr.OrgInactive)
+				if !declared[cerr.OrgInactive] {
+					t.Fatalf("%s devuelve %s y el contrato v%s no lo declara para esa operacion",
+						name, cerr.OrgInactive, ContractVersion)
+				}
+			})
+		})
 	}
 }

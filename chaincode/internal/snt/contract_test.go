@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
+	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 )
 
 // contractOperations es la superficie publica congelada por
-// docs/api-contract.md (v2.6.1). Es la lista completa: agregar, quitar o
+// docs/api-contract.md (v2.7.1). Es la lista completa: agregar, quitar o
 // renombrar una operacion es un cambio del contrato que exige su propio PR con
 // aprobacion explicita, nunca un efecto colateral de una issue de
 // implementacion.
@@ -45,6 +46,7 @@ var contractOperations = []string{
 	"ReadUnit",
 	"GetUnitHistory",
 	"QueryUnitsByGTIN",
+	"VerifyUnit",
 	"VerifyTrace",
 }
 
@@ -108,26 +110,6 @@ func TestDeclaredOperationsReportTheirOwner(t *testing.T) {
 	contract := new(SNTContract)
 
 	pending := map[string]func() error{
-		"RegisterUnit": func() error {
-			_, err := contract.RegisterUnit(ctx, RegisterUnitRequest{})
-			return err
-		},
-		"DispatchTransfer": func() error {
-			_, err := contract.DispatchTransfer(ctx, DispatchTransferRequest{})
-			return err
-		},
-		"ReceiveTransfer": func() error {
-			_, err := contract.ReceiveTransfer(ctx, UnitRefRequest{})
-			return err
-		},
-		"RejectTransfer": func() error {
-			_, err := contract.RejectTransfer(ctx, UnitEventRequest{})
-			return err
-		},
-		"Dispense": func() error {
-			_, err := contract.Dispense(ctx, UnitRefRequest{})
-			return err
-		},
 		"Quarantine": func() error {
 			_, err := contract.Quarantine(ctx, UnitEventRequest{})
 			return err
@@ -172,18 +154,6 @@ func TestDeclaredOperationsReportTheirOwner(t *testing.T) {
 			_, err := contract.FinalDisposition(ctx, UnitEventRequest{})
 			return err
 		},
-		"ReadUnit": func() error {
-			_, err := contract.ReadUnit(ctx, validGTIN, validSerial)
-			return err
-		},
-		"GetUnitHistory": func() error {
-			_, err := contract.GetUnitHistory(ctx, validGTIN, validSerial)
-			return err
-		},
-		"QueryUnitsByGTIN": func() error {
-			_, err := contract.QueryUnitsByGTIN(ctx, validGTIN)
-			return err
-		},
 		"VerifyTrace": func() error {
 			_, err := contract.VerifyTrace(ctx, validGTIN, validSerial)
 			return err
@@ -226,5 +196,50 @@ func TestImplementedOperationsAreNotStubs(t *testing.T) {
 		MSPID: labMSP, Active: true,
 	}); err != nil {
 		t.Fatalf("SetOrganizationActive deberia estar implementada: %v", err)
+	}
+	// T01, implementada por CC-2 (#15).
+	if _, err := contract.RegisterUnit(
+		testContext(stub, labMSP, RoleOperator), validRegisterUnitRequest()); err != nil {
+		t.Fatalf("RegisterUnit deberia estar implementada: %v", err)
+	}
+
+	// T02/T03, T04 y T05, implementadas por CC-3 (#16).
+	registerOrg(t, stub, drogueriaMSP, drogueriaGLN, domain.AgentDrugstore)
+	withTransient(stub, dispatchTransient("GLN:"+drogueriaGLN))
+	if _, err := contract.DispatchTransfer(
+		testContext(stub, labMSP, RoleOperator),
+		DispatchTransferRequest{GTIN: validGTIN, NumeroSerie: validSerial}); err != nil {
+		t.Fatalf("DispatchTransfer deberia estar implementada: %v", err)
+	}
+	stub.transient = map[string][]byte{}
+	if _, err := contract.ReceiveTransfer(
+		testContext(stub, drogueriaMSP, RoleOperator),
+		UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial}); err != nil {
+		t.Fatalf("ReceiveTransfer deberia estar implementada: %v", err)
+	}
+
+	// T06, implementada por CC-4 (#17).
+	registerOrg(t, stub, farmaciaMSP, farmaciaGLN, domain.AgentPharmacy)
+	seedUnit(t, stub, domain.StateEnCustodia, "GLN:"+farmaciaGLN)
+	if _, err := contract.Dispense(
+		testContext(stub, farmaciaMSP, RoleOperator),
+		UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial}); err != nil {
+		t.Fatalf("Dispense deberia estar implementada: %v", err)
+	}
+
+	// Operaciones de lectura, implementadas por CC-5 (#18).
+	if _, err := contract.ReadUnit(ctx, validGTIN, validSerial); err != nil {
+		t.Fatalf("ReadUnit deberia estar implementada: %v", err)
+	}
+	if _, err := contract.GetUnitHistory(ctx, validGTIN, validSerial); err != nil {
+		t.Fatalf("GetUnitHistory deberia estar implementada: %v", err)
+	}
+	if _, err := contract.QueryUnitsByGTIN(ctx, validGTIN); err != nil {
+		t.Fatalf("QueryUnitsByGTIN deberia estar implementada: %v", err)
+	}
+
+	// Verificacion de autenticidad del adquirente, implementada por CC-7 (#61).
+	if _, err := contract.VerifyUnit(ctx, validGTIN, validSerial); err != nil {
+		t.Fatalf("VerifyUnit deberia estar implementada: %v", err)
 	}
 }

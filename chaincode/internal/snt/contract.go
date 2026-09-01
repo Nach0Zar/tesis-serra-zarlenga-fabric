@@ -1,6 +1,6 @@
 // Package snt implementa el chaincode `snt` del prototipo del PFI.
 //
-// Su superficie publica esta congelada en docs/api-contract.md (v2.6.1) y su
+// Su superficie publica esta congelada en docs/api-contract.md (v2.7.1) y su
 // logica debe respetar, sin excepciones:
 //
 //   - ADR-001: la maquina de estados del medicamento. El paquete compartido
@@ -30,7 +30,7 @@ import (
 
 // ContractVersion es la version del contrato publico que implementa este
 // chaincode (docs/api-contract.md).
-const ContractVersion = "2.6.1"
+const ContractVersion = "2.7.1"
 
 // SNTContract es el contrato publico del chaincode `snt`.
 //

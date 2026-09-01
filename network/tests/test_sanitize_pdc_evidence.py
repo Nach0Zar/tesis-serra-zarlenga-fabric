@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -57,6 +59,25 @@ def decoded_block() -> dict:
 
 
 class SanitizePdcEvidenceTest(unittest.TestCase):
+    def test_cli_requires_forbidden_private_value(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--input",
+                "decoded-block.json",
+                "--collection",
+                COLLECTION,
+                "--output",
+                "sanitized.json",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("--forbidden-value", result.stderr)
+
     def test_extracts_only_citable_hash_evidence(self) -> None:
         excerpt = MODULE.sanitize_block(decoded_block(), COLLECTION)
         self.assertEqual("1.0.0", excerpt["schemaVersion"])

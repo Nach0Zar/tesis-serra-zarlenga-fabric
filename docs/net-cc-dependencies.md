@@ -58,14 +58,17 @@ concentra la evidencia que solo existe después de las operaciones EXT.
 | NET-8 | El listener necesita eventos confirmados y bloques inválidos. CC-2 solo demuestra el patrón de emisión. | La demo de irregularidades depende de EXT-1…EXT-3 y del catálogo de eventos acordado con DES-5. | No bloquear NET-6/NET-7 ni prometer eventos extraordinarios antes de EXT. |
 | NET-9 | CC-1 aporta autorización/SBE/marcadores y CC-5/DES-5 debe aportar historial; las operaciones que consumen esos mecanismos son EXT. | Restauración T09/T13–T16, eventos regulatorios e intervención de laboratorio no custodio. | Ejecutar únicamente después de integrar las EXT relacionadas y extender el harness de NET-6 sin copiar lógica del chaincode. |
 
-## Estado informativo al 2026-08-28
+## Estado informativo al 2026-09-01
 
-- CC-1 y CC-2 tienen sus implementaciones integradas en `develop`.
-- CC-3 a CC-6 existen como ramas apiladas y todavía deben recorrer su revisión
-  e integración.
-- CC-7 permanece pendiente dentro del Core.
+- CC-1 a CC-7 están integradas en `develop` (`06ebf1c`).
 - CC-8 pertenece a la milestone posterior y no es gate de NET-6/NET-7.
 - NET-9 es la issue #97 y pertenece a la misma milestone que EXT-1…EXT-8.
+- La integración real del 2026-09-01 detectó que CC-7 consumía
+  `GetHistoryForKey` como si Fabric devolviera el elemento más antiguo primero;
+  Fabric 2.x lo devuelve de más nuevo a más antiguo. La corrección compatible
+  `2.7.1` normaliza ese historial, agrega una prueba de regresión y permitió
+  repetir satisfactoriamente toda la evidencia NET-5/NET-6 desde un ledger
+  limpio.
 
 Este estado no reemplaza GitHub como fuente de verdad. Debe comprobarse otra
 vez antes de actualizar la rama NET.

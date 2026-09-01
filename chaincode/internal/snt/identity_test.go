@@ -1,6 +1,7 @@
 package snt
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
@@ -44,7 +45,7 @@ func TestResolveRegulatorErrorMapping(t *testing.T) {
 			setup: func(t *testing.T) (*mockStub, *mockIdentity) {
 				stub := newMockStub()
 				seedRegistry(t, stub)
-				stub.failGetState = true
+				stub.failOn("GetState", errors.New("fallo simulado del ledger"))
 				return stub, regulatorIdentity()
 			},
 			want: cerr.InternalError,

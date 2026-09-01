@@ -98,10 +98,10 @@ Tres tests distintos custodian el congelamiento del contrato, y hacen falta los 
 | `Init` | Implementada | CC-1 (#14) |
 | `RegisterOrganization`, `SetOrganizationActive` | Implementadas | CC-1 (#14) |
 | `AuthorizeLabIntervention`, `RevokeLabIntervention` | Implementadas | CC-1 (#14) |
-| `RegisterUnit` | Declarada | CC-2 (#15) |
-| `DispatchTransfer`, `ReceiveTransfer`, `RejectTransfer` | Declaradas | CC-3 (#16) |
-| `Dispense` | Declarada | CC-4 (#17) |
-| `ReadUnit`, `GetUnitHistory`, `QueryUnitsByGTIN` | Declaradas | CC-5 (#18) |
+| `RegisterUnit` | Implementada | CC-2 (#15) |
+| `DispatchTransfer`, `ReceiveTransfer`, `RejectTransfer` | Implementadas | CC-3 (#16) |
+| `Dispense` | Implementada | CC-4 (#17) |
+| `ReadUnit`, `GetUnitHistory`, `QueryUnitsByGTIN` | Implementadas | CC-5 (#18) |
 | `Quarantine`, `ReleaseQuarantine` | Declaradas | EXT-1 (#27) |
 | `ReportExpired` | Declarada | EXT-2 (#28) |
 | `ReportStolen`, `ReportLost`, `ReportDamaged` | Declaradas | EXT-3 (#29) |
@@ -120,11 +120,53 @@ Las operaciones declaradas devuelven `INTERNAL_ERROR` con el detalle `{"operacio
 - **State-based endorsement por clave** (`setKeyEndorsement`), para los requisitos derivables del estado confirmado. Con un solo `mspId` la política exige a esa organización; con varios, `statebased` construye la conjunción — la semántica que necesita `AND(emisor, receptor)` durante el tránsito. **Ninguna política de clave de unidad admite a la organización regulatoria como rama alternativa**: la política es de la clave y no de la función, y una rama disyuntiva agregada para un caso excepcional habilitaría con la misma fuerza todos los casos ordinarios.
 - **Marcador de participación** en la colección implícita de una organización, en sus dos variantes (`Unidad` y `Organizacion`). Es la única forma nativa de exigir el endoso de una organización que no es titular de la clave escrita, o de exigirlo en la **primera** escritura de una clave, donde SBE todavía no puede aplicarse. El `txId` va último en la clave: la hace única por transacción, sin contención MVCC.
 
-`TestPublicKeyCreationWritesMarker` cubre la invariante de ADR-007 punto 6.j: toda operación que crea una clave pública nueva escribe también el marcador de la organización responsable. Mientras se cumpla, la política de chaincode `OR(custodiales, regulatoria)` no es una frontera de seguridad.
+### Salida de `EN_TRANSITO` por evento extraordinario
 
-El test enumera las **tres** operaciones que hoy crean una clave pública —`RegisterUnit` (laboratorio), `RegisterOrganization` y `AuthorizeLabIntervention` (regulador)—, no solo las dos que CC-1 implementa. El caso de `RegisterUnit` comprueba que la operación siga siendo el stub de CC-2 (#15) y se marca como pendiente; el día que CC-2 le ponga lógica, deja de saltearse **por sí solo** y exige el marcador. La invariante queda así cubierta por un mecanismo y no por la convención de acordarse de agregar la fila.
+`CloseTransitForExtraordinaryEvent` es el mecanismo que CC-3 (#16) deja listo para las issues EXT, que implementan las operaciones (T09, T13–T16). Compone las **tres** piezas que ADR-007 exige, para que ninguna quede afuera por olvido:
+
+1. el **marcador de participación** en la colección implícita de la organización regulatoria, **sólo cuando es ella quien inicia el evento** (punto 6.d). Es el segundo uso del marcador —exigir el endoso de una organización que no es titular de la clave escrita—, distinto del que cierra la ventana de creación de una clave pública nueva (punto 6.g). Sin él, la participación de ANMAT descansaría en su firma de creador, que acredita identidad pero no prueba que ningún peer suyo haya ejecutado la lógica;
+2. el **cierre del registro de operación**: histórico + `DelPrivateData` de la clave activa;
+3. la **restauración de la política de reposo** hacia el emisor, que sigue siendo el custodio registrado porque el tránsito no se consumó (punto 6.c).
+
+Escribir el marcador siempre —y no sólo cuando invoca el regulador— convertiría a `AnmatMSP` en coendosante obligatoria de eventos que no inició, que es exactamente lo que DES-6 prohíbe. `TestExtraordinaryExitByCustodianWritesNoRegulatoryMarker` lo deja fijado.
+
+### Receptor equivocado vs. dato privado no diseminado
+
+Ambos casos se ven igual desde el contenido privado: la clave `TransferOpActive` no está. El chaincode los separa con el **hash público** que Fabric persiste por cada escritura privada (ADR-006, punto 6), legible con `GetPrivateDataHash` desde cualquier peer sin exigir membresía en la colección ni que el dato se haya diseminado:
+
+- **hay hash vivo** → la operación existe y su contenido todavía no llegó a este peer: `INTERNAL_ERROR` con `reintentable: true`, la falla transitoria que ADR-006 punto 1 obliga a contemplar;
+- **no hay hash** → en esa colección nunca hubo operación, de modo que el invocador no es el destinatario declarado: `RECEIVER_MISMATCH`, definitivo y no reintentable.
+
+Cerrar una operación elimina también esa entrada del estado público, así que un registro histórico no deja hash vivo y no puede confundirse con una operación en curso.
+
+**El orden de las dos consultas no es intercambiable, y por eso vive dentro de `readActiveTransferOperation` y no en cada llamador.** Fabric no se comporta como un mapa: el *query helper* del peer compara la versión del hash público con la del dato privado y, cuando difieren —hash confirmado, contenido todavía no reconciliado—, la lectura **falla** con `private data matching public hash version is not available`; no devuelve vacío. Consultar el hash *después* de una lectura privada que se asume vacía nunca llegaría a ejecutarse: el error sepultaría la condición transitoria bajo un `INTERNAL_ERROR` genérico, indistinguible de cualquier otra falla de plataforma. Por eso la función consulta primero el hash, sólo entonces lee el contenido, y convierte el fallo de esa lectura en la condición tipificada, conservando el mensaje original de Fabric en `details.causaSubyacente`.
+
+`TestMockStubReproducesFabricPrivateDataSemantics` fija esa semántica en el doble de prueba, porque de ella depende que los tests de la condición transitoria prueben algo: si el mock devolviera `(nil, nil)` con el hash presente, el chaincode podría apoyarse en un camino que en la red real no se recorre y los tests pasarían igual.
+
+`TestPublicKeyCreationWritesMarker` cubre la invariante de ADR-007 punto 6.j: toda operación que crea una clave pública nueva escribe también el marcador de la organización responsable. Hoy son exactamente tres — `RegisterUnit` (laboratorio invocante), `RegisterOrganization` y `AuthorizeLabIntervention` (organización regulatoria) — y el test las cubre a las tres. Mientras se cumpla, la política de chaincode `OR(custodiales, regulatoria)` no es una frontera de seguridad; una operación futura que cree una clave pública sin marcador reabriría una ventana de creación sin dueño.
+
+El campo `pendingOwner` de ese test es la maquinaria que CC-1 (#14) dejó para las operaciones todavía no implementadas: mientras una siga devolviendo el error de stub de su issue dueña, su caso se saltea; el día que esa issue le ponga lógica, el caso deja de saltearse **por sí solo** y exige el marcador. Con `RegisterUnit` ya implementada ningún caso lo usa hoy, pero se conserva para las operaciones que CC-3 (#16) y siguientes agreguen a la lista, de modo que la invariante quede cubierta por un mecanismo y no por la convención de acordarse de agregar la fila.
 
 `TestCompositeKeySchema` pinnea el esquema de claves compuestas que CC-1 fija para las issues que lo consumen: los tipos de objeto, el orden de los componentes y el `txId` al final en las dos variantes del marcador.
+
+## Verificación de autenticidad del adquirente (`VerifyUnit`)
+
+`VerifyUnit` ([`internal/snt/verify.go`](internal/snt/verify.go)) materializa la obligación que la Disposición ANMAT 3683/2011 impone al miembro de la cadena que adquiere. Su semántica la fija [ADR-013](../docs/adr/013-acquirer-authenticity-verification.md): cuatro comprobaciones determinísticas evaluadas en orden —existencia, unicidad, cadena de custodia legítima y aptitud del estado actual— con un veredicto estructurado.
+
+**No es `VerifyTrace` con otro nombre**, y la distinción es la razón de que exista. La checklist de [ADR-011](../docs/adr/011-financier-trace-verification.md) exige que la unidad esté `DISPENSADO` y devuelve `NO_DISPENSADA` en cualquier otro caso: es correcta para el financiador, cuya condición de pago nace de una dispensa ya ocurrida, e inservible para el adquirente, que consulta **antes** de aceptar la custodia —cuando la unidad está justamente en `EN_TRANSITO` o `EN_CUSTODIA`—. Aplicarle la checklist del financiador respondería `NO_DISPENSADA` en el 100 % de sus consultas legítimas.
+
+Lo que **sí** comparten son las dos comprobaciones de cadena de custodia (camino de estados contra ADR-001 y pares autorizados contra la matriz de ADR-008), y por eso están implementadas **una sola vez**, en `verifyCustodyChain`. CC-8 (#62) debe consumir ese helper, no reescribirlo: dos implementaciones de la misma regla divergirían en silencio, y el día que lo hicieran el adquirente y el financiador darían veredictos distintos sobre la misma unidad. `TestVerifyCustodyChainIsSharedWithVerifyTrace` ejercita el helper directamente para dejar constancia de que es una pieza con contrato propio.
+
+**Las comprobaciones de cadena verifican ADR-001 y ADR-004 juntas, no por separado.** La legitimidad de una transferencia no es el producto de dos condiciones independientes: ADR-004 acopla estado y custodia — el despacho lleva la unidad a `EN_TRANSITO` **sin** mover `CustodioActual`, y solo la recepción (T04) lo mueve. Verificar «los estados forman un camino declarado» por un lado y «los pares de agentes están autorizados» por otro deja pasar historiales que violan el acoplamiento aunque ambas proyecciones sean válidas: `EN_LABORATORIO/laboratorio → EN_TRANSITO/droguería` es una transición declarada con un par autorizado, y aun así describe una custodia que se movió durante el tránsito. Que T04 sea la única transición que mueve la custodia no es interpretación: ADR-009 (punto 1) lo confirma para las cuatro vías hacia `DEVUELTO` y descarta expresamente la alternativa que la cambiaba.
+
+**La aptitud para operar mira la fecha, no solo el estado.** El paso del tiempo no ejecuta transacciones: `VENCIDO` se alcanza por T11/T12/T13, que alguien tiene que invocar, y hasta entonces una unidad cuya `fechaVencimiento` ya pasó sigue registrada como `EN_CUSTODIA`. Declararla apta sería el peor resultado posible de esta operación — decirle a quien está por adquirir que un producto vencido es apto, con la fecha que lo desmiente en el mismo estado público que la verificación ya está leyendo. Tiene veredicto propio (`VENCIDO_POR_FECHA`) y no se reporta como `ESTADO_BLOQUEANTE`, porque son acciones distintas: ante un estado bloqueante el ledger ya registró la causa; acá el adquirente está descubriendo una condición no informada y corresponde además detonar `ReportExpired` (T13). La comparación sale siempre de `GetTxTimestamp()`, nunca del reloj local, y `fechaVencimiento` es el **último día operable**.
+
+Dos propiedades que el código sostiene y los tests verifican en lugar de afirmar:
+
+- **No lee datos privados.** El veredicto se computa solo sobre el estado mínimo de trazabilidad que ADR-002 declara de visibilidad amplia. `TestVerifyUnitReadsNoPrivateData` inyecta una falla en toda lectura privada del stub y exige que la operación siga funcionando: si algún día tocara una colección, el test lo dice.
+- **La autorización no finge ser una barrera.** Se exige invocador registrado y habilitado, pero **no** `agentType` ni `snt.role`, a diferencia de `VerifyTrace`. Restringirlo sería aparente: la misma información es alcanzable con `ReadUnit` y `GetUnitHistory`, que no autorizan en absoluto porque ADR-005 declara que la lectura del estado público no es restringible por chaincode. Una barrera que no detiene nada es peor que ninguna, porque induce a confiar en ella.
+
+Y un límite que conviene repetir donde se lea el código, porque la palabra «autenticidad» sugiere más de lo que el ledger puede acreditar: **un envase falsificado que reproduzca un GTIN + serie legítimo obtiene `autentica: true`**. La verificación acredita la traza registrada, no el envase. La lista completa está en «Límites de la verificación» de ADR-013.
 
 ## Smoke test local sobre la TEST-NETWORK
 
@@ -145,6 +187,25 @@ El script comprueba, en orden:
 5. la invocación dummy de `Init` responde con el error tipificado `REGULATORY_ONLY`.
 
 El `Init` **exitoso** —y con él, el seed del registro— se prueba en la red de NET-4. Las operaciones funcionales de transferencia sobre ella permanecen en CC-3 (#16).
+
+## Tests
+
+CC-6 (#19) es dueña de la batería:
+
+- **mocks del `ChaincodeStub`** y de la identidad del cliente (`internal/snt/mocks_test.go`), con world state, datos privados —incluida la capa de hashes públicos y la semántica real de `GetPrivateData`—, políticas de endoso por clave, transaction log e **inyección de fallas de plataforma** por método, para poder ejercitar las ramas `INTERNAL_ERROR`;
+- **un camino feliz por operación implementada**, inventariado en `TestHappyPathInventory`;
+- **un escenario por cada código del catálogo de errores** del contrato, en `TestErrorCatalogIsCovered`. Los códigos que las operaciones implementadas todavía no pueden producir se declaran con la issue que los habilitará, de modo que la tabla nunca queda muda sobre uno de ellos — hoy solo `LAB_INTERVENTION_REQUIRED`, que aparece con las issues EXT;
+- cobertura por encima del 80 % y suite limpia con `-race`.
+
+Los mocks embeben la interfaz de Fabric en lugar de implementarla entera: un método que un test use sin estar implementado entra en pánico de forma evidente, en vez de devolver un cero silencioso.
+
+### Lo que la implementación devuelve vs. lo que el contrato declara
+
+`TestProducedErrorsAreDeclaredByTheContract` cierra un hueco que las otras comprobaciones dejaban abierto entre sí: `TestErrorCatalogIsCovered` exige que cada código del catálogo tenga **algún** escenario, sin mirar de qué operación sale, y `TestContractSignaturesMatchFrozenContract` compara firmas, no errores. Entre las dos, una operación podía devolver de forma estable un código que su sección del contrato no nombraba.
+
+Es exactamente lo que le pasaba a `Dispense` y a `RejectTransfer` con `ORG_NOT_REGISTERED` y `ORG_INACTIVE` hasta la v2.6.2: ambas resuelven la identidad del invocador contra el registro de ADR-003 —lo exigen #17 y DES-6— y por lo tanto pueden rechazar porque la organización no tiene entrada o no está habilitada, pero sus listas de errores no lo declaraban. El test recorre las cinco operaciones custodiales, produce las dos condiciones transversales de DES-6 y falla si el contrato no las declara para esa operación. `INTERNAL_ERROR` queda deliberadamente fuera: el catálogo lo define como el error no clasificable de cualquier operación y el contrato no lo repite en cada lista.
+
+`TestContractVersionMatchesFrozenContract` impide, por lo mismo, que `ContractVersion` y el encabezado del documento se separen: esa constante viaja al peer como `Info.Version` y aparece en los mensajes de los tests de firma, de modo que si citara una versión inexistente todo el andamiaje de congelamiento estaría hablando de un contrato que no existe.
 
 ## Desarrollo
 

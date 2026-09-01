@@ -165,7 +165,8 @@ transacción inválida por falta de endosos de un rechazo tipificado por la
 lógica. El harness de NET-6 ejecuta después
 `RegisterOrganization → RegisterUnit → DispatchTransfer → ReceiveTransfer` y
 la variante `RejectTransfer`; completa el camino aceptado con otro despacho,
-otra recepción, `Dispense`, historial y `VerifyTrace`.
+consulta `VerifyUnit` mientras la unidad está `EN_TRANSITO`, y luego ejecuta
+otra recepción, `Dispense` e historial. `VerifyTrace` pertenece a CC-8.
 
 Los resultados crudos se guardan en `build/evidence/net-6/` y permanecen
 ignorados por Git. El procedimiento y el estado de la corrida citable se
@@ -193,6 +194,12 @@ contrato `snt`:
 ```bash
 ./test/integration/pdc-evidence.sh
 ```
+
+Al detener temporalmente al receptor puede existir una ventana en la que
+gossip todavía lo considere disponible y el endorser rechace la diseminación
+privada. El probe reintenta de forma acotada solamente ese error transitorio;
+cualquier otro fallo aborta de inmediato. Todos los intentos y sus códigos de
+salida quedan en `build/evidence/net-5/explicit-dispatch.txt`.
 
 La evidencia completa queda en `build/evidence/` y no se versiona. En cada
 ejecución el probe genera `sanitized-block-excerpt.json`, limitado al encabezado
