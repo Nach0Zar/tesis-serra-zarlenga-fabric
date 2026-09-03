@@ -593,18 +593,22 @@ fetch_peer_block_from_ledger() {
   local block_number="$1"
   local output="$2"
   local diagnostics="$3"
+  local query="${4:-GetBlockByNumber}"
   local temporary="${output}.query"
   local ctor last_byte
+  [[ "${query}" == GetBlockByNumber || "${query}" == GetBlockByTxID ]] \
+    || fail "unsupported QSCC block query"
   require_command head
   require_command tail
   require_command od
   require_command xargs
-  ctor="$(jq -cn --arg channel "${CHANNEL_NAME}" --arg number "${block_number}" '{Args:["GetBlockByNumber",$channel,$number]}')"
+  ctor="$(jq -cn --arg channel "${CHANNEL_NAME}" --arg number "${block_number}" \
+    --arg query "${query}" '{Args:[$query,$channel,$number]}')"
   peer chaincode query \
     --channelID "${CHANNEL_NAME}" \
     --name qscc \
     --ctor "${ctor}" \
-    >"${temporary}" 2>"${diagnostics}"
+    >"${temporary}" 2>>"${diagnostics}" || return 1
   last_byte="$(tail -c 1 "${temporary}" | od -An -t u1 | xargs)"
   [[ "${last_byte}" == "10" ]] || fail "QSCC block output did not end with the expected CLI newline"
   head -c -1 "${temporary}" >"${output}"

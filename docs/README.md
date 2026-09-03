@@ -12,6 +12,7 @@ Este directorio agrupa documentos de diseño, decisiones de arquitectura y proto
 | [`modelo-datos.md`](modelo-datos.md) | Clave compuesta y struct de estado público del activo de trazabilidad, y justificación de datos excluidos por Ley 25.326. |
 | [`api-contract.md`](api-contract.md) | Contrato congelado de la interfaz pública del chaincode `snt`: firmas, JSON de request/response y formato de errores. |
 | [`adr/README.md`](adr/README.md) | Índice de Architecture Decision Records aceptados o en revisión. |
+| [`net-cc-dependencies.md`](net-cc-dependencies.md) | Dependencias NET↔CC y secuencia de integración de la evidencia Core y EXT. |
 
 ## Decisiones de arquitectura
 

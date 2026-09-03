@@ -120,46 +120,43 @@ run_invoke() {
   printf '%s\n' "${LAST_STATUS}" >"${RUN_DIR}/${label}-status.txt"
 }
 
-current_height() {
-  local output
-  output="$(peer channel getinfo --channelID "${CHANNEL_NAME}")"
-  jq -r '.height' <<<"${output#Blockchain info: }"
-}
-
-wait_for_height() {
-  local previous="$1"
-  local current
-  for _ in {1..30}; do
-    current="$(current_height)"
-    if [[ "${current}" -gt "${previous}" ]]; then
-      printf '%s\n' "${current}"
-      return
-    fi
-    sleep 1
-  done
-  fail "channel height did not advance after submitted transaction"
+prepare_run_directory() {
+  # mkdir sin -p: nunca mezclar ni borrar evidencia de una corrida anterior.
+  mkdir -p "${NET6_ROOT}"
+  mkdir "${RUN_DIR}" || fail "run directory already exists; choose a new SNT_NET6_RUN_TOKEN"
 }
 
 capture_block() {
   local label="$1"
-  local block_number="$2"
-  local raw="${RUN_DIR}/${label}-block-${block_number}.pb"
-  local decoded="${RUN_DIR}/${label}-block-${block_number}.json"
-  local filter codes
+  local expected_code="$2"
+  local raw="${RUN_DIR}/${label}-block.pb"
+  local decoded="${RUN_DIR}/${label}-block.json"
+  local tx_id fetched=false
+  local -a tx_ids=()
+  mapfile -t tx_ids < <(sed -nE 's/.*txid \[([0-9a-f]{64})\].*/\1/p' <<<"${LAST_OUTPUT}" | sort -u)
+  [[ "${#tx_ids[@]}" -eq 1 ]] || fail "${label} did not report exactly one transaction ID"
+  tx_id="${tx_ids[0]}"
+  printf '%s\n' "${tx_id}" >"${RUN_DIR}/${label}-txid.txt"
   select_identity AnmatMSP Admin
-  fetch_peer_block_from_ledger "${block_number}" "${raw}" "${RUN_DIR}/${label}-block-fetch.txt"
+  # El peer observador puede estar atrasado: esperar ESTA transaccion, no una altura.
+  for _ in {1..30}; do
+    if fetch_peer_block_from_ledger "${tx_id}" "${raw}" "${RUN_DIR}/${label}-block-fetch.txt" GetBlockByTxID; then
+      fetched=true
+      break
+    fi
+    sleep 1
+  done
+  [[ "${fetched}" == true ]] || fail "${label} transaction was not available on the observer peer"
   configtxlator proto_decode --input "${raw}" --type common.Block --output "${decoded}"
-  filter="$(jq -er '.metadata.metadata[2]' "${decoded}")"
-  codes="$(printf '%s' "${filter}" | base64 --decode | od -An -t u1 | xargs)"
-  printf '%s\n' "${codes}" >"${RUN_DIR}/${label}-validation-codes.txt"
+  python3 "${NETWORK_DIR}/scripts/verify-net6-evidence.py" transaction \
+    --block "${decoded}" --txid "${tx_id}" --code "${expected_code}" \
+    >"${RUN_DIR}/${label}-transaction.json"
 }
 
 captured_block_json() {
-  local label="$1"
-  local -a blocks=("${RUN_DIR}/${label}"-block-*.json)
-  [[ "${#blocks[@]}" -eq 1 && -f "${blocks[0]}" ]] \
-    || fail "expected one decoded block for ${label}"
-  printf '%s\n' "${blocks[0]}"
+  local block="${RUN_DIR}/$1-block.json"
+  [[ -f "${block}" ]] || fail "decoded block is missing for $1"
+  printf '%s\n' "${block}"
 }
 
 sanitize_captured_block() {
@@ -172,6 +169,7 @@ sanitize_captured_block() {
   python3 "${SANITIZER}" \
     --input "${decoded}" \
     --collection "${collection}" \
+    --transaction-id "$(<"${RUN_DIR}/${label}-txid.txt")" \
     --output "${RUN_DIR}/${output_name}" \
     --forbidden-value "${forbidden_value}"
 }
@@ -186,9 +184,12 @@ assert_block_sbe() {
   decoded="$(captured_block_json "${label}")"
   policy_pb="${RUN_DIR}/${label}-sbe.pb"
   policy_json="${RUN_DIR}/${label}-sbe.json"
-  policy_value="$(jq -er --arg namespace "${CHAINCODE_NAME}" '
+  policy_value="$(jq -er --arg namespace "${CHAINCODE_NAME}" \
+    --arg txid "$(<"${RUN_DIR}/${label}-txid.txt")" '
     [
-      .data.data[]?.payload.data.actions[]?.payload.action.proposal_response_payload.extension.results.ns_rwset[]?
+      .data.data[]?
+      | select(.payload.header.channel_header.tx_id == $txid)
+      | .payload.data.actions[]?.payload.action.proposal_response_payload.extension.results.ns_rwset[]?
       | select(.namespace == $namespace)
       | .rwset.metadata_writes[]?
       | .entries[]?
@@ -232,13 +233,8 @@ expect_valid_with_block() {
   local ctor="$3"
   local transient="$4"
   shift 4
-  local before
-  select_identity AnmatMSP Admin
-  before="$(current_height)"
   expect_valid "${label}" "${creator_msp}" "${ctor}" "${transient}" "$@"
-  select_identity AnmatMSP Admin
-  wait_for_height "${before}" >/dev/null
-  capture_block "${label}" "${before}"
+  capture_block "${label}" 0
 }
 
 expect_platform_rejection() {
@@ -247,19 +243,10 @@ expect_platform_rejection() {
   local ctor="$3"
   local transient="$4"
   shift 4
-  local before codes
-  select_identity AnmatMSP Admin
-  before="$(current_height)"
   run_invoke "${label}" "${creator_msp}" "${ctor}" "${transient}" "$@"
   [[ "${LAST_STATUS}" -ne 0 ]] || fail "${label} unexpectedly committed"
   grep -q 'ENDORSEMENT_POLICY_FAILURE' <<<"${LAST_OUTPUT}"     || fail "${label} did not report ENDORSEMENT_POLICY_FAILURE"
-  # Un owner de PDC puede demorar el commit mientras intenta reconciliar el
-  # dato privado de una transaccion invalida. ANMAT observa el bloque sin esa espera.
-  select_identity AnmatMSP Admin
-  wait_for_height "${before}" >/dev/null
-  capture_block "${label}" "${before}"
-  codes="$(<"${RUN_DIR}/${label}-validation-codes.txt")"
-  grep -qw '10' <<<"${codes}"     || fail "${label} block does not contain Fabric validation code 10 (ENDORSEMENT_POLICY_FAILURE)"
+  capture_block "${label}" 10
 }
 
 expect_logic_rejection() {
@@ -271,12 +258,12 @@ expect_logic_rejection() {
   shift 5
   local before after
   select_identity "${creator_msp}" User1
-  before="$(current_height)"
+  before="$(network_channel_height)"
   run_invoke "${label}" "${creator_msp}" "${ctor}" "${transient}" "$@"
   [[ "${LAST_STATUS}" -ne 0 ]] || fail "${label} unexpectedly committed"
   grep -q "${expected_code}" <<<"${LAST_OUTPUT}"     || fail "${label} did not return application code ${expected_code}"
   sleep 2
-  after="$(current_height)"
+  after="$(network_channel_height)"
   [[ "${after}" -eq "${before}" ]]     || fail "${label} reached the ledger despite being rejected during proposal simulation"
   printf '%s\n' "${before}" >"${RUN_DIR}/${label}-unchanged-height.txt"
 }
@@ -349,7 +336,7 @@ verify_core_implementations() {
 verify_regulatory_registry_write() {
   local height request ctor
   select_identity AnmatMSP User1
-  height="$(current_height)"
+  height="$(network_channel_height)"
   request="$(jq -cn --arg msp "Net6Evidence${height}MSP" --arg id "NET6-${height}" '
     {mspId:$msp,id:$id,idType:"REG",agentType:"FINANCIER",active:true}
   ')"
@@ -530,12 +517,12 @@ verify_matrix_divergence() {
 
   ctor="$(request_ctor ReceiveTransfer "${request}")"
   select_identity DrogueriaMSP User1
-  before="$(current_height)"
+  before="$(network_channel_height)"
   run_invoke matrix-divergent-receive DrogueriaMSP "${ctor}" "" LabMSP DrogueriaMSP
   [[ "${LAST_STATUS}" -ne 0 ]] || fail "divergent receiver unexpectedly completed ReceiveTransfer"
   grep -Eq 'TRANSFER_NOT_AUTHORIZED|ProposalResponsePayloads do not match|endorsement' <<<"${LAST_OUTPUT}"     || fail "divergent receiver failed for an unexpected reason"
   sleep 2
-  after="$(current_height)"
+  after="$(network_channel_height)"
   [[ "${after}" -eq "${before}" ]] || fail "divergent endorsement reached the ledger"
   printf '%s\n' "${before}" >"${RUN_DIR}/matrix-divergent-unchanged-height.txt"
 
@@ -574,6 +561,7 @@ write_result() {
       schemaVersion:$schemaVersion,
       runToken:$runToken,
       repositoryCommit:$commit,
+      artifactManifest:"artifacts.json",
       channel:$channel,
       chaincode:$chaincode,
       packageID:$packageID,
@@ -612,12 +600,12 @@ main_net6() {
   require_command git
   require_command sort
   require_command tail
-  require_command wc
+  require_command sed
   require_command xargs
   resolve_fabric_environment
   validate_sources
   ensure_network_running
-  mkdir -p "${RUN_DIR}"
+  prepare_run_directory
   set_primary_orderer
   build_all_peer_targets
   verify_channel
@@ -634,9 +622,12 @@ main_net6() {
   verify_core_queries
   verify_reject_restoration
   verify_matrix_divergence
+  python3 "${NETWORK_DIR}/scripts/verify-net6-evidence.py" run --directory "${RUN_DIR}" >"${RUN_DIR}/artifacts.json"
   write_result
 
   printf 'OK: NET-6 Core endorsement evidence completed under %s\n' "${RUN_DIR}"
 }
 
-main_net6 "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main_net6 "$@"
+fi

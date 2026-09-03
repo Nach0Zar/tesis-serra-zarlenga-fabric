@@ -2,11 +2,14 @@
 
 ## Estado
 
-**Ejecución final completada el 2026-09-01.**
+**Evidencia Core confirmada por CI el 2026-09-01 para la revisión indicada
+en «Resultado final».** El refuerzo posterior del harness por revisión de PR
+debe volver a pasar integración antes del merge; no se atribuye ese resultado
+previo al código de pruebas modificado.
 
-La corrida citable se realizó desde un ledger limpio después de integrar las
-implementaciones CC del Core y regenerar el paquete. Los resultados crudos se
-encuentran bajo `build/evidence/net-6/run-0901151321/`, ignorado por Git.
+La ejecución citada levantó un ledger limpio con las implementaciones CC del
+Core. La corrida local previa `run-0901151321` queda como antecedente; sus
+resultados crudos están ignorados por Git bajo `build/evidence/net-6/`.
 
 ## Defecto detectado y resuelto durante la integración
 
@@ -30,12 +33,16 @@ matriz y la restauración del paquete canónico. No generó `result.json` y no e
 evidencia aprobatoria. Reinicio, `createChannel`, `deployCC` y `verify` fueron
 idempotentes después de la corrida.
 
-Con autorización explícita, la integración corrigió el defecto en el carril CC:
+Con autorización de Nacho para implementar la corrección en esta rama,
+la integración corrigió el defecto en el carril CC:
 `readUnitHistory` normaliza el orden real de Fabric a cronológico, el mock ahora
 reproduce el orden de Fabric y una prueba de regresión protege ambas
 semánticas. La corrección compatible quedó documentada como contrato `2.7.1`,
 sin cambiar firmas, tipos, schemas ni códigos públicos. Luego se regeneró el
 paquete y se repitió el procedimiento completo desde un ledger limpio.
+Esa autorización de implementación no sustituye la aprobación explícita de B
+sobre el contrato congelado; dicha aprobación sigue pendiente de constancia
+en la PR antes del merge.
 
 La evidencia de operaciones extraordinarias fue separada a
 [NET-9](https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/issues/97).
@@ -116,9 +123,21 @@ versión anterior del script.
 | Autenticidad previa a recepción | `VerifyUnit.autentica=true` en `EN_TRANSITO` | Gate general CC-7; no define endoso | `core-unit-verdict.json` |
 | Historial del flujo completo | Seis o más snapshots confirmados | Gate general CC-5; no define endoso | `core-history.json` |
 
-El código 10 se lee desde `TRANSACTIONS_FILTER` del bloque decodificado y
-corresponde a `ENDORSEMENT_POLICY_FAILURE`. El texto de la CLI se conserva,
-pero no es la única prueba.
+El código 10 corresponde a `ENDORSEMENT_POLICY_FAILURE`. El harness revisado
+extrae el `txID` de la CLI, espera ese bloque en el peer observador mediante
+QSCC `GetBlockByTxID` y busca el índice exacto de la transacción dentro de
+`TRANSACTIONS_FILTER`. Un código 10 de otra transacción no satisface el caso.
+Se conserva el bloque completo como `<escenario>-block.json` y la correlación
+como `<escenario>-transaction.json` (ID, índice, bloque y código). Los checks
+SBE y los extractos PDC se limitan también a ese ID.
+
+`result.json` es un resumen fail-fast de escenarios completados, no veinte
+pruebas independientes. `artifacts.json` inventaría tamaños y SHA-256 de
+los archivos verificados. Antes de emitirlo, y nuevamente en CI, el validador
+recalcula la correlación bloque/transacción/código, comprueba políticas SBE,
+extractos PDC, consultas y la presencia de los demás diagnósticos. Los hashes
+permiten detectar cambios de archivos; no constituyen una firma de autenticidad.
+Un token ya utilizado se rechaza sin borrar ni mezclar evidencia anterior.
 
 ## Paquete divergente
 
@@ -132,20 +151,49 @@ coinciden. Un `trap` restaura el `packageID` canónico incluso ante errores;
 el harness verifica `queryapproved` y completa luego la recepción con el
 paquete correcto.
 
+## Conclusión acotada al Core
+
+En los escenarios Core probados, ninguna organización puede por sí sola
+cambiar la custodia, intervenir una unidad ajena mediante las operaciones Core
+ni sustituir una contraparte exigida por la política. Esto no afirma que toda
+operación requiera múltiples organizaciones: el custodio puede dispensar su
+propia unidad, y las operaciones del registro pueden llevar solo endoso
+regulatorio. La autorización del creador y el endoso de peers son controles
+distintos, con rechazos de aplicación y plataforma respectivamente.
+
+**Ventana restante:** entre el despacho, endosado solo por el emisor, y la
+recepción, la unidad permanece en `EN_TRANSITO` bajo un par validado únicamente
+por el emisor. El despacho instala la SBE de tránsito para las escrituras
+posteriores; no prueba aún coincidencia de matrices entre ambas partes.
+`ReceiveTransfer` reevalúa el par y exige los endosos de emisor y receptor.
+La política PDC `OR(A,B)` es complementaria: es la SBE pública la que exige
+ambas partes al cerrar el tránsito.
+
+La afirmación sobre intervención no abarca operaciones extraordinarias ni
+laboratorios no custodios: su evidencia pertenece a NET-9, no a esta corrida.
+
 ## Resultado final
 
-- estado del merge ejecutado: `HEAD d1cc9700ba56bde26962e0b2fae0cd1712430ae9`
-  más `MERGE_HEAD 06ebf1c` y la corrección CC-7 aún no commiteada;
-- `packageID`:
-  `snt_1.0:d6659e4907274adff5695c9de33d26a02e4f790f62494334c8f67018aef705aa`;
-- corrida: `run-0901151321`;
-- resultado: las 20 aserciones del harness son verdaderas;
-- autenticidad: `autentica=true`, estado `EN_TRANSITO` y cuatro checks `OK`;
-- NET-5 se repitió previamente sobre el mismo ledger limpio, incluido el caso
-  de reconciliación de datos privados.
+La referencia citable sobre la PR publicada es
+[Fabric Network Integration, run 33527737437](https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/actions/runs/33527737437),
+[job 99922781876](https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/actions/runs/33527737437/job/99922781876):
 
-El campo `repositoryCommit` del artefacto crudo identifica `HEAD`; como la
-ejecución ocurrió durante un merge todavía abierto, este reporte registra
-además `MERGE_HEAD` y el `packageID`, que identifica de forma determinística el
-chaincode efectivamente instalado. La evidencia deberá repetirse si cambia el
-árbol antes del commit final.
+- head de la PR: `b0b1cd0f812b3846463cf902bea1db4b214cee9a`;
+- base: `06ebf1c899219cf0d8f0fda52113eb47c0b7c789`;
+- revisión realmente extraída por Actions (merge de prueba):
+  `02a2207ab65ab6eaf4b055af91a219bfa86f180c`;
+- corrida del harness en CI: `run-0901155646`;
+- `packageID` confirmado en los logs:
+  `snt_1.0:d6659e4907274adff5695c9de33d26a02e4f790f62494334c8f67018aef705aa`;
+- pasos de despliegue/evidencia Core y reinicio/idempotencia: `success`;
+- el paso Core ejecutó NET-5, NET-6 y comprobó las 20 aserciones del resumen.
+
+La corrida local `run-0901151321` obtuvo `autentica=true` en `EN_TRANSITO`
+con cuatro checks `OK`, sobre el mismo paquete, antes del commit de merge.
+Se conserva su identificación original; no se reetiqueta como una corrida
+ejecutada después del commit.
+
+Estos resultados validan la revisión indicada, no automáticamente cualquier
+modificación posterior del harness. Los cambios de correlación por txID y
+validación de artefactos incorporados tras la revisión requieren una nueva
+corrida completa de integración antes de considerar cerrada la PR.
