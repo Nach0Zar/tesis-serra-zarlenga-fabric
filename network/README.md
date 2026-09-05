@@ -2,6 +2,22 @@
 
 Este directorio contiene la configuración de la red Hyperledger Fabric del prototipo conforme a [ADR-007](../docs/adr/007-network-topology.md). La interfaz de topología permanece definida por `configtx.yaml`: un canal `snt-channel`, siete MSP, un peer por organización y tres nodos Raft aportados por ANMAT, laboratorio y droguería.
 
+La relación completa entre las issues de red y las implementaciones del
+chaincode está registrada en
+[`docs/net-cc-dependencies.md`](../docs/net-cc-dependencies.md). Ese documento
+también fija el orden de integración del Core y separa la evidencia futura de
+operaciones extraordinarias en NET-9.
+
+## Diagrama de despliegue
+
+![Topología de despliegue de snt-channel](deployment.svg)
+
+La fuente reproducible es [`network/deployment.mmd`](deployment.mmd) y el SVG
+se genera con Mermaid CLI `11.16.0`. La
+[tabla canónica de puertos y endpoints](compose.md#puertos-publicados) vive en
+`network/compose.md`; el diagrama resume esa tabla, pero no la reemplaza como
+fuente operativa.
+
 ## Inventario de organizaciones
 
 `organizations-manifest.json` es el inventario versionado compartido por la configuración criptográfica, la generación de colecciones y el bootstrap, según [ADR-010](../docs/adr/010-non-custodial-identity.md). `organizations-manifest.schema.json` usa JSON Schema Draft 2020-12 y cierra el formato con `additionalProperties: false`.
@@ -125,6 +141,40 @@ lifecycle. Si un `Init` incorrecto ya fue confirmado, hace falta reiniciar el
 ledger descartable o tomar una decisión de gobernanza; el script no sustituye
 al regulador.
 
+### Demo Core reproducible y evidencia de endoso
+
+La secuencia completa, desde las identidades hasta la demo funcional, se
+ejecuta desde la raíz:
+
+```bash
+python3 network/scripts/validate-organizations-manifest.py
+./network/scripts/generate-crypto.sh
+./network/scripts/verify-crypto.sh
+
+./network/network.sh up
+./network/network.sh createChannel
+./network/network.sh deployCC
+
+./test/integration/pdc-evidence.sh
+./test/integration/endorsement-evidence.sh
+./network/network.sh verify
+```
+
+`deployCC` prueba el bootstrap antes de confirmar el `Init`: diferencia una
+transacción inválida por falta de endosos de un rechazo tipificado por la
+lógica. El harness de NET-6 ejecuta después
+`RegisterOrganization → RegisterUnit → DispatchTransfer → ReceiveTransfer` y
+la variante `RejectTransfer`; completa el camino aceptado con otro despacho,
+consulta `VerifyUnit` mientras la unidad está `EN_TRANSITO`, y luego ejecuta
+otra recepción, `Dispense` e historial. `VerifyTrace` pertenece a CC-8.
+
+Los resultados crudos se guardan en `build/evidence/net-6/` y permanecen
+ignorados por Git. El procedimiento y el estado de la corrida citable se
+versionan en [`network/evidence/NET-6.md`](evidence/NET-6.md). El harness
+aborta si detecta stubs de CC: la evidencia final solo puede obtenerse después
+de integrar las CC Core, ejecutar `git pull origin develop`, regenerar el
+paquete y comenzar desde un ledger limpio.
+
 ## Colecciones privadas y evidencia
 
 `collections_config.json` se genera exclusivamente desde el manifiesto y
@@ -155,6 +205,12 @@ La evidencia completa queda en `build/evidence/` y no se versiona. En cada
 ejecución el probe genera `sanitized-block-excerpt.json`, limitado al encabezado
 del bloque, identificadores y hashes del rwset. Los resúmenes sanitizados y un
 extracto citable de una ejecución verificada están en `network/evidence/`.
+
+El probe conserva una responsabilidad deliberadamente estrecha: aislar la
+semántica de Fabric y la política `OR(A,B)` de la colección. NET-6 lo
+complementa con un `DispatchTransfer` real del chaincode `snt`, cuyo bloque
+sanitizado demuestra el nombre y los hashes de la PDC sin exponer el payload
+comercial.
 
 Un onboarding que agregue una organización custodial requiere actualizar
 manifiesto y canal, regenerar las colecciones, reconstruir y bloquear el
@@ -201,7 +257,8 @@ El proceso implementa el mecanismo `cafiles` soportado por Fabric CA: un único 
 
 ## Fuera de alcance
 
-El probe de integración demuestra la semántica de PDC de la red, pero no
-implementa `DispatchTransfer`, `ReceiveTransfer` ni `RejectTransfer`;
-esas operaciones permanecen en CC-3. La evidencia exhaustiva de SBE y
-marcadores del chaincode productivo permanece en NET-6.
+NET-6/NET-7 cubren únicamente el flujo Core. Las transiciones extraordinarias,
+la intervención de un laboratorio no custodio y su evidencia de red pertenecen
+a [NET-9](https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/issues/97).
+El listener regulatorio permanece en NET-8. Ninguno de esos comportamientos se
+simula ni se anticipa en los scripts Core.

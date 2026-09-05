@@ -104,6 +104,16 @@ class SanitizePdcEvidenceTest(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.SanitizationError, "found 2"):
             MODULE.sanitize_block(block, COLLECTION)
 
+    def test_selects_requested_transaction_in_multi_transaction_block(self) -> None:
+        value = decoded_block()
+        other = copy.deepcopy(value["data"]["data"][0])
+        other["payload"]["header"]["channel_header"]["tx_id"] = "other"
+        value["data"]["data"].insert(0, other)
+        excerpt = MODULE.sanitize_block(value, COLLECTION, "abc123")
+        self.assertEqual("abc123", excerpt["transactionId"])
+        with self.assertRaises(MODULE.SanitizationError):
+            MODULE.sanitize_block(value, COLLECTION, "missing")
+
     def test_invalid_hash_encoding_is_rejected(self) -> None:
         block = decoded_block()
         block["header"]["data_hash"] = "not base64!"

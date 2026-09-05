@@ -565,6 +565,120 @@ verify_pre_init_gate() {
   }
 }
 
+network_channel_height() {
+  local output
+  output="$(peer channel getinfo --channelID "${CHANNEL_NAME}")"
+  jq -r '.height' <<<"${output#Blockchain info: }"
+}
+
+# Los bloques obtenidos del orderer no incluyen TRANSACTIONS_FILTER: ese
+# metadata lo agrega cada peer al validar y confirmar el bloque. QSCC consulta
+# el ledger local ya validado. La CLI agrega un salto de linea al payload
+# binario en su modo printable, por lo que se lo retira de forma controlada.
+fetch_peer_block_from_ledger() {
+  local block_number="$1"
+  local output="$2"
+  local diagnostics="$3"
+  local query="${4:-GetBlockByNumber}"
+  local temporary="${output}.query"
+  local ctor last_byte
+  [[ "${query}" == GetBlockByNumber || "${query}" == GetBlockByTxID ]] \
+    || fail "unsupported QSCC block query"
+  require_command head
+  require_command tail
+  require_command od
+  require_command xargs
+  ctor="$(jq -cn --arg channel "${CHANNEL_NAME}" --arg number "${block_number}" \
+    --arg query "${query}" '{Args:[$query,$channel,$number]}')"
+  peer chaincode query \
+    --channelID "${CHANNEL_NAME}" \
+    --name qscc \
+    --ctor "${ctor}" \
+    >"${temporary}" 2>>"${diagnostics}" || return 1
+  last_byte="$(tail -c 1 "${temporary}" | od -An -t u1 | xargs)"
+  [[ "${last_byte}" == "10" ]] || fail "QSCC block output did not end with the expected CLI newline"
+  head -c -1 "${temporary}" >"${output}"
+  rm -f -- "${temporary}"
+}
+
+verify_bootstrap_constraints() {
+  local evidence="${EVIDENCE_DIR}/net-6/bootstrap"
+  local msp_id slug peer_hostname agent_type id id_type active orderer_hostname
+  local output status before after raw decoded tx_id fetched=false
+  local -a invoke_args tx_ids=()
+  mkdir -p "${evidence}"
+
+  read -r msp_id slug peer_hostname agent_type id id_type active orderer_hostname < <(regulator_row)
+  use_organization "${msp_id}" "${slug}" "${peer_hostname}" User1
+  invoke_args=(
+    "${ORDERER_ARGS[@]}"
+    --channelID "${CHANNEL_NAME}"
+    --name "${CHAINCODE_NAME}"
+    --isInit
+    --ctor '{"function":"Init","Args":[]}'
+    --peerAddresses "${CORE_PEER_ADDRESS}"
+    --tlsRootCertFiles "${CORE_PEER_TLS_ROOTCERT_FILE}"
+    --waitForEvent
+    --waitForEventTimeout "${SNT_COMMIT_TIMEOUT:-180s}"
+  )
+  info "Proving that Init cannot commit with only the regulatory endorser"
+  set +e
+  output="$(peer chaincode invoke "${invoke_args[@]}" 2>&1)"
+  status=$?
+  set -e
+  printf '%s\n' "${output}" >"${evidence}/init-insufficient-endorsers.txt"
+  [[ "${status}" -ne 0 ]] || fail "Init unexpectedly committed without all founding organizations"
+  grep -q 'ENDORSEMENT_POLICY_FAILURE' <<<"${output}" || fail "insufficient Init endorsement did not produce ENDORSEMENT_POLICY_FAILURE"
+  mapfile -t tx_ids < <(sed -nE 's/.*txid \[([0-9a-f]{64})\].*/\1/p' <<<"${output}" | sort -u)
+  [[ "${#tx_ids[@]}" -eq 1 ]] || fail "insufficient Init endorsement did not report exactly one transaction ID"
+  tx_id="${tx_ids[0]}"
+  printf '%s\n' "${tx_id}" >"${evidence}/init-insufficient-endorsers-txid.txt"
+  raw="${evidence}/init-insufficient-endorsers-block.pb"
+  decoded="${evidence}/init-insufficient-endorsers-block.json"
+  : >"${evidence}/init-insufficient-endorsers-fetch.txt"
+  for _ in {1..30}; do
+    if fetch_peer_block_from_ledger "${tx_id}" "${raw}" "${evidence}/init-insufficient-endorsers-fetch.txt" GetBlockByTxID; then
+      fetched=true
+      break
+    fi
+    sleep 1
+  done
+  [[ "${fetched}" == true ]] || fail "insufficient Init transaction was not available on the observer peer"
+  configtxlator proto_decode --input "${raw}" --type common.Block --output "${decoded}"
+  python3 "${SCRIPT_DIR}/scripts/verify-net6-evidence.py" transaction \
+    --block "${decoded}" --txid "${tx_id}" --code 10 --channel "${CHANNEL_NAME}" \
+    >"${evidence}/init-insufficient-endorsers-transaction.json"
+
+  read -r msp_id slug peer_hostname agent_type id id_type active orderer_hostname < <(
+    organization_rows | awk -F '\t' '$4 != "REGULATOR" { print; exit }'
+  )
+  [[ -n "${msp_id}" ]] || fail "no non-regulatory organization is available for the Init identity test"
+  use_organization "${msp_id}" "${slug}" "${peer_hostname}" User1
+  before="$(network_channel_height)"
+  invoke_args=(
+    "${ORDERER_ARGS[@]}"
+    --channelID "${CHANNEL_NAME}"
+    --name "${CHAINCODE_NAME}"
+    --isInit
+    --ctor '{"function":"Init","Args":[]}'
+    "${ALL_PEER_TARGETS[@]}"
+    --waitForEvent
+    --waitForEventTimeout "${SNT_COMMIT_TIMEOUT:-180s}"
+  )
+  info "Proving that Init rejects a creator outside the embedded regulator"
+  set +e
+  output="$(peer chaincode invoke "${invoke_args[@]}" 2>&1)"
+  status=$?
+  set -e
+  printf '%s\n' "${output}" >"${evidence}/init-wrong-creator.txt"
+  [[ "${status}" -ne 0 ]] || fail "Init unexpectedly accepted a non-regulatory creator"
+  grep -q 'REGULATORY_ONLY' <<<"${output}" || fail "wrong Init creator did not return REGULATORY_ONLY"
+  sleep 2
+  after="$(network_channel_height)"
+  [[ "${after}" -eq "${before}" ]] || fail "the application-level Init rejection unexpectedly reached the ledger"
+  printf '%s\n' "${before}" >"${evidence}/init-wrong-creator-unchanged-height.txt"
+}
+
 initialize_registry() {
   local evidence="${EVIDENCE_DIR}/net-4/lifecycle"
   local msp_id slug peer_hostname agent_type id id_type active orderer_hostname
@@ -583,6 +697,11 @@ initialize_registry() {
   fi
 
   verify_pre_init_gate
+  verify_bootstrap_constraints
+
+  # La prueba negativa termina con la identidad de otra organizacion activa.
+  # El Init valido debe volver a ser creado por el regulador embebido.
+  use_organization "${msp_id}" "${slug}" "${peer_hostname}" User1
 
   invoke_args=(
     "${ORDERER_ARGS[@]}"

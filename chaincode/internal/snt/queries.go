@@ -36,7 +36,8 @@ func (c *SNTContract) ReadUnit(
 	return &view, nil
 }
 
-// GetUnitHistory devuelve la traza completa de una unidad con
+// GetUnitHistory devuelve la traza completa de una unidad en orden cronologico
+// --desde el alta hasta el estado actual-- con
 // GetHistoryForKey: el identificador de transaccion, el timestamp y el valor
 // ENTERO de la clave en cada punto del historial.
 //
@@ -71,7 +72,10 @@ func (c *SNTContract) GetUnitHistory(
 }
 
 // readUnitHistory devuelve las modificaciones CONFIRMADAS de la clave de una
-// unidad, en el orden en que Fabric las entrega.
+// unidad en orden cronologico, de la mas antigua a la mas reciente. Fabric 2.x
+// entrega GetHistoryForKey en el orden inverso; normalizarlo aca conserva el
+// contrato de GetUnitHistory y permite que las verificaciones recorran la
+// cadena desde su origen.
 //
 // Existe como helper y no dentro de GetUnitHistory porque tiene dos consumidores
 // con reglas distintas sobre el mismo dato: la operacion de lectura, que
@@ -114,6 +118,9 @@ func readUnitHistory(
 			entry.Value = &unit
 		}
 		entries = append(entries, entry)
+	}
+	for left, right := 0, len(entries)-1; left < right; left, right = left+1, right-1 {
+		entries[left], entries[right] = entries[right], entries[left]
 	}
 	return entries, nil
 }

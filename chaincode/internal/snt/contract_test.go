@@ -11,7 +11,7 @@ import (
 )
 
 // contractOperations es la superficie publica congelada por
-// docs/api-contract.md (v2.7.0). Es la lista completa: agregar, quitar o
+// docs/api-contract.md (v2.7.1). Es la lista completa: agregar, quitar o
 // renombrar una operacion es un cambio del contrato que exige su propio PR con
 // aprobacion explicita, nunca un efecto colateral de una issue de
 // implementacion.

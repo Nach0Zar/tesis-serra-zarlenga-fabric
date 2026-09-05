@@ -137,7 +137,15 @@ func (s *mockStub) GetHistoryForKey(key string) (shim.HistoryQueryIteratorInterf
 	if err := s.injected("GetHistoryForKey"); err != nil {
 		return nil, err
 	}
-	return &mockHistoryIterator{items: s.history[key]}, nil
+	// Fabric 2.x entrega el historial desde la modificacion mas nueva hacia la
+	// mas antigua. El mock debe reproducir ese contrato para que los tests no
+	// oculten consumidores que asumen el orden cronologico.
+	stored := s.history[key]
+	items := make([]*queryresult.KeyModification, len(stored))
+	for i := range stored {
+		items[i] = stored[len(stored)-1-i]
+	}
+	return &mockHistoryIterator{items: items}, nil
 }
 
 // errPvtdataNotAvailable reproduce el mensaje con el que Fabric rechaza la
