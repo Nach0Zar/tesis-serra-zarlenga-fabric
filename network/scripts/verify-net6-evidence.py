@@ -42,7 +42,9 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
-def transaction_evidence(block: dict, txid: str, expected_code: int) -> dict:
+def transaction_evidence(
+    block: dict, txid: str, expected_code: int, expected_channel: str = "snt-channel"
+) -> dict:
     transactions = block["data"]["data"]
     matches = [
         index for index, tx in enumerate(transactions)
@@ -53,7 +55,10 @@ def transaction_evidence(block: dict, txid: str, expected_code: int) -> dict:
     require(len(codes) == len(transactions), "validation filter length mismatch")
     index = matches[0]
     header = transactions[index]["payload"]["header"]["channel_header"]
-    require(header["channel_id"] == "snt-channel", "unexpected channel")
+    require(
+        header["channel_id"] == expected_channel,
+        f"unexpected channel: expected {expected_channel}, got {header['channel_id']}",
+    )
     require(codes[index] == expected_code, f"transaction {txid}: expected code {expected_code}, got {codes[index]}")
     return {
         "transactionId": txid,
@@ -67,7 +72,7 @@ def load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def verify_run(directory: Path) -> dict:
+def verify_run(directory: Path, expected_channel: str = "snt-channel") -> dict:
     artifacts = {}
 
     def record(name: str) -> Path:
@@ -85,7 +90,9 @@ def verify_run(directory: Path) -> dict:
         require(txid not in seen, "transaction reused across scenarios")
         seen.add(txid)
         ids[label] = txid
-        evidence = transaction_evidence(load_json(record(f"{label}-block.json")), txid, code)
+        evidence = transaction_evidence(
+            load_json(record(f"{label}-block.json")), txid, code, expected_channel
+        )
         require(load_json(record(f"{label}-transaction.json")) == evidence, f"{label}: transaction evidence mismatch")
         status = int(record(f"{label}-status.txt").read_text())
         require((status == 0) == (code == 0), f"{label}: CLI status mismatch")
@@ -139,15 +146,19 @@ def main() -> int:
     transaction.add_argument("--block", type=Path, required=True)
     transaction.add_argument("--txid", required=True)
     transaction.add_argument("--code", type=int, choices=(0, 10), required=True)
+    transaction.add_argument("--channel", default="snt-channel")
     run = commands.add_parser("run")
     run.add_argument("--directory", type=Path, required=True)
     run.add_argument("--manifest", type=Path)
+    run.add_argument("--channel", default="snt-channel")
     args = parser.parse_args()
     try:
         if args.command == "transaction":
-            result = transaction_evidence(load_json(args.block), args.txid, args.code)
+            result = transaction_evidence(
+                load_json(args.block), args.txid, args.code, args.channel
+            )
         else:
-            result = verify_run(args.directory)
+            result = verify_run(args.directory, args.channel)
             if args.manifest:
                 require(load_json(args.manifest) == result, "artifact manifest differs from verified content")
         print(json.dumps(result, indent=2, sort_keys=True))

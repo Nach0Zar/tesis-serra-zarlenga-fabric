@@ -46,7 +46,8 @@ jq -e '.transactionIndex == 1 and .validationCode == 10 and .blockNumber == 42' 
 # Un 10 de OTRA transaccion no demuestra que la nuestra sea invalida.
 jq '.metadata.metadata[2] = "CgA="' "${RUN_DIR}/observer-lag-block.json" >"${TEST_DIR}/wrong-code.json"
 if python3 "${NETWORK_DIR}/scripts/verify-net6-evidence.py" transaction \
-  --block "${TEST_DIR}/wrong-code.json" --txid "${txid}" --code 10 >/dev/null 2>&1; then
+  --block "${TEST_DIR}/wrong-code.json" --txid "${txid}" --code 10 \
+  --channel "${CHANNEL_NAME}" >/dev/null 2>&1; then
   fail "accepted another transaction's validation code"
 fi
 

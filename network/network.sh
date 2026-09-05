@@ -571,20 +571,6 @@ network_channel_height() {
   jq -r '.height' <<<"${output#Blockchain info: }"
 }
 
-wait_for_network_height() {
-  local previous="$1"
-  local current
-  for _ in {1..30}; do
-    current="$(network_channel_height)"
-    if [[ "${current}" -gt "${previous}" ]]; then
-      printf '%s\n' "${current}"
-      return
-    fi
-    sleep 1
-  done
-  fail "channel height did not advance after the bootstrap transaction"
-}
-
 # Los bloques obtenidos del orderer no incluyen TRANSACTIONS_FILTER: ese
 # metadata lo agrega cada peer al validar y confirmar el bloque. QSCC consulta
 # el ledger local ya validado. La CLI agrega un salto de linea al payload
@@ -618,14 +604,12 @@ fetch_peer_block_from_ledger() {
 verify_bootstrap_constraints() {
   local evidence="${EVIDENCE_DIR}/net-6/bootstrap"
   local msp_id slug peer_hostname agent_type id id_type active orderer_hostname
-  local output status before after raw decoded filter codes
-  local -a invoke_args
+  local output status before after raw decoded tx_id fetched=false
+  local -a invoke_args tx_ids=()
   mkdir -p "${evidence}"
-  require_command od
 
   read -r msp_id slug peer_hostname agent_type id id_type active orderer_hostname < <(regulator_row)
   use_organization "${msp_id}" "${slug}" "${peer_hostname}" User1
-  before="$(network_channel_height)"
   invoke_args=(
     "${ORDERER_ARGS[@]}"
     --channelID "${CHANNEL_NAME}"
@@ -645,16 +629,25 @@ verify_bootstrap_constraints() {
   printf '%s\n' "${output}" >"${evidence}/init-insufficient-endorsers.txt"
   [[ "${status}" -ne 0 ]] || fail "Init unexpectedly committed without all founding organizations"
   grep -q 'ENDORSEMENT_POLICY_FAILURE' <<<"${output}" || fail "insufficient Init endorsement did not produce ENDORSEMENT_POLICY_FAILURE"
-  wait_for_network_height "${before}" >/dev/null
-
-  raw="${evidence}/init-insufficient-endorsers-block-${before}.pb"
-  decoded="${evidence}/init-insufficient-endorsers-block-${before}.json"
-  fetch_peer_block_from_ledger "${before}" "${raw}" "${evidence}/init-insufficient-endorsers-fetch.txt"
+  mapfile -t tx_ids < <(sed -nE 's/.*txid \[([0-9a-f]{64})\].*/\1/p' <<<"${output}" | sort -u)
+  [[ "${#tx_ids[@]}" -eq 1 ]] || fail "insufficient Init endorsement did not report exactly one transaction ID"
+  tx_id="${tx_ids[0]}"
+  printf '%s\n' "${tx_id}" >"${evidence}/init-insufficient-endorsers-txid.txt"
+  raw="${evidence}/init-insufficient-endorsers-block.pb"
+  decoded="${evidence}/init-insufficient-endorsers-block.json"
+  : >"${evidence}/init-insufficient-endorsers-fetch.txt"
+  for _ in {1..30}; do
+    if fetch_peer_block_from_ledger "${tx_id}" "${raw}" "${evidence}/init-insufficient-endorsers-fetch.txt" GetBlockByTxID; then
+      fetched=true
+      break
+    fi
+    sleep 1
+  done
+  [[ "${fetched}" == true ]] || fail "insufficient Init transaction was not available on the observer peer"
   configtxlator proto_decode --input "${raw}" --type common.Block --output "${decoded}"
-  filter="$(jq -er '.metadata.metadata[2]' "${decoded}")"
-  codes="$(printf '%s' "${filter}" | base64 --decode | od -An -t u1 | xargs)"
-  printf '%s\n' "${codes}" >"${evidence}/init-insufficient-endorsers-validation-codes.txt"
-  grep -qw '10' <<<"${codes}" || fail "bootstrap block does not contain Fabric validation code 10"
+  python3 "${SCRIPT_DIR}/scripts/verify-net6-evidence.py" transaction \
+    --block "${decoded}" --txid "${tx_id}" --code 10 --channel "${CHANNEL_NAME}" \
+    >"${evidence}/init-insufficient-endorsers-transaction.json"
 
   read -r msp_id slug peer_hostname agent_type id id_type active orderer_hostname < <(
     organization_rows | awk -F '\t' '$4 != "REGULATOR" { print; exit }'

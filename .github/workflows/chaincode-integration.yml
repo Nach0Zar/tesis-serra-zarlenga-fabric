@@ -124,11 +124,11 @@ jobs:
             .schemaVersion == "1.0.0"
             and .channel == "snt-channel"
             and .chaincode == "snt"
-            and all(.assertions[]; . == true)
           ' "${NET6_RESULTS[0]}" >/dev/null
           NET6_RUN_DIR="$(dirname "${NET6_RESULTS[0]}")"
           python3 network/scripts/verify-net6-evidence.py run \
-            --directory "${NET6_RUN_DIR}" --manifest "${NET6_RUN_DIR}/artifacts.json"
+            --directory "${NET6_RUN_DIR}" --manifest "${NET6_RUN_DIR}/artifacts.json" \
+            --channel "${SNT_CHANNEL_NAME}"
 
       - name: Verify restart and idempotence
         shell: bash

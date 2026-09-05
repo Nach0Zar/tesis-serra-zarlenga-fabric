@@ -2,10 +2,8 @@
 
 ## Estado
 
-**Evidencia Core confirmada por CI el 2026-09-01 para la revisión indicada
-en «Resultado final».** El refuerzo posterior del harness por revisión de PR
-debe volver a pasar integración antes del merge; no se atribuye ese resultado
-previo al código de pruebas modificado.
+**Evidencia Core confirmada por CI el 2026-09-03 para la revisión indicada
+en «Resultado final».**
 
 La ejecución citada levantó un ledger limpio con las implementaciones CC del
 Core. La corrida local previa `run-0901151321` queda como antecedente; sus
@@ -132,12 +130,16 @@ como `<escenario>-transaction.json` (ID, índice, bloque y código). Los checks
 SBE y los extractos PDC se limitan también a ese ID.
 
 `result.json` es un resumen fail-fast de escenarios completados, no veinte
-pruebas independientes. `artifacts.json` inventaría tamaños y SHA-256 de
+pruebas independientes. `artifacts.json` registra tamaños y SHA-256 de
 los archivos verificados. Antes de emitirlo, y nuevamente en CI, el validador
 recalcula la correlación bloque/transacción/código, comprueba políticas SBE,
 extractos PDC, consultas y la presencia de los demás diagnósticos. Los hashes
 permiten detectar cambios de archivos; no constituyen una firma de autenticidad.
 Un token ya utilizado se rechaza sin borrar ni mezclar evidencia anterior.
+Los resultados crudos y el manifiesto permanecen bajo `build/`, ignorado por
+Git, y el workflow no los publica como artifact: son diagnósticos efímeros de
+la corrida. La evidencia citable y persistente es este reporte, respaldado por
+el run, job, revisión y `packageID` identificados abajo.
 
 ## Paquete divergente
 
@@ -175,25 +177,21 @@ laboratorios no custodios: su evidencia pertenece a NET-9, no a esta corrida.
 ## Resultado final
 
 La referencia citable sobre la PR publicada es
-[Fabric Network Integration, run 33527737437](https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/actions/runs/33527737437),
-[job 99922781876](https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/actions/runs/33527737437/job/99922781876):
+[Fabric Network Integration, run 33815572025](https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/actions/runs/33815572025),
+[job 100846863523](https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/actions/runs/33815572025/job/100846863523):
 
-- head de la PR: `b0b1cd0f812b3846463cf902bea1db4b214cee9a`;
+- head de la PR: `1269942401716ca3edb6fb38bb53b2e582563919`;
 - base: `06ebf1c899219cf0d8f0fda52113eb47c0b7c789`;
 - revisión realmente extraída por Actions (merge de prueba):
-  `02a2207ab65ab6eaf4b055af91a219bfa86f180c`;
-- corrida del harness en CI: `run-0901155646`;
+  `c3872fe`;
+- corrida del harness en CI: `run-0903230815`;
 - `packageID` confirmado en los logs:
   `snt_1.0:d6659e4907274adff5695c9de33d26a02e4f790f62494334c8f67018aef705aa`;
 - pasos de despliegue/evidencia Core y reinicio/idempotencia: `success`;
-- el paso Core ejecutó NET-5, NET-6 y comprobó las 20 aserciones del resumen.
+- el paso Core ejecutó NET-5, NET-6, comprobó el resumen y volvió a validar
+  `artifacts.json` contra el contenido real de la corrida.
 
 La corrida local `run-0901151321` obtuvo `autentica=true` en `EN_TRANSITO`
 con cuatro checks `OK`, sobre el mismo paquete, antes del commit de merge.
 Se conserva su identificación original; no se reetiqueta como una corrida
 ejecutada después del commit.
-
-Estos resultados validan la revisión indicada, no automáticamente cualquier
-modificación posterior del harness. Los cambios de correlación por txID y
-validación de artefactos incorporados tras la revisión requieren una nueva
-corrida completa de integración antes de considerar cerrada la PR.

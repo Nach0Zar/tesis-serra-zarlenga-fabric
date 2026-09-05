@@ -138,6 +138,7 @@ capture_block() {
   tx_id="${tx_ids[0]}"
   printf '%s\n' "${tx_id}" >"${RUN_DIR}/${label}-txid.txt"
   select_identity AnmatMSP Admin
+  : >"${RUN_DIR}/${label}-block-fetch.txt"
   # El peer observador puede estar atrasado: esperar ESTA transaccion, no una altura.
   for _ in {1..30}; do
     if fetch_peer_block_from_ledger "${tx_id}" "${raw}" "${RUN_DIR}/${label}-block-fetch.txt" GetBlockByTxID; then
@@ -149,7 +150,7 @@ capture_block() {
   [[ "${fetched}" == true ]] || fail "${label} transaction was not available on the observer peer"
   configtxlator proto_decode --input "${raw}" --type common.Block --output "${decoded}"
   python3 "${NETWORK_DIR}/scripts/verify-net6-evidence.py" transaction \
-    --block "${decoded}" --txid "${tx_id}" --code "${expected_code}" \
+    --block "${decoded}" --txid "${tx_id}" --code "${expected_code}" --channel "${CHANNEL_NAME}" \
     >"${RUN_DIR}/${label}-transaction.json"
 }
 
@@ -622,7 +623,8 @@ main_net6() {
   verify_core_queries
   verify_reject_restoration
   verify_matrix_divergence
-  python3 "${NETWORK_DIR}/scripts/verify-net6-evidence.py" run --directory "${RUN_DIR}" >"${RUN_DIR}/artifacts.json"
+  python3 "${NETWORK_DIR}/scripts/verify-net6-evidence.py" run \
+    --directory "${RUN_DIR}" --channel "${CHANNEL_NAME}" >"${RUN_DIR}/artifacts.json"
   write_result
 
   printf 'OK: NET-6 Core endorsement evidence completed under %s\n' "${RUN_DIR}"

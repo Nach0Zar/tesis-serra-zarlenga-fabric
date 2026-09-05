@@ -55,6 +55,12 @@ class TransactionEvidenceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "channel"):
             MODULE.transaction_evidence(value, "target", 10)
 
+    def test_configured_channel(self):
+        value = block(ids=("target",), codes=(0,))
+        value["data"]["data"][0]["payload"]["header"]["channel_header"]["channel_id"] = "custom-channel"
+        result = MODULE.transaction_evidence(value, "target", 0, "custom-channel")
+        self.assertEqual(result["validationCode"], 0)
+
 
 class RunEvidenceTest(unittest.TestCase):
     def setUp(self):
