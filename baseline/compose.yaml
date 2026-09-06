@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_DB: ${SNT_BASELINE_DB_NAME:-snt_baseline}
+      POSTGRES_USER: ${SNT_BASELINE_DB_USER:-snt_baseline}
+      POSTGRES_PASSWORD: ${SNT_BASELINE_DB_PASSWORD:?SNT_BASELINE_DB_PASSWORD must be set}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    ports:
+      - "127.0.0.1:${SNT_BASELINE_DB_PORT:-5432}:5432"
+    volumes:
+      - baseline-postgres-data:/var/lib/postgresql/data
+      - ./migrations:/migrations:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    shm_size: 128mb
+
+volumes:
+  baseline-postgres-data:
