@@ -29,8 +29,10 @@
 #
 # El Init EXITOSO -- y con el, el seed del registro y las operaciones de
 # negocio -- exige una red cuyas MSP sean las del manifiesto fundacional. Esa
-# red la construye NET-4 (#23) con `snt-channel`; el escenario funcional
-# completo sobre ella pertenece a CC-3 (#16).
+# red la construye NET-4 (#23) con `snt-channel`. Cuando las CC del Core están
+# integradas, el escenario funcional y sus políticas se ejecutan mediante
+# `network/network.sh` y `test/integration/endorsement-evidence.sh`; este smoke
+# conserva únicamente la responsabilidad de despliegue sobre test-network.
 #
 # ------------------------------------------------------------------------------
 # Entorno

@@ -163,6 +163,37 @@ func TestGetUnitHistoryReconstructsFullTrace(t *testing.T) {
 	}
 }
 
+// TestGetUnitHistoryNormalizesFabricOrder reproduce la diferencia que detecto
+// la integracion NET-6: Fabric 2.x itera desde la modificacion mas nueva hacia
+// la mas antigua, mientras el contrato publico y la verificacion de custodia
+// recorren la traza desde el alta hacia el estado actual.
+func TestGetUnitHistoryNormalizesFabricOrder(t *testing.T) {
+	stub, contract := transferFixture(t)
+	stub.txID = "tx-despacho"
+	withTransient(stub, dispatchTransient("GLN:"+drogueriaGLN))
+	_, err := contract.DispatchTransfer(
+		testContext(stub, labMSP, RoleOperator),
+		DispatchTransferRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+	requireNoError(t, err)
+
+	key, err := medicationUnitKey(stub, validGTIN, validSerial)
+	requireNoError(t, err)
+	raw, err := stub.GetHistoryForKey(key)
+	requireNoError(t, err)
+	latest, err := raw.Next()
+	requireNoError(t, err)
+	if latest.GetTxId() != "tx-despacho" {
+		t.Fatalf("el mock no reproduce el orden newest-first de Fabric: %s", latest.GetTxId())
+	}
+
+	history, err := contract.GetUnitHistory(
+		testContext(stub, anmatMSP, RoleAuditor), validGTIN, validSerial)
+	requireNoError(t, err)
+	if history[0].TxID != "tx-0000000000000000" || history[len(history)-1].TxID != "tx-despacho" {
+		t.Fatalf("GetUnitHistory no normalizo a orden cronologico: %+v", history)
+	}
+}
+
 // TestGetUnitHistoryOnlyShowsConfirmedModifications documenta la semantica que
 // GetHistoryForKey hereda de la plataforma y que ADR-011 declara como limite:
 // los intentos rechazados no llegan al world state y no aparecen en el

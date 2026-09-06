@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Probe deliberadamente aislado para demostrar políticas y privacidad de
+# colecciones sin duplicar reglas del contrato snt. La evidencia productiva de
+# DispatchTransfer que complementa este probe vive en
+# test/integration/endorsement-evidence.sh.
 set -Eeuo pipefail
 
 REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"

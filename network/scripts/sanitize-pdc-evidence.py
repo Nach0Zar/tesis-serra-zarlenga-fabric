@@ -41,7 +41,7 @@ def require_base64(value: Any, field: str) -> str:
     return encoded
 
 
-def sanitize_block(block: dict[str, Any], collection: str) -> dict[str, Any]:
+def sanitize_block(block: dict[str, Any], collection: str, transaction_id: str | None = None) -> dict[str, Any]:
     header = block.get("header")
     transactions = block.get("data", {}).get("data")
     if not isinstance(header, dict) or not isinstance(transactions, list):
@@ -50,6 +50,9 @@ def sanitize_block(block: dict[str, Any], collection: str) -> dict[str, Any]:
     matches: list[tuple[dict[str, Any], dict[str, Any]]] = []
     for transaction in transactions:
         if not isinstance(transaction, dict):
+            continue
+        txid = transaction.get("payload", {}).get("header", {}).get("channel_header", {}).get("tx_id")
+        if transaction_id is not None and txid != transaction_id:
             continue
         for item in walk_objects(transaction):
             if item.get("collection_name") == collection:
@@ -104,6 +107,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--collection", required=True)
+    parser.add_argument("--transaction-id")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--forbidden-value", required=True)
     return parser.parse_args()
@@ -118,7 +122,7 @@ def main() -> int:
         block = json.loads(raw)
         if not isinstance(block, dict):
             raise SanitizationError("decoded block must be a JSON object")
-        excerpt = sanitize_block(block, args.collection)
+        excerpt = sanitize_block(block, args.collection, args.transaction_id)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
             json.dumps(excerpt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
