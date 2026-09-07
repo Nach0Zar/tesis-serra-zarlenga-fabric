@@ -46,7 +46,7 @@ como decisiones por ausencia de regla.
 Las fechas de vencimiento se generan deliberadamente entre 2099-01-01 y
 2101-12-31 para que todas las unidades permanezcan vigentes durante las rondas
 de CLI-3. Los rechazos por unidad vencida no forman parte de este dataset:
-corresponden a EXT-2 (#61).
+corresponden a EXT-2 (#28).
 
 Los pares se derivan en tiempo de generación mediante
 `domain.DecideTransfer`; no existe una segunda matriz en el cliente.
