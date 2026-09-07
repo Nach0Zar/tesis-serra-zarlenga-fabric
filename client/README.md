@@ -43,6 +43,11 @@ un `DispatchTransfer` que debe rechazarse con
 `TRANSFER_NOT_AUTHORIZED`. Se incluyen tanto prohibiciones explícitas
 como decisiones por ausencia de regla.
 
+Las fechas de vencimiento se generan deliberadamente entre 2099-01-01 y
+2101-12-31 para que todas las unidades permanezcan vigentes durante las rondas
+de CLI-3. Los rechazos por unidad vencida no forman parte de este dataset:
+corresponden a EXT-2 (#61).
+
 Los pares se derivan en tiempo de generación mediante
 `domain.DecideTransfer`; no existe una segunda matriz en el cliente.
 Las organizaciones se leen de la copia embebida y verificada del manifiesto

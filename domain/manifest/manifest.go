@@ -1,7 +1,6 @@
-// Package manifest expone la copia embebida y verificada del manifiesto
-// fundacional. El chaincode la usa en el bootstrap para resolver la identidad
-// regulatoria y las herramientas reproducibles la usan para conocer las
-// organizaciones del despliegue (ADR-010, punto 4; ADR-008).
+// Package manifest expone el manifiesto fundacional de organizaciones que el
+// chaincode embebe para resolver, en el bootstrap, la identidad de la
+// organizacion regulatoria (ADR-010, punto 4).
 //
 // El manifiesto NO es una fuente de verdad de identidad en tiempo de ejecucion:
 // tiene un unico punto de consumo (Init) y un unico momento de consumo (el
@@ -38,8 +37,8 @@ var organizationsManifestJSON []byte
 const CanonicalPath = "network/organizations-manifest.json"
 
 // Organization es una entrada del manifiesto fundacional. Solo se modelan los
-// campos que necesitan el chaincode y las herramientas de dominio; el esquema
-// completo (hostnames y otros datos operativos) lo consumen los scripts de red.
+// campos que el chaincode necesita; el esquema completo (hostnames, slugs) lo
+// consumen los scripts de red.
 type Organization struct {
 	MSPID      string           `json:"mspId"`
 	Slug       string           `json:"slug"`

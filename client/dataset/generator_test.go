@@ -198,6 +198,39 @@ func TestBundleIsDeterministicAndHashMatches(t *testing.T) {
 	}
 }
 
+func TestBundleIsDeterministicAcrossIdentifierRotations(t *testing.T) {
+	if testing.Short() {
+		t.Skip("omite la generacion ampliada en modo short")
+	}
+	t.Parallel()
+
+	first, err := generateBundle(t.TempDir(), 5000)
+	if err != nil {
+		t.Fatalf("primera generacion ampliada: %v", err)
+	}
+	second, err := generateBundle(t.TempDir(), 5000)
+	if err != nil {
+		t.Fatalf("segunda generacion ampliada: %v", err)
+	}
+	if first.Manifest.Dataset.SHA256 != second.Manifest.Dataset.SHA256 {
+		t.Fatalf(
+			"hash no deterministico tras rotaciones de GTIN y lote: first=%s second=%s",
+			first.Manifest.Dataset.SHA256,
+			second.Manifest.Dataset.SHA256,
+		)
+	}
+
+	firstGTIN, _, firstLot, _ := identifiersFor(1)
+	rotatedGTIN, _, _, _ := identifiersFor(101)
+	_, _, rotatedLot, _ := identifiersFor(1001)
+	if firstGTIN == rotatedGTIN {
+		t.Fatal("la prueba ampliada no alcanzo la primera rotacion de GTIN")
+	}
+	if firstLot == rotatedLot {
+		t.Fatal("la prueba ampliada no alcanzo la primera rotacion de lote")
+	}
+}
+
 func TestSchemasUseDraft202012AndMatchingVersion(t *testing.T) {
 	t.Parallel()
 
