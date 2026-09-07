@@ -1,3 +1,4 @@
+// Package main expone el ejecutable CLI del cliente Fabric Gateway.
 package main
 
 import (

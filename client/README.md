@@ -123,5 +123,10 @@ Los errores del chaincode se conservan en stderr con el envelope de DES-5:
 ```
 
 Los fallos de transporte o plataforma no clasificables se expresan como
-`INTERNAL_ERROR`. Los códigos de salida son `0` para éxito,
+`INTERNAL_ERROR`. En esos casos, `details` incluye la etapa,
+una clasificación operativa y la causa original normalizada y truncada a 1024
+caracteres. Los rechazos de validación de Fabric incluyen además
+`validationCode` y `transactionId`.
+
+Los códigos de salida son `0` para éxito,
 `1` para fallos de ejecución y `2` para uso inválido de la CLI.

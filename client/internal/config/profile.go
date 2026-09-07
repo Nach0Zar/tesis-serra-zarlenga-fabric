@@ -1,3 +1,4 @@
+// Package config resuelve perfiles organizacionales desde la topología local.
 package config
 
 import (
@@ -11,7 +12,9 @@ import (
 )
 
 const (
-	DefaultChannelName   = "snt-channel"
+	// DefaultChannelName identifica el canal fijado por ADR-007.
+	DefaultChannelName = "snt-channel"
+	// DefaultChaincodeName identifica el contrato fijado por ADR-007.
 	DefaultChaincodeName = "snt"
 )
 
@@ -136,6 +139,9 @@ func Resolve(repoRoot, organization, endpointOverride, serverNameOverride string
 
 func loadOrganization(repoRoot, slug string) (manifestOrganization, error) {
 	manifestPath := filepath.Join(repoRoot, "network", "organizations-manifest.json")
+	// repoRoot es una ruta explícita o una raíz descubierta por
+	// FindRepositoryRoot mediante este mismo archivo.
+	//nolint:gosec // lectura intencional del manifiesto versionado del repositorio
 	contents, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return manifestOrganization{}, fmt.Errorf("read network manifest: %w", err)

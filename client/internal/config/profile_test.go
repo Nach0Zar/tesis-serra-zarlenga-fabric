@@ -110,7 +110,7 @@ func TestFindRepositoryRoot(t *testing.T) {
 	repositoryRoot := t.TempDir()
 	writeManifest(t, repositoryRoot, nil)
 	nested := filepath.Join(repositoryRoot, "client", "cmd")
-	if err := os.MkdirAll(nested, 0o755); err != nil {
+	if err := os.MkdirAll(nested, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
@@ -126,7 +126,7 @@ func TestFindRepositoryRoot(t *testing.T) {
 func writeManifest(t *testing.T, repositoryRoot string, organizations []manifestOrganization) {
 	t.Helper()
 	manifestDirectory := filepath.Join(repositoryRoot, "network")
-	if err := os.MkdirAll(manifestDirectory, 0o755); err != nil {
+	if err := os.MkdirAll(manifestDirectory, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	contents, err := json.Marshal(manifest{Organizations: organizations})
@@ -166,7 +166,7 @@ func writeCryptoFixture(
 		filepath.Join(organizationRoot, "peers", organization.PeerHostname, "tls", "ca.crt"): []byte("tls"),
 	}
 	for path, contents := range files {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(path, contents, 0o600); err != nil {

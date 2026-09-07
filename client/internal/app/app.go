@@ -1,3 +1,4 @@
+// Package app implementa el parsing y la ejecución de la CLI genérica.
 package app
 
 import (
@@ -96,7 +97,7 @@ func run(
 		return exitSuccess
 	}
 	if err != nil {
-		fmt.Fprintf(stderr, "error: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
 		return exitUsage
 	}
 
@@ -127,7 +128,7 @@ func run(
 
 	transient, err := readTransient(opts.transientFile, stdin)
 	if err != nil {
-		fmt.Fprintf(stderr, "error: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
 		return exitUsage
 	}
 
@@ -233,14 +234,18 @@ func parseOptions(arguments []string, stderr io.Writer) (options, bool, error) {
 }
 
 func printUsage(writer io.Writer) {
-	fmt.Fprintln(writer, "Usage:")
-	fmt.Fprintln(writer, "  snt-client query  --org <org> --function <name> [--arg <value> ...]")
-	fmt.Fprintln(writer, "  snt-client invoke --org <org> --function <name> [--arg <value> ...]")
-	fmt.Fprintln(writer, "Run either command with --help to list all options.")
+	_, _ = fmt.Fprintln(writer, "Usage:")
+	_, _ = fmt.Fprintln(writer, "  snt-client query  --org <org> --function <name> [--arg <value> ...]")
+	_, _ = fmt.Fprintln(writer, "  snt-client invoke --org <org> --function <name> [--arg <value> ...]")
+	_, _ = fmt.Fprintln(writer, "Run either command with --help to list all options.")
 }
 
 func printCommandUsage(writer io.Writer, command string, flags *flag.FlagSet) {
-	fmt.Fprintf(writer, "Usage: snt-client %s --org <org> --function <name> [options]\n", command)
+	_, _ = fmt.Fprintf(
+		writer,
+		"Usage: snt-client %s --org <org> --function <name> [options]\n",
+		command,
+	)
 	flags.PrintDefaults()
 }
 
@@ -249,15 +254,20 @@ func readTransient(path string, stdin io.Reader) (map[string][]byte, error) {
 		return nil, nil
 	}
 
-	var reader io.Reader = stdin
+	reader := stdin
 	var file *os.File
 	var err error
 	if path != "-" {
+		// La ruta es entrada explícita del operador; no se combina con secretos
+		// ni se usa para escribir contenido.
+		//nolint:gosec // lectura intencional de un archivo indicado por --transient-file
 		file, err = os.Open(path)
 		if err != nil {
 			return nil, fmt.Errorf("open transient file: %w", err)
 		}
-		defer file.Close()
+		defer func() {
+			_ = file.Close()
+		}()
 		reader = file
 	}
 

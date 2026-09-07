@@ -208,7 +208,7 @@ func TestRunNormalizesConnectionError(t *testing.T) {
 	}
 	want := "{\"code\":\"INTERNAL_ERROR\",\"message\":" +
 		"\"Error no clasificable atribuible al chaincode o a la plataforma.\"," +
-		"\"details\":{\"stage\":\"connect\"}}\n"
+		"\"details\":{\"cause\":\"dial failed\",\"classification\":\"unexpected\",\"stage\":\"connect\"}}\n"
 	if stderr.String() != want {
 		t.Fatalf("stderr = %q, want %q", stderr.String(), want)
 	}

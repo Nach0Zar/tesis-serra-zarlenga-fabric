@@ -1,3 +1,4 @@
+// Package fabric conecta la CLI con Hyperledger Fabric Gateway.
 package fabric
 
 import (
@@ -157,6 +158,9 @@ func newIdentity(profile config.Profile) (*identity.X509Identity, error) {
 }
 
 func newSign(privateKeyPath string) (identity.Sign, error) {
+	// privateKeyPath proviene exclusivamente del keystore User1 resuelto por
+	// config.Resolve, que además exige un único archivo regular.
+	//nolint:gosec // lectura intencional de la clave privada configurada
 	privateKeyPEM, err := os.ReadFile(privateKeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("read client private key: %w", err)
