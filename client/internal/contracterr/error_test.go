@@ -14,6 +14,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type wrappedTestError struct {
+	cause error
+}
+
+func (e wrappedTestError) Error() string {
+	return "wrapped gateway error"
+}
+
+func (e wrappedTestError) Unwrap() error {
+	return e.cause
+}
+
 func TestExtractWrappedContractError(t *testing.T) {
 	source := errors.New("proposal failed: response: status 500, message: " +
 		"{\"code\":\"UNIT_NOT_FOUND\",\"message\":\"La unidad no existe.\",\"details\":{\"key\":\"x\"}}")
@@ -62,6 +74,49 @@ func TestNormalizePlatformRejection(t *testing.T) {
 	}
 	if details["transactionId"] != "tx-123" {
 		t.Fatalf("transactionId = %q", details["transactionId"])
+	}
+}
+
+func TestGatewayTransactionID(t *testing.T) {
+	tests := map[string]struct {
+		err  error
+		want string
+	}{
+		"endorse": {
+			err: &gatewayclient.EndorseError{TransactionError: &gatewayclient.TransactionError{
+				TransactionID: "tx-endorse",
+			}},
+			want: "tx-endorse",
+		},
+		"submit": {
+			err: &gatewayclient.SubmitError{TransactionError: &gatewayclient.TransactionError{
+				TransactionID: "tx-submit",
+			}},
+			want: "tx-submit",
+		},
+		"commit status": {
+			err: &gatewayclient.CommitStatusError{TransactionError: &gatewayclient.TransactionError{
+				TransactionID: "tx-status",
+			}},
+			want: "tx-status",
+		},
+		"transaction": {
+			err:  &gatewayclient.TransactionError{TransactionID: "tx-generic"},
+			want: "tx-generic",
+		},
+		"commit": {
+			err:  &gatewayclient.CommitError{TransactionID: "tx-commit"},
+			want: "tx-commit",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			wrapped := wrappedTestError{cause: test.err}
+			if got := gatewayTransactionID(wrapped); got != test.want {
+				t.Fatalf("gatewayTransactionID() = %q, want %q", got, test.want)
+			}
+		})
 	}
 }
 

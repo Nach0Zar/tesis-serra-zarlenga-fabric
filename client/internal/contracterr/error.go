@@ -60,14 +60,14 @@ func Normalize(err error, stage string) Error {
 	if cause := diagnosticCause(err); cause != "" {
 		detailValues["cause"] = cause
 	}
+	if transactionID := gatewayTransactionID(err); transactionID != "" {
+		detailValues["transactionId"] = transactionID
+	}
 
 	var commitError *gatewayclient.CommitError
 	if errors.As(err, &commitError) {
 		detailValues["classification"] = "platform_rejection"
 		detailValues["validationCode"] = commitError.Code.String()
-		if commitError.TransactionID != "" {
-			detailValues["transactionId"] = commitError.TransactionID
-		}
 	}
 
 	if grpcStatus, ok := status.FromError(err); ok {
@@ -85,6 +85,25 @@ func Normalize(err error, stage string) Error {
 		Message: "Error no clasificable atribuible al chaincode o a la plataforma.",
 		Details: details,
 	}
+}
+
+func gatewayTransactionID(err error) string {
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		switch gatewayError := current.(type) {
+		case *gatewayclient.EndorseError:
+			return gatewayError.TransactionID
+		case *gatewayclient.SubmitError:
+			return gatewayError.TransactionID
+		case *gatewayclient.CommitStatusError:
+			return gatewayError.TransactionID
+		case *gatewayclient.TransactionError:
+			return gatewayError.TransactionID
+		case *gatewayclient.CommitError:
+			return gatewayError.TransactionID
+		}
+	}
+
+	return ""
 }
 
 // Extract busca un envelope DES-5 aun cuando Fabric o gRPC hayan agregado
