@@ -193,6 +193,20 @@ BEGIN
            )) <> 4 THEN
         RAISE EXCEPTION 'expected four foreign keys on event and operation tables';
     END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM pg_trigger
+         WHERE tgrelid = 'public.unit_events'::regclass
+           AND NOT tgisinternal
+    ) THEN
+        RAISE EXCEPTION 'unit_events append-only convention must not be enforced by database triggers';
+    END IF;
+
+    IF (SELECT count(*) FROM pg_trigger
+         WHERE tgrelid = 'public.return_operations'::regclass
+           AND NOT tgisinternal) <> 2 THEN
+        RAISE EXCEPTION 'return_operations must reject row mutations and truncation';
+    END IF;
 END;
 $$;
 
@@ -300,27 +314,6 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'complete unit event snapshot was not preserved';
     END IF;
-
-    BEGIN
-        UPDATE public.unit_events SET operation = 'tampered';
-        RAISE EXCEPTION 'unit_events UPDATE was accepted';
-    EXCEPTION WHEN SQLSTATE '55000' THEN
-        NULL;
-    END;
-
-    BEGIN
-        DELETE FROM public.unit_events;
-        RAISE EXCEPTION 'unit_events DELETE was accepted';
-    EXCEPTION WHEN SQLSTATE '55000' THEN
-        NULL;
-    END;
-
-    BEGIN
-        TRUNCATE public.unit_events;
-        RAISE EXCEPTION 'unit_events TRUNCATE was accepted';
-    EXCEPTION WHEN SQLSTATE '55000' THEN
-        NULL;
-    END;
 END;
 $$;
 

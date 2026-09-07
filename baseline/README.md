@@ -58,16 +58,18 @@ La migración inicial crea exactamente cinco tablas de dominio en `public`:
 El runner mantiene su tabla técnica `schema_migrations` en el esquema separado
 `baseline_meta`. No forma parte del modelo de dominio.
 
-`unit_events` y `return_operations` rechazan `UPDATE`, `DELETE` y `TRUNCATE` a
-nivel de base de datos. Esto evita que la futura API altere accidentalmente la
-historia; no pretende ofrecer la inmutabilidad criptográfica de Fabric, ya que
-un administrador de PostgreSQL conserva control sobre el servidor.
+Conforme ADR-012 §5, `unit_events` es append-only por convención de aplicación:
+la futura API sólo insertará eventos, pero un administrador de PostgreSQL puede
+alterarlos con SQL directo. `return_operations`, cuyo histórico sí fue definido
+como inmutable por ADR-012 §2, rechaza `UPDATE`, `DELETE` y `TRUNCATE` mediante
+triggers.
 
 ## Validación
 
 La prueba usa un proyecto Compose y un volumen aislados, aplica la migración,
-verifica estructura y restricciones, prueba inmutabilidad, ejecuta `down`,
-reaplica `up` y elimina todos sus recursos al finalizar:
+verifica estructura y restricciones, comprueba la inmutabilidad de las
+devoluciones, ejecuta `down`, reaplica `up` y elimina todos sus recursos al
+finalizar. El target ejecuta `shellcheck` antes de la integración:
 
 ```bash
 make -C baseline test

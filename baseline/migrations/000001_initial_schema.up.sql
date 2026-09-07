@@ -230,14 +230,6 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER unit_events_reject_row_mutation
-    BEFORE UPDATE OR DELETE ON public.unit_events
-    FOR EACH ROW EXECUTE FUNCTION public.reject_immutable_table_mutation();
-
-CREATE TRIGGER unit_events_reject_truncate
-    BEFORE TRUNCATE ON public.unit_events
-    FOR EACH STATEMENT EXECUTE FUNCTION public.reject_immutable_table_mutation();
-
 CREATE TRIGGER return_operations_reject_row_mutation
     BEFORE UPDATE OR DELETE ON public.return_operations
     FOR EACH ROW EXECUTE FUNCTION public.reject_immutable_table_mutation();
