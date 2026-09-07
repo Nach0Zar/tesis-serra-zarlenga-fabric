@@ -71,6 +71,69 @@ CREATE TABLE public.medication_units (
 
 CREATE INDEX medication_units_gtin_idx ON public.medication_units (gtin);
 
+CREATE TABLE public.lab_interventions (
+    gtin VARCHAR(14) NOT NULL,
+    numero_serie VARCHAR(20) NOT NULL,
+    laboratorio TEXT NOT NULL,
+    operacion TEXT NOT NULL,
+    motivo TEXT NOT NULL,
+    expira_en TIMESTAMPTZ NOT NULL,
+    estado TEXT NOT NULL,
+    emitida_por TEXT NOT NULL,
+    emitida_en TIMESTAMPTZ NOT NULL,
+    consumida_en TIMESTAMPTZ,
+    revocada_en TIMESTAMPTZ,
+    motivo_revocacion TEXT,
+    CONSTRAINT lab_interventions_pk PRIMARY KEY (gtin, numero_serie),
+    CONSTRAINT lab_interventions_unit_fk FOREIGN KEY (gtin, numero_serie)
+        REFERENCES public.medication_units (gtin, numero_serie)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT lab_interventions_issuer_fk FOREIGN KEY (emitida_por)
+        REFERENCES public.organizations (msp_id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT lab_interventions_gtin_valid CHECK (gtin ~ '^[0-9]{14}$'),
+    CONSTRAINT lab_interventions_numero_serie_valid CHECK (
+        char_length(numero_serie) BETWEEN 1 AND 20
+    ),
+    CONSTRAINT lab_interventions_laboratorio_valid CHECK (
+        laboratorio ~ '^(GLN|CUFE):[^:]+$'
+    ),
+    CONSTRAINT lab_interventions_operacion_valid CHECK (
+        operacion IN ('WITHDRAW_FROM_MARKET', 'RESTOCK', 'FINAL_DISPOSITION')
+    ),
+    CONSTRAINT lab_interventions_motivo_not_blank CHECK (btrim(motivo) <> ''),
+    CONSTRAINT lab_interventions_estado_valid CHECK (
+        estado IN ('ACTIVA', 'CONSUMIDA', 'REVOCADA')
+    ),
+    CONSTRAINT lab_interventions_expiration_valid CHECK (expira_en > emitida_en),
+    CONSTRAINT lab_interventions_closure_timestamps_valid CHECK (
+        (consumida_en IS NULL OR consumida_en >= emitida_en)
+        AND (revocada_en IS NULL OR revocada_en >= emitida_en)
+    ),
+    CONSTRAINT lab_interventions_lifecycle_valid CHECK (
+        (
+            estado = 'ACTIVA'
+            AND consumida_en IS NULL
+            AND revocada_en IS NULL
+            AND motivo_revocacion IS NULL
+        )
+        OR
+        (
+            estado = 'CONSUMIDA'
+            AND consumida_en IS NOT NULL
+            AND revocada_en IS NULL
+            AND motivo_revocacion IS NULL
+        )
+        OR
+        (
+            estado = 'REVOCADA'
+            AND consumida_en IS NULL
+            AND revocada_en IS NOT NULL
+            AND btrim(motivo_revocacion) <> ''
+        )
+    )
+);
+
 CREATE TABLE public.unit_events (
     gtin VARCHAR(14) NOT NULL,
     numero_serie VARCHAR(20) NOT NULL,

@@ -47,11 +47,12 @@ make -C baseline db-down
 
 ## Esquema
 
-La migración inicial crea exactamente cinco tablas de dominio en `public`:
+La migración inicial crea exactamente seis tablas de dominio en `public`:
 
 - `organizations`: espejo del registro organización-establecimiento;
 - `medication_units`: estado público vigente de cada unidad;
 - `unit_events`: historial append-only con el snapshot público completo;
+- `lab_interventions`: autorización vigente de intervención de laboratorio;
 - `transfer_operations`: ciclo activo/cerrado de cada transferencia;
 - `return_operations`: historial inmutable de devoluciones T21-T24.
 

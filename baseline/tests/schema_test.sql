@@ -11,6 +11,7 @@ BEGIN
        AND table_type = 'BASE TABLE';
 
     IF actual_tables <> ARRAY[
+        'lab_interventions',
         'medication_units',
         'organizations',
         'return_operations',
@@ -91,6 +92,16 @@ SELECT pg_temp.assert_table_signature('public.medication_units', ARRAY[
     'fecha_vencimiento:date:not null', 'custodio_actual:text:not null',
     'estado:text:not null', 'ultima_actualizacion:timestamp with time zone:not null'
 ]);
+SELECT pg_temp.assert_table_signature('public.lab_interventions', ARRAY[
+    'gtin:character varying(14):not null',
+    'numero_serie:character varying(20):not null', 'laboratorio:text:not null',
+    'operacion:text:not null', 'motivo:text:not null',
+    'expira_en:timestamp with time zone:not null', 'estado:text:not null',
+    'emitida_por:text:not null', 'emitida_en:timestamp with time zone:not null',
+    'consumida_en:timestamp with time zone:nullable',
+    'revocada_en:timestamp with time zone:nullable',
+    'motivo_revocacion:text:nullable'
+]);
 SELECT pg_temp.assert_table_signature('public.unit_events', ARRAY[
     'gtin:character varying(14):not null',
     'numero_serie:character varying(20):not null', 'tx_id:text:not null',
@@ -129,8 +140,8 @@ BEGIN
      WHERE constraint_record.contype = 'p'
        AND constraint_record.connamespace = 'public'::regnamespace;
     IF primary_keys <> ARRAY[
-        'medication_units_pk', 'organizations_pkey', 'return_operations_pk',
-        'transfer_operations_pk', 'unit_events_pk'
+        'lab_interventions_pk', 'medication_units_pk', 'organizations_pkey',
+        'return_operations_pk', 'transfer_operations_pk', 'unit_events_pk'
     ] THEN
         RAISE EXCEPTION 'unexpected primary keys: %', primary_keys;
     END IF;
@@ -141,6 +152,7 @@ BEGIN
      WHERE constraint_record.contype = 'f'
        AND constraint_record.connamespace = 'public'::regnamespace;
     IF foreign_keys <> ARRAY[
+        'lab_interventions_issuer_fk', 'lab_interventions_unit_fk',
         'return_operations_unit_fk', 'transfer_operations_unit_fk',
         'unit_events_invoker_fk', 'unit_events_unit_fk'
     ] THEN
@@ -157,7 +169,7 @@ BEGIN
              AND constraint_record.connamespace = 'public'::regnamespace
            GROUP BY relation.relname
       ) AS table_checks;
-    IF check_counts <> ARRAY[5, 5, 3, 12, 7]::BIGINT[] THEN
+    IF check_counts <> ARRAY[9, 5, 5, 3, 12, 7]::BIGINT[] THEN
         RAISE EXCEPTION 'unexpected check constraint counts: %', check_counts;
     END IF;
 END;
@@ -187,11 +199,12 @@ BEGIN
     IF (SELECT count(*) FROM pg_constraint
          WHERE contype = 'f'
            AND conrelid IN (
+               'public.lab_interventions'::regclass,
                'public.unit_events'::regclass,
                'public.transfer_operations'::regclass,
                'public.return_operations'::regclass
-           )) <> 4 THEN
-        RAISE EXCEPTION 'expected four foreign keys on event and operation tables';
+           )) <> 6 THEN
+        RAISE EXCEPTION 'expected six foreign keys on event and operation tables';
     END IF;
 
     IF EXISTS (
@@ -283,6 +296,76 @@ BEGIN
     EXCEPTION WHEN check_violation THEN
         NULL;
     END;
+END;
+$$;
+
+INSERT INTO public.lab_interventions (
+    gtin, numero_serie, laboratorio, operacion, motivo, expira_en,
+    estado, emitida_por, emitida_en
+) VALUES (
+    '07791234567898', 'SERIE-001', 'GLN:7791234500017',
+    'WITHDRAW_FROM_MARKET', 'Retiro preventivo documentado',
+    TIMESTAMPTZ '2026-10-01T12:00:00Z', 'ACTIVA', 'AnmatMSP',
+    TIMESTAMPTZ '2026-09-06T12:01:00Z'
+);
+
+DO $$
+BEGIN
+    BEGIN
+        UPDATE public.lab_interventions
+           SET operacion = 'UNKNOWN_OPERATION'
+         WHERE gtin = '07791234567898' AND numero_serie = 'SERIE-001';
+        RAISE EXCEPTION 'invalid lab intervention operation was accepted';
+    EXCEPTION WHEN check_violation THEN
+        NULL;
+    END;
+
+    BEGIN
+        UPDATE public.lab_interventions
+           SET estado = 'UNKNOWN_STATE'
+         WHERE gtin = '07791234567898' AND numero_serie = 'SERIE-001';
+        RAISE EXCEPTION 'invalid lab intervention state was accepted';
+    EXCEPTION WHEN check_violation THEN
+        NULL;
+    END;
+
+    BEGIN
+        UPDATE public.lab_interventions
+           SET estado = 'CONSUMIDA'
+         WHERE gtin = '07791234567898' AND numero_serie = 'SERIE-001';
+        RAISE EXCEPTION 'consumed lab intervention without timestamp was accepted';
+    EXCEPTION WHEN check_violation THEN
+        NULL;
+    END;
+END;
+$$;
+
+UPDATE public.lab_interventions
+   SET estado = 'CONSUMIDA',
+       consumida_en = TIMESTAMPTZ '2026-09-06T12:03:00Z'
+ WHERE gtin = '07791234567898'
+   AND numero_serie = 'SERIE-001';
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+          FROM public.lab_interventions
+         WHERE gtin = '07791234567898'
+           AND numero_serie = 'SERIE-001'
+           AND laboratorio = 'GLN:7791234500017'
+           AND operacion = 'WITHDRAW_FROM_MARKET'
+           AND motivo = 'Retiro preventivo documentado'
+           AND expira_en = TIMESTAMPTZ '2026-10-01T12:00:00Z'
+           AND estado = 'CONSUMIDA'
+           AND emitida_por = 'AnmatMSP'
+           AND emitida_en = TIMESTAMPTZ '2026-09-06T12:01:00Z'
+           AND consumida_en = TIMESTAMPTZ '2026-09-06T12:03:00Z'
+           AND revocada_en IS NULL
+           AND motivo_revocacion IS NULL
+    ) THEN
+        RAISE EXCEPTION 'lab intervention lifecycle was not preserved';
+    END IF;
 END;
 $$;
 
