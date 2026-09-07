@@ -19,7 +19,7 @@ Tutora: Dra. Mg. Ing. María Roxana Martínez — UADE, 2026.
 | [`baseline/`](baseline/README.md) | Línea base centralizada para la comparación — pendiente. |
 | [`network/`](network/README.md) | Configuración de la red Fabric del prototipo — pendiente. |
 | [`benchmarks/`](benchmarks/README.md) | Workloads y resultados de medición — pendiente. |
-| [`client/`](client/README.md) | Cliente que consume el contrato del chaincode — pendiente. |
+| [`client/`](client/README.md) | Cliente CLI genérico basado en Fabric Gateway SDK. |
 
 ## Documentos principales
 
