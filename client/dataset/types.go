@@ -10,10 +10,12 @@ const (
 	// MinimumUnits es el piso experimental de docs/measurement-protocol.md §4.
 	MinimumUnits = 50000
 
-	// DatasetFileName, ManifestFileName and HashFileName are the stable bundle filenames.
-	DatasetFileName  = "dataset.json"
+	// DatasetFileName is the stable dataset payload filename.
+	DatasetFileName = "dataset.json"
+	// ManifestFileName is the stable reproducibility manifest filename.
 	ManifestFileName = "manifest.json"
-	HashFileName     = "dataset.sha256"
+	// HashFileName is the stable SHA-256 sidecar filename.
+	HashFileName = "dataset.sha256"
 
 	datasetSchemaID  = "urn:pfi-snt:synthetic-dataset:schema:1.0.0"
 	manifestSchemaID = "urn:pfi-snt:synthetic-dataset-manifest:schema:1.0.0"
@@ -129,8 +131,8 @@ type SourceMetadata struct {
 	OrganizationsManifestSchemaVersion string `json:"organizationsManifestSchemaVersion"`
 }
 
-// DatasetMetadata summarizes the generated workload and its digest.
-type DatasetMetadata struct {
+// Metadata summarizes the generated workload and its digest.
+type Metadata struct {
 	File                     string `json:"file"`
 	HashFile                 string `json:"hashFile"`
 	SHA256                   string `json:"sha256"`
@@ -158,7 +160,7 @@ type Manifest struct {
 	Seed          uint64            `json:"seed"`
 	Parameters    Parameters        `json:"parameters"`
 	Sources       SourceMetadata    `json:"sources"`
-	Dataset       DatasetMetadata   `json:"dataset"`
+	Dataset       Metadata          `json:"dataset"`
 	Organizations []Organization    `json:"organizations"`
 }
 

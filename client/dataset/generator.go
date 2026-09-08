@@ -648,7 +648,7 @@ func buildManifest(units int, hash string, plan generationPlan) Manifest {
 			TransferMatrixSchemaVersion:        plan.matrixSchemaVersion,
 			OrganizationsManifestSchemaVersion: plan.manifestVersion,
 		},
-		Dataset: DatasetMetadata{
+		Dataset: Metadata{
 			File:                     DatasetFileName,
 			HashFile:                 HashFileName,
 			SHA256:                   hash,
