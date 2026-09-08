@@ -27,17 +27,22 @@ const (
 )
 
 type options struct {
-	command         string
-	organization    string
-	function        string
-	arguments       stringList
-	transientFile   string
-	repositoryRoot  string
-	gatewayEndpoint string
-	tlsServerName   string
-	channelName     string
-	chaincodeName   string
-	timeout         time.Duration
+	command               string
+	operation             string
+	organization          string
+	function              string
+	arguments             stringList
+	transientFile         string
+	requiredTransientKeys []string
+	allowedTransientKeys  []string
+	retryPrivateData      bool
+	retryInterval         time.Duration
+	repositoryRoot        string
+	gatewayEndpoint       string
+	tlsServerName         string
+	channelName           string
+	chaincodeName         string
+	timeout               time.Duration
 }
 
 type stringList []string
@@ -61,7 +66,9 @@ type dependencies struct {
 	currentDirectory   func() (string, error)
 	findRepositoryRoot func(string) (string, error)
 	resolveProfile     func(string, string, string, string) (config.Profile, error)
+	resolveCanonicalID func(string, string) (string, error)
 	connect            func(config.Profile, string, string, time.Duration) (transactionClient, error)
+	wait               func(context.Context, time.Duration) error
 }
 
 func productionDependencies() dependencies {
@@ -69,6 +76,7 @@ func productionDependencies() dependencies {
 		currentDirectory:   os.Getwd,
 		findRepositoryRoot: config.FindRepositoryRoot,
 		resolveProfile:     config.Resolve,
+		resolveCanonicalID: config.CanonicalID,
 		connect: func(
 			profile config.Profile,
 			channelName string,
@@ -77,6 +85,7 @@ func productionDependencies() dependencies {
 		) (transactionClient, error) {
 			return fabric.Connect(profile, channelName, chaincodeName, timeout)
 		},
+		wait: waitForRetry,
 	}
 }
 
@@ -92,6 +101,10 @@ func run(
 	stdin io.Reader,
 	deps dependencies,
 ) int {
+	if len(arguments) > 0 && arguments[0] == "demo-core" {
+		return runDemoCore(arguments[1:], stdout, stderr, deps)
+	}
+
 	opts, help, err := parseOptions(arguments, stderr)
 	if help {
 		return exitSuccess
@@ -101,18 +114,10 @@ func run(
 		return exitUsage
 	}
 
-	repositoryRoot := opts.repositoryRoot
-	if repositoryRoot == "" {
-		currentDirectory, currentErr := deps.currentDirectory()
-		if currentErr != nil {
-			writeRuntimeError(stderr, currentErr, "configuration")
-			return exitRuntime
-		}
-		repositoryRoot, err = deps.findRepositoryRoot(currentDirectory)
-		if err != nil {
-			writeRuntimeError(stderr, err, "configuration")
-			return exitRuntime
-		}
+	repositoryRoot, err := resolveRepositoryRoot(opts.repositoryRoot, deps)
+	if err != nil {
+		writeRuntimeError(stderr, err, "configuration")
+		return exitRuntime
 	}
 
 	profile, err := deps.resolveProfile(
@@ -128,6 +133,10 @@ func run(
 
 	transient, err := readTransient(opts.transientFile, stdin)
 	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return exitUsage
+	}
+	if err := validateTransient(opts, transient); err != nil {
 		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
 		return exitUsage
 	}
@@ -150,7 +159,7 @@ func run(
 	if opts.command == "query" {
 		payload, err = gatewayClient.Query(ctx, opts.function, opts.arguments, transient)
 	} else {
-		payload, err = gatewayClient.Invoke(ctx, opts.function, opts.arguments, transient)
+		payload, err = invokeWithRetry(ctx, gatewayClient, opts, transient, stderr, deps.wait)
 	}
 	closeErr := gatewayClient.Close()
 
@@ -176,6 +185,9 @@ func parseOptions(arguments []string, stderr io.Writer) (options, bool, error) {
 	}
 
 	command := arguments[0]
+	if isBusinessCommand(command) {
+		return parseBusinessOptions(command, arguments[1:], stderr)
+	}
 	if command != "query" && command != "invoke" {
 		printUsage(stderr)
 		return options{}, false, fmt.Errorf("unknown command %q", command)
@@ -183,6 +195,7 @@ func parseOptions(arguments []string, stderr io.Writer) (options, bool, error) {
 
 	opts := options{
 		command:       command,
+		operation:     command,
 		channelName:   config.DefaultChannelName,
 		chaincodeName: config.DefaultChaincodeName,
 		timeout:       30 * time.Second,
@@ -235,9 +248,19 @@ func parseOptions(arguments []string, stderr io.Writer) (options, bool, error) {
 
 func printUsage(writer io.Writer) {
 	_, _ = fmt.Fprintln(writer, "Usage:")
+	_, _ = fmt.Fprintln(writer, "  snt-client register-unit       --org <org> --gtin <gtin> --serial <serie> --lot <lote> --expiry <fecha>")
+	_, _ = fmt.Fprintln(writer, "  snt-client dispatch-transfer   --org <org> --gtin <gtin> --serial <serie> --transient-file <archivo|->")
+	_, _ = fmt.Fprintln(writer, "  snt-client receive-transfer    --org <org> --gtin <gtin> --serial <serie> [--transient-file <archivo|->]")
+	_, _ = fmt.Fprintln(writer, "  snt-client dispense            --org <org> --gtin <gtin> --serial <serie>")
+	_, _ = fmt.Fprintln(writer, "  snt-client read-unit           --org <org> --gtin <gtin> --serial <serie>")
+	_, _ = fmt.Fprintln(writer, "  snt-client unit-history        --org <org> --gtin <gtin> --serial <serie>")
+	_, _ = fmt.Fprintln(writer, "  snt-client query-units-by-gtin --org <org> --gtin <gtin>")
+	_, _ = fmt.Fprintln(writer, "  snt-client demo-core [--repo-root <ruta>]")
+	_, _ = fmt.Fprintln(writer)
+	_, _ = fmt.Fprintln(writer, "Low-level access:")
 	_, _ = fmt.Fprintln(writer, "  snt-client query  --org <org> --function <name> [--arg <value> ...]")
 	_, _ = fmt.Fprintln(writer, "  snt-client invoke --org <org> --function <name> [--arg <value> ...]")
-	_, _ = fmt.Fprintln(writer, "Run either command with --help to list all options.")
+	_, _ = fmt.Fprintln(writer, "Run any command with --help to list its options.")
 }
 
 func printCommandUsage(writer io.Writer, command string, flags *flag.FlagSet) {
