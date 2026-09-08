@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.23.5
 
 require (
+	github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain v0.0.0
 	github.com/hyperledger/fabric-gateway v1.8.0
 	github.com/hyperledger/fabric-protos-go-apiv2 v0.3.7
 	google.golang.org/grpc v1.73.0
@@ -19,3 +20,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250324211829-b45e905df463 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 )
+
+replace github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain => ../domain
