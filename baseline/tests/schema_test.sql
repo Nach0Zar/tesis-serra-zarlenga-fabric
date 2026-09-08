@@ -45,7 +45,7 @@ BEGIN
     IF actual_columns <> ARRAY[
         'gtin', 'numero_serie', 'tx_id', 'event_timestamp', 'operation',
         'invoker_msp_id', 'lote', 'fecha_vencimiento', 'custodio_actual',
-        'estado', 'ultima_actualizacion'
+        'estado', 'ultima_actualizacion', 'event_sequence'
     ] THEN
         RAISE EXCEPTION 'unit_events does not contain the complete snapshot: %', actual_columns;
     END IF;
@@ -108,7 +108,8 @@ SELECT pg_temp.assert_table_signature('public.unit_events', ARRAY[
     'event_timestamp:timestamp with time zone:not null', 'operation:text:not null',
     'invoker_msp_id:text:not null', 'lote:text:not null',
     'fecha_vencimiento:date:not null', 'custodio_actual:text:not null',
-    'estado:text:not null', 'ultima_actualizacion:timestamp with time zone:not null'
+    'estado:text:not null', 'ultima_actualizacion:timestamp with time zone:not null',
+    'event_sequence:bigint:not null'
 ]);
 SELECT pg_temp.assert_table_signature('public.transfer_operations', ARRAY[
     'gtin:character varying(14):not null',
@@ -371,12 +372,13 @@ $$;
 
 INSERT INTO public.unit_events (
     gtin, numero_serie, tx_id, event_timestamp, operation, invoker_msp_id,
-    lote, fecha_vencimiento, custodio_actual, estado, ultima_actualizacion
+    lote, fecha_vencimiento, custodio_actual, estado, ultima_actualizacion,
+    event_sequence
 ) VALUES (
     '07791234567898', 'SERIE-001', 'tx-register-001',
     TIMESTAMPTZ '2026-09-06T12:00:00Z', 'RegisterUnit', 'LabMSP',
     'LOTE-001', DATE '2028-12-31', 'GLN:7791234500017',
-    'EN_LABORATORIO', TIMESTAMPTZ '2026-09-06T12:00:00Z'
+    'EN_LABORATORIO', TIMESTAMPTZ '2026-09-06T12:00:00Z', 1
 );
 
 DO $$
@@ -396,6 +398,21 @@ BEGIN
            AND ultima_actualizacion = TIMESTAMPTZ '2026-09-06T12:00:00Z'
     ) THEN
         RAISE EXCEPTION 'complete unit event snapshot was not preserved';
+    END IF;
+END;
+$$;
+
+DO $$
+BEGIN
+    IF (SELECT event_sequence FROM public.unit_events WHERE tx_id = 'tx-register-001') <> 1 THEN
+        RAISE EXCEPTION 'migration did not backfill event_sequence';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_indexes
+         WHERE schemaname = 'public' AND indexname = 'unit_events_history_idx'
+           AND indexdef LIKE '%(gtin, numero_serie, event_sequence)%'
+    ) THEN
+        RAISE EXCEPTION 'history index does not use event_sequence';
     END IF;
 END;
 $$;
@@ -436,6 +453,24 @@ UPDATE public.transfer_operations
        cerrada_en = TIMESTAMPTZ '2026-09-06T12:10:00Z',
        motivo_cierre = 'RECEPCION',
        recepcion_numero_remito = 'R-001',
+       recepcion_numero_factura = 'F-001',
+       recepcion_cantidad = 1
+ WHERE gtin = '07791234567898'
+   AND numero_serie = 'SERIE-001'
+   AND tx_id_despacho = 'tx-dispatch-001';
+
+UPDATE public.transfer_operations
+   SET recepcion_numero_remito = NULL,
+       recepcion_numero_factura = NULL,
+       recepcion_cantidad = NULL
+ WHERE gtin = '07791234567898'
+   AND numero_serie = 'SERIE-001'
+   AND tx_id_despacho = 'tx-dispatch-001';
+
+-- Dejar la fila compatible con la migracion down para que el test de
+-- reversibilidad pueda restaurar la restriccion anterior.
+UPDATE public.transfer_operations
+   SET recepcion_numero_remito = 'R-001',
        recepcion_numero_factura = 'F-001',
        recepcion_cantidad = 1
  WHERE gtin = '07791234567898'

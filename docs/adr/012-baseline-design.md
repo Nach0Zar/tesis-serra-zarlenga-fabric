@@ -1,6 +1,6 @@
 # ADR-012: Diseño de la línea base centralizada y checklist de paridad funcional
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-08-17
 - **Autores**: Serra, Zarlenga
 
