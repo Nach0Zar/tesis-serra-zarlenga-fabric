@@ -19,7 +19,7 @@ Tutora: Dra. Mg. Ing. María Roxana Martínez — UADE, 2026.
 | [`baseline/`](baseline/README.md) | Línea base centralizada para la comparación — pendiente. |
 | [`network/`](network/README.md) | Configuración de la red Fabric del prototipo — pendiente. |
 | [`benchmarks/`](benchmarks/README.md) | Workloads y resultados de medición — pendiente. |
-| [`client/`](client/README.md) | Generador reproducible de dataset compartido; cliente operativo pendiente. |
+| [`client/`](client/README.md) | Cliente CLI basado en Fabric Gateway SDK y generador reproducible del dataset compartido. |
 
 ## Documentos principales
 
