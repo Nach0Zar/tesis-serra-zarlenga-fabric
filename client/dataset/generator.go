@@ -1,3 +1,4 @@
+// Package dataset generates the deterministic synthetic workload shared by both backends.
 package dataset
 
 import (
@@ -26,6 +27,7 @@ const (
 	generatorName               = "cli-3-dataset-generator"
 )
 
+// Config defines the requested bundle size and destination directory.
 type Config struct {
 	Units     int
 	OutputDir string
@@ -89,7 +91,7 @@ func generateBundle(outputDir string, units int) (Result, error) {
 	if units < len(plan.deniedCases) {
 		return Result{}, fmt.Errorf("units=%d no alcanza para los %d casos de rechazo derivados de la matriz", units, len(plan.deniedCases))
 	}
-	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+	if err := os.MkdirAll(outputDir, 0o750); err != nil {
 		return Result{}, fmt.Errorf("crear output-dir: %w", err)
 	}
 
@@ -107,7 +109,7 @@ func generateBundle(outputDir string, units int) (Result, error) {
 
 	hashPath := filepath.Join(outputDir, HashFileName)
 	hashLine := fmt.Sprintf("%s  %s%c", datasetHash, DatasetFileName, byte(10))
-	if err := os.WriteFile(hashPath, []byte(hashLine), 0o644); err != nil {
+	if err := os.WriteFile(hashPath, []byte(hashLine), 0o600); err != nil {
 		return Result{}, fmt.Errorf("escribir archivo SHA-256: %w", err)
 	}
 
@@ -372,6 +374,7 @@ func shortestPath(start, target organization, graph map[string][]organization) (
 }
 
 func writeDataset(path string, units int, plan generationPlan) (string, error) {
+	// #nosec G304 -- path is the output location explicitly selected by the CLI caller.
 	file, err := os.Create(path)
 	if err != nil {
 		return "", fmt.Errorf("crear dataset: %w", err)
@@ -464,7 +467,9 @@ func buildUnitScenario(index int, plan generationPlan) (UnitScenario, error) {
 		rejection = &selected
 		path = selected.SetupPath
 	} else {
-		rng := splitMix64{state: FixedSeed + uint64(sequence)*0x9e3779b97f4a7c15}
+		// #nosec G115 -- sequence is index+1 and therefore strictly positive.
+		sequence64 := uint64(sequence)
+		rng := splitMix64{state: FixedSeed + sequence64*0x9e3779b97f4a7c15}
 		path = plan.happyPaths[rng.intn(len(plan.happyPaths))]
 	}
 	if len(path) == 0 {
@@ -570,13 +575,19 @@ func makeDispatch(
 }
 
 func identifiersFor(sequence int) (gtin, serial, lot, expiration string) {
-	product := (FixedSeed + uint64((sequence-1)/100)) % 1_000_000_000
+	zeroBased := sequence - 1
+	// #nosec G115 -- callers provide a strictly positive sequence.
+	zeroBased64 := uint64(zeroBased)
+	// #nosec G115 -- callers provide a strictly positive sequence.
+	sequence64 := uint64(sequence)
+
+	product := (FixedSeed + zeroBased64/100) % 1_000_000_000
 	gtinData := fmt.Sprintf("0779%09d", product)
 	gtin = gtinData + string(rune('0'+gs1CheckDigit(gtinData)))
-	serial = fmt.Sprintf("SN%016X", uint64(sequence))
-	lot = fmt.Sprintf("L%08X", uint64((sequence-1)/1000+1))
+	serial = fmt.Sprintf("SN%016X", sequence64)
+	lot = fmt.Sprintf("L%08X", zeroBased64/1000+1)
 
-	rng := splitMix64{state: FixedSeed ^ (uint64(sequence) * 0xd2b74407b1ce6e93)}
+	rng := splitMix64{state: FixedSeed ^ (sequence64 * 0xd2b74407b1ce6e93)}
 	base := time.Date(2099, time.January, 1, 0, 0, 0, 0, time.UTC)
 	expiration = base.AddDate(0, 0, rng.intn(1095)).Format("2006-01-02")
 	return gtin, serial, lot, expiration
@@ -609,6 +620,7 @@ func (r *splitMix64) next() uint64 {
 }
 
 func (r *splitMix64) intn(n int) int {
+	// #nosec G115 -- private callers guarantee a strictly positive bound.
 	return int(r.next() % uint64(n))
 }
 
@@ -656,5 +668,5 @@ func writeJSON(path string, value any) error {
 		return err
 	}
 	encoded = append(encoded, byte(10))
-	return os.WriteFile(path, encoded, 0o644)
+	return os.WriteFile(path, encoded, 0o600)
 }

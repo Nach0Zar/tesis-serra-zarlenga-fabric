@@ -1,3 +1,4 @@
+// Package main provides the CLI entry point for synthetic dataset generation.
 package main
 
 import (
@@ -19,9 +20,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Fprintf(os.Stdout, "dataset=%s%c", result.DatasetPath, byte(10))
-	fmt.Fprintf(os.Stdout, "manifest=%s%c", result.ManifestPath, byte(10))
-	fmt.Fprintf(os.Stdout, "hash=%s%c", result.HashPath, byte(10))
-	fmt.Fprintf(os.Stdout, "units=%d%c", result.Manifest.Dataset.Units, byte(10))
-	fmt.Fprintf(os.Stdout, "sha256=%s%c", result.Manifest.Dataset.SHA256, byte(10))
+	if _, err := fmt.Fprintf(
+		os.Stdout,
+		"dataset=%s%cmanifest=%s%chash=%s%cunits=%d%csha256=%s%c",
+		result.DatasetPath,
+		byte(10),
+		result.ManifestPath,
+		byte(10),
+		result.HashPath,
+		byte(10),
+		result.Manifest.Dataset.Units,
+		byte(10),
+		result.Manifest.Dataset.SHA256,
+		byte(10),
+	); err != nil {
+		fmt.Fprintln(os.Stderr, "datasetgen: escribir resultado:", err)
+		os.Exit(1)
+	}
 }

@@ -163,10 +163,12 @@ func TestBundleIsDeterministicAndHashMatches(t *testing.T) {
 	}
 
 	for _, name := range []string{DatasetFileName, ManifestFileName, HashFileName} {
+		// #nosec G304 -- firstDir is an isolated directory created by t.TempDir.
 		left, err := os.ReadFile(filepath.Join(firstDir, name))
 		if err != nil {
 			t.Fatalf("leer primer %s: %v", name, err)
 		}
+		// #nosec G304 -- secondDir is an isolated directory created by t.TempDir.
 		right, err := os.ReadFile(filepath.Join(secondDir, name))
 		if err != nil {
 			t.Fatalf("leer segundo %s: %v", name, err)
@@ -176,6 +178,7 @@ func TestBundleIsDeterministicAndHashMatches(t *testing.T) {
 		}
 	}
 
+	// #nosec G304 -- DatasetPath was generated beneath the preceding t.TempDir.
 	raw, err := os.ReadFile(first.DatasetPath)
 	if err != nil {
 		t.Fatalf("leer dataset: %v", err)
@@ -185,6 +188,7 @@ func TestBundleIsDeterministicAndHashMatches(t *testing.T) {
 	if actual != first.Manifest.Dataset.SHA256 || actual != second.Manifest.Dataset.SHA256 {
 		t.Fatalf("hash calculado=%s manifiesto1=%s manifiesto2=%s", actual, first.Manifest.Dataset.SHA256, second.Manifest.Dataset.SHA256)
 	}
+	// #nosec G304 -- HashPath was generated beneath the preceding t.TempDir.
 	hashFile, err := os.ReadFile(first.HashPath)
 	if err != nil {
 		t.Fatalf("leer sidecar: %v", err)
@@ -235,6 +239,7 @@ func TestSchemasUseDraft202012AndMatchingVersion(t *testing.T) {
 	t.Parallel()
 
 	for _, name := range []string{"dataset.schema.json", "manifest.schema.json"} {
+		// #nosec G304 -- name comes from the fixed schema filename list above.
 		raw, err := os.ReadFile(filepath.Join("schema", name))
 		if err != nil {
 			t.Fatalf("leer %s: %v", name, err)

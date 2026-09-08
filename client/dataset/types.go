@@ -10,6 +10,7 @@ const (
 	// MinimumUnits es el piso experimental de docs/measurement-protocol.md §4.
 	MinimumUnits = 50000
 
+	// DatasetFileName, ManifestFileName and HashFileName are the stable bundle filenames.
 	DatasetFileName  = "dataset.json"
 	ManifestFileName = "manifest.json"
 	HashFileName     = "dataset.sha256"
@@ -32,27 +33,32 @@ type RegisterUnitRequest struct {
 	FechaVencimiento string `json:"fechaVencimiento"`
 }
 
+// Registration describes the initial RegisterUnit operation.
 type Registration struct {
 	Operation    string              `json:"operation"`
 	InvokerMSPID string              `json:"invokerMspId"`
 	Request      RegisterUnitRequest `json:"request"`
 }
 
+// DestinationPrivateData carries the declared transfer recipient.
 type DestinationPrivateData struct {
 	Destino string `json:"destino"`
 }
 
+// CommercialPrivateData carries the synthetic transfer documents.
 type CommercialPrivateData struct {
 	NumeroRemito  string `json:"numeroRemito"`
 	NumeroFactura string `json:"numeroFactura"`
 	Cantidad      int    `json:"cantidad"`
 }
 
+// DispatchPrivateData groups the transient fields required by DispatchTransfer.
 type DispatchPrivateData struct {
 	Destinatario DestinationPrivateData `json:"destinatario"`
 	Commercial   CommercialPrivateData  `json:"commercial"`
 }
 
+// Dispatch describes one DispatchTransfer invocation.
 type Dispatch struct {
 	Operation    string              `json:"operation"`
 	InvokerMSPID string              `json:"invokerMspId"`
@@ -60,12 +66,14 @@ type Dispatch struct {
 	PrivateData  DispatchPrivateData `json:"privateData"`
 }
 
+// Receive describes the matching ReceiveTransfer invocation.
 type Receive struct {
 	Operation    string  `json:"operation"`
 	InvokerMSPID string  `json:"invokerMspId"`
 	Request      UnitRef `json:"request"`
 }
 
+// Dispense describes the terminal Dispense invocation.
 type Dispense struct {
 	Operation    string  `json:"operation"`
 	InvokerMSPID string  `json:"invokerMspId"`
@@ -82,6 +90,7 @@ type ValidTransfer struct {
 	Receive             Receive  `json:"receive"`
 }
 
+// ExpectedRejection describes a transfer that the domain matrix must reject.
 type ExpectedRejection struct {
 	DecisionKind      string   `json:"decisionKind"`
 	RuleID            string   `json:"ruleId,omitempty"`
@@ -102,21 +111,25 @@ type UnitScenario struct {
 	ExpectedRejection *ExpectedRejection `json:"expectedRejection,omitempty"`
 }
 
+// GeneratorMetadata identifies the implementation that produced the bundle.
 type GeneratorMetadata struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
 }
 
+// Parameters records the reproducible generator inputs.
 type Parameters struct {
 	Units int `json:"units"`
 }
 
+// SourceMetadata records the versions of the embedded domain sources.
 type SourceMetadata struct {
 	TransferRulesetID                  string `json:"transferRulesetId"`
 	TransferMatrixSchemaVersion        string `json:"transferMatrixSchemaVersion"`
 	OrganizationsManifestSchemaVersion string `json:"organizationsManifestSchemaVersion"`
 }
 
+// DatasetMetadata summarizes the generated workload and its digest.
 type DatasetMetadata struct {
 	File                     string `json:"file"`
 	HashFile                 string `json:"hashFile"`
@@ -128,6 +141,7 @@ type DatasetMetadata struct {
 	DefaultDenyCases         int    `json:"defaultDenyCases"`
 }
 
+// Organization identifies an active custodial participant used by the workload.
 type Organization struct {
 	MSPID       string `json:"mspId"`
 	CanonicalID string `json:"canonicalId"`
