@@ -55,6 +55,18 @@ func TestParseBusinessOptionsMapsPublicContract(t *testing.T) {
 			},
 		},
 		{
+			name: "reject transfer",
+			arguments: []string{
+				"reject-transfer", "--org", "drogueria", "--gtin", "07791234567898",
+				"--serial", "SN-1", "--reason", "embalaje dañado",
+			},
+			command:  "invoke",
+			function: "RejectTransfer",
+			wantArgs: []string{
+				`{"gtin":"07791234567898","numeroSerie":"SN-1","motivo":"embalaje dañado"}`,
+			},
+		},
+		{
 			name: "dispense",
 			arguments: []string{
 				"dispense", "--org", "farmacia", "--gtin", "07791234567898", "--serial", "SN-1",
@@ -81,6 +93,15 @@ func TestParseBusinessOptionsMapsPublicContract(t *testing.T) {
 			},
 			command:  "query",
 			function: "GetUnitHistory",
+			wantArgs: []string{"07791234567898", "SN-1"},
+		},
+		{
+			name: "verify unit",
+			arguments: []string{
+				"verify-unit", "--org", "drogueria", "--gtin", "07791234567898", "--serial", "SN-1",
+			},
+			command:  "query",
+			function: "VerifyUnit",
 			wantArgs: []string{"07791234567898", "SN-1"},
 		},
 		{

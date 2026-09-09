@@ -29,6 +29,12 @@ type unitRefRequest struct {
 	SerialNumber string `json:"numeroSerie"`
 }
 
+type unitEventRequest struct {
+	GTIN         string `json:"gtin"`
+	SerialNumber string `json:"numeroSerie"`
+	Reason       string `json:"motivo"`
+}
+
 type privateDataRetryDetails struct {
 	Retryable bool   `json:"reintentable"`
 	Cause     string `json:"causa"`
@@ -46,9 +52,11 @@ func isBusinessCommand(command string) bool {
 	case "register-unit",
 		"dispatch-transfer",
 		"receive-transfer",
+		"reject-transfer",
 		"dispense",
 		"read-unit",
 		"unit-history",
+		"verify-unit",
 		"query-units-by-gtin":
 		return true
 	default:
@@ -75,6 +83,7 @@ func parseBusinessOptions(
 	var serialNumber string
 	var lot string
 	var expirationDate string
+	var reason string
 
 	flags.StringVar(&opts.organization, "org", "", "organización: anmat, lab, drogueria o farmacia")
 	flags.StringVar(&gtin, "gtin", "", "GTIN-14 de la unidad")
@@ -84,6 +93,9 @@ func parseBusinessOptions(
 	if command == "register-unit" {
 		flags.StringVar(&lot, "lot", "", "lote de elaboración")
 		flags.StringVar(&expirationDate, "expiry", "", "fecha de vencimiento YYYY-MM-DD")
+	}
+	if command == "reject-transfer" {
+		flags.StringVar(&reason, "reason", "", "motivo del rechazo")
 	}
 	if command == "dispatch-transfer" || command == "receive-transfer" {
 		flags.StringVar(
@@ -168,6 +180,17 @@ func parseBusinessOptions(
 		opts.arguments = stringList{marshalArgument(unitReference)}
 		opts.allowedTransientKeys = []string{"commercial"}
 		opts.retryPrivateData = true
+	case "reject-transfer":
+		if strings.TrimSpace(reason) == "" {
+			return options{}, false, errors.New("--reason is required")
+		}
+		opts.command = "invoke"
+		opts.function = "RejectTransfer"
+		opts.arguments = stringList{marshalArgument(unitEventRequest{
+			GTIN:         gtin,
+			SerialNumber: serialNumber,
+			Reason:       reason,
+		})}
 	case "dispense":
 		opts.command = "invoke"
 		opts.function = "Dispense"
@@ -179,6 +202,10 @@ func parseBusinessOptions(
 	case "unit-history":
 		opts.command = "query"
 		opts.function = "GetUnitHistory"
+		opts.arguments = stringList{gtin, serialNumber}
+	case "verify-unit":
+		opts.command = "query"
+		opts.function = "VerifyUnit"
 		opts.arguments = stringList{gtin, serialNumber}
 	case "query-units-by-gtin":
 		opts.command = "query"

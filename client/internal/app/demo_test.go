@@ -120,6 +120,7 @@ func TestRunDemoCoreExecutesCompleteFlow(t *testing.T) {
 			"demo-core",
 			"--repo-root", "repository",
 			"--serial", "DEMO-TEST-1",
+			"--reject-serial", "DEMO-REJECT-1",
 			"--timeout", "1s",
 		},
 		&stdout,
@@ -134,24 +135,39 @@ func TestRunDemoCoreExecutesCompleteFlow(t *testing.T) {
 	wantFunctions := []string{
 		"RegisterUnit",
 		"DispatchTransfer",
+		"VerifyUnit",
 		"ReceiveTransfer",
 		"DispatchTransfer",
+		"VerifyUnit",
 		"ReceiveTransfer",
 		"Dispense",
 		"ReadUnit",
 		"GetUnitHistory",
+		"RegisterUnit",
+		"DispatchTransfer",
+		"RejectTransfer",
+		"ReadUnit",
 		"QueryUnitsByGTIN",
 	}
-	wantCommands := []string{"invoke", "invoke", "invoke", "invoke", "invoke", "invoke", "query", "query", "query"}
+	wantCommands := []string{
+		"invoke", "invoke", "query", "invoke", "invoke", "query", "invoke", "invoke",
+		"query", "query", "invoke", "invoke", "invoke", "query", "query",
+	}
 	wantOrganizations := []string{
 		"lab",
 		"lab",
 		"drogueria",
 		"drogueria",
+		"drogueria",
 		"farmacia",
 		"farmacia",
 		"farmacia",
 		"farmacia",
+		"farmacia",
+		"lab",
+		"lab",
+		"drogueria",
+		"drogueria",
 		"farmacia",
 	}
 	if len(recorder.transactions) != len(wantFunctions) {
@@ -180,9 +196,16 @@ func TestRunDemoCoreExecutesCompleteFlow(t *testing.T) {
 		`{"destino":"GLN:7791234500024"}` {
 		t.Fatalf("first transfer destination = %s", got)
 	}
-	if got := string(recorder.transactions[3].transient["destinatario"]); got !=
+	if got := string(recorder.transactions[4].transient["destinatario"]); got !=
 		`{"destino":"GLN:7791234500048"}` {
 		t.Fatalf("second transfer destination = %s", got)
+	}
+	if got := string(recorder.transactions[11].transient["destinatario"]); got !=
+		`{"destino":"GLN:7791234500024"}` {
+		t.Fatalf("rejected transfer destination = %s", got)
+	}
+	if got := recorder.transactions[12].arguments[0]; !strings.Contains(got, `"numeroSerie":"DEMO-REJECT-1"`) {
+		t.Fatalf("rejected transfer argument = %s", got)
 	}
 	if !strings.Contains(stdout.String(), "Demo core completed.") {
 		t.Fatalf("stdout = %q", stdout.String())

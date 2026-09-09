@@ -33,19 +33,22 @@ go vet ./...
 snt-client register-unit       --org <org> --gtin <gtin> --serial <serie> --lot <lote> --expiry <fecha>
 snt-client dispatch-transfer   --org <org> --gtin <gtin> --serial <serie> --transient-file <archivo|->
 snt-client receive-transfer    --org <org> --gtin <gtin> --serial <serie>
+snt-client reject-transfer     --org <org> --gtin <gtin> --serial <serie> --reason <motivo>
 snt-client dispense            --org <org> --gtin <gtin> --serial <serie>
 snt-client read-unit           --org <org> --gtin <gtin> --serial <serie>
 snt-client unit-history        --org <org> --gtin <gtin> --serial <serie>
+snt-client verify-unit         --org <org> --gtin <gtin> --serial <serie>
 snt-client query-units-by-gtin --org <org> --gtin <gtin>
 ```
 
 Los comandos tipados cubren los tres procesos core:
 
 1. alta mediante `register-unit`;
-2. transferencia, separada en `dispatch-transfer` y `receive-transfer`;
+2. transferencia, separada en `dispatch-transfer`, `receive-transfer` y `reject-transfer`;
 3. dispensación mediante `dispense`.
 
-También exponen lectura puntual, historial cronológico y consulta por GTIN. Cada
+También exponen lectura puntual, historial cronológico, verificación previa a la
+adquisición y consulta por GTIN. Cada
 comando arma exactamente el request público de `docs/api-contract.md`; el destino
 de una transferencia nunca forma parte de ese argumento.
 
@@ -78,22 +81,24 @@ Con una red limpia ya levantada, el canal creado y `snt` desplegado:
 make demo-core
 ```
 
-El comando ejecuta y muestra nueve pasos:
-`RegisterUnit`; despacho y recepción laboratorio → droguería; despacho y
-recepción droguería → farmacia; `Dispense`; `ReadUnit`;
-`GetUnitHistory`; y `QueryUnitsByGTIN`.
+El comando ejecuta y muestra quince pasos. El flujo feliz registra una unidad,
+la despacha laboratorio → droguería y droguería → farmacia, ejecuta `VerifyUnit`
+antes de cada recepción, dispensa y consulta la unidad y su historial. Una segunda
+unidad demuestra `RejectTransfer` desde una transferencia activa y se lee en
+estado `DEVUELTO`; `QueryUnitsByGTIN` cierra la demo mostrando ambas unidades.
 
 Los destinos se derivan de `network/organizations-manifest.json`. La demo usa
-por defecto el GTIN `07791234567898`, la serie `DEMO-CORE-0001`, el lote
-`LOTE-DEMO-2026` y vencimiento `2099-12-31`. El resultado es reproducible
+por defecto el GTIN `07791234567898`, las series `DEMO-CORE-0001` y
+`DEMO-CORE-REJECT-1`, el lote `LOTE-DEMO-2026` y vencimiento `2099-12-31`.
+El resultado es reproducible
 contra un ledger recién creado. Para repetirla sin reiniciar el ledger se debe
 usar otra serie, porque el contrato rechaza correctamente una unidad duplicada:
 
 ```bash
-make demo-core DEMO_ARGS="--serial DEMO-CORE-0002"
+make demo-core DEMO_ARGS="--serial DEMO-CORE-0002 --reject-serial DEMO-CORE-REJECT-2"
 ```
 
-Se pueden sobrescribir también `--gtin`, `--lot`, `--expiry`, `--channel`,
+Se pueden sobrescribir también `--gtin`, `--reject-serial`, `--lot`, `--expiry`, `--channel`,
 `--chaincode`, `--repo-root`, `--timeout` y `--retry-interval`.
 
 ### Acceso genérico

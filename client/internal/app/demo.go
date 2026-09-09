@@ -15,6 +15,7 @@ import (
 const (
 	defaultDemoGTIN       = "07791234567898"
 	defaultDemoSerial     = "DEMO-CORE-0001"
+	defaultRejectSerial   = "DEMO-CORE-REJECT-1"
 	defaultDemoLot        = "LOTE-DEMO-2026"
 	defaultDemoExpiration = "2099-12-31"
 )
@@ -22,6 +23,7 @@ const (
 type demoOptions struct {
 	gtin           string
 	serialNumber   string
+	rejectSerial   string
 	lot            string
 	expirationDate string
 	repositoryRoot string
@@ -103,6 +105,7 @@ func parseDemoOptions(arguments []string, stderr io.Writer) (demoOptions, bool, 
 	opts := demoOptions{
 		gtin:           defaultDemoGTIN,
 		serialNumber:   defaultDemoSerial,
+		rejectSerial:   defaultRejectSerial,
 		lot:            defaultDemoLot,
 		expirationDate: defaultDemoExpiration,
 		channelName:    config.DefaultChannelName,
@@ -113,7 +116,8 @@ func parseDemoOptions(arguments []string, stderr io.Writer) (demoOptions, bool, 
 	flags := flag.NewFlagSet("demo-core", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&opts.gtin, "gtin", opts.gtin, "GTIN-14 usado por la demo")
-	flags.StringVar(&opts.serialNumber, "serial", opts.serialNumber, "número de serie usado por la demo")
+	flags.StringVar(&opts.serialNumber, "serial", opts.serialNumber, "número de serie usado por el flujo feliz")
+	flags.StringVar(&opts.rejectSerial, "reject-serial", opts.rejectSerial, "número de serie usado por el flujo de rechazo")
 	flags.StringVar(&opts.lot, "lot", opts.lot, "lote usado por la demo")
 	flags.StringVar(&opts.expirationDate, "expiry", opts.expirationDate, "vencimiento YYYY-MM-DD")
 	flags.StringVar(&opts.repositoryRoot, "repo-root", "", "raíz del repositorio")
@@ -146,6 +150,7 @@ func parseDemoOptions(arguments []string, stderr io.Writer) (demoOptions, bool, 
 	}{
 		{option: "--gtin", value: opts.gtin},
 		{option: "--serial", value: opts.serialNumber},
+		{option: "--reject-serial", value: opts.rejectSerial},
 		{option: "--lot", value: opts.lot},
 		{option: "--expiry", value: opts.expirationDate},
 	}
@@ -169,24 +174,22 @@ func buildDemoSteps(
 	drugstoreID string,
 	pharmacyID string,
 ) []demoStep {
-	unitFlags := []string{"--gtin", opts.gtin, "--serial", opts.serialNumber}
 	commonFlags := []string{
 		"--repo-root", repositoryRoot,
 		"--channel", opts.channelName,
 		"--chaincode", opts.chaincodeName,
 		"--timeout", opts.timeout.String(),
 	}
-	command := func(name, organization string, extra ...string) []string {
-		result := []string{name, "--org", organization}
-		result = append(result, unitFlags...)
+	command := func(name, organization, serialNumber string, extra ...string) []string {
+		result := []string{name, "--org", organization, "--gtin", opts.gtin, "--serial", serialNumber}
 		result = append(result, extra...)
 		return append(result, commonFlags...)
 	}
-	dispatch := func(organization, destination, documentSuffix string) demoStep {
+	dispatch := func(organization, destination, serialNumber, documentSuffix string) demoStep {
 		return demoStep{
 			name:         "dispatch-transfer",
 			organization: organization,
-			arguments:    command("dispatch-transfer", organization, "--transient-file", "-"),
+			arguments:    command("dispatch-transfer", organization, serialNumber, "--transient-file", "-"),
 			stdin: marshalArgument(map[string]any{
 				"destinatario": map[string]string{"destino": destination},
 				"commercial": map[string]any{
@@ -197,39 +200,60 @@ func buildDemoSteps(
 			}),
 		}
 	}
-	receive := func(organization string) demoStep {
+	receive := func(organization, serialNumber string) demoStep {
 		return demoStep{
 			name:         "receive-transfer",
 			organization: organization,
 			arguments: command(
 				"receive-transfer",
 				organization,
+				serialNumber,
 				"--retry-interval",
 				opts.retryInterval.String(),
 			),
 		}
 	}
-
-	return []demoStep{
-		{
+	register := func(serialNumber string) demoStep {
+		return demoStep{
 			name:         "register-unit",
 			organization: "lab",
 			arguments: command(
 				"register-unit",
 				"lab",
+				serialNumber,
 				"--lot",
 				opts.lot,
 				"--expiry",
 				opts.expirationDate,
 			),
+		}
+	}
+
+	return []demoStep{
+		register(opts.serialNumber),
+		dispatch("lab", drugstoreID, opts.serialNumber, "LAB-DROG-0001"),
+		{name: "verify-unit", organization: "drogueria", arguments: command("verify-unit", "drogueria", opts.serialNumber)},
+		receive("drogueria", opts.serialNumber),
+		dispatch("drogueria", pharmacyID, opts.serialNumber, "DROG-FARM-0001"),
+		{name: "verify-unit", organization: "farmacia", arguments: command("verify-unit", "farmacia", opts.serialNumber)},
+		receive("farmacia", opts.serialNumber),
+		{name: "dispense", organization: "farmacia", arguments: command("dispense", "farmacia", opts.serialNumber)},
+		{name: "read-unit", organization: "farmacia", arguments: command("read-unit", "farmacia", opts.serialNumber)},
+		{name: "unit-history", organization: "farmacia", arguments: command("unit-history", "farmacia", opts.serialNumber)},
+		register(opts.rejectSerial),
+		dispatch("lab", drugstoreID, opts.rejectSerial, "LAB-DROG-REJECT"),
+		{
+			name:         "reject-transfer",
+			organization: "drogueria",
+			arguments: command(
+				"reject-transfer",
+				"drogueria",
+				opts.rejectSerial,
+				"--reason",
+				"rechazo de recepción demostrado por CLI-2",
+			),
 		},
-		dispatch("lab", drugstoreID, "LAB-DROG-0001"),
-		receive("drogueria"),
-		dispatch("drogueria", pharmacyID, "DROG-FARM-0001"),
-		receive("farmacia"),
-		{name: "dispense", organization: "farmacia", arguments: command("dispense", "farmacia")},
-		{name: "read-unit", organization: "farmacia", arguments: command("read-unit", "farmacia")},
-		{name: "unit-history", organization: "farmacia", arguments: command("unit-history", "farmacia")},
+		{name: "read-unit", organization: "drogueria", arguments: command("read-unit", "drogueria", opts.rejectSerial)},
 		{
 			name:         "query-units-by-gtin",
 			organization: "farmacia",
