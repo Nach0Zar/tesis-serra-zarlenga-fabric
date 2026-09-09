@@ -2,9 +2,10 @@
 
 Este directorio contiene la API REST en Go y el esquema PostgreSQL de la línea
 base centralizada definida por [ADR-012](../docs/adr/012-baseline-design.md).
-La implementación de BASE-2 (#38) cubre los procesos core de M2 y consume el
-paquete compartido [`domain`](../domain/README.md) para la máquina de estados y
-la matriz de transferencias.
+La implementación de BASE-2 (#38) cubre el subconjunto de procesos core de M2
+del contrato v2.7.1 y consume el paquete compartido
+[`domain`](../domain/README.md) para la máquina de estados y la matriz de
+transferencias.
 
 ## Requisitos
 
@@ -65,6 +66,12 @@ memoria solamente su SHA-256. Las operaciones de escritura requieren el header
 `X-Org-Key`; la organización se resuelve después contra `organizations` y se
 validan `active`, `agentType`, custodio y rol. Las lecturas no exigen esa key,
 igual que `ReadUnit`, `GetUnitHistory` y `QueryUnitsByGTIN` en el chaincode.
+
+Una key ausente o desconocida devuelve `UNAUTHORIZED_ROLE`. Esta es una
+asimetría explícita de la identidad emulada: Fabric rechaza una identidad no
+reconocida antes de ejecutar el chaincode, mientras que la baseline debe
+expresarla con un `code` existente del contrato, que no define un error
+específico para credenciales API.
 
 ## Endpoints core
 
@@ -136,8 +143,6 @@ make -C baseline test
 ## Fuera de alcance de BASE-2
 
 - eventos extraordinarios, devoluciones T21–T24, intervención de laboratorio y
-  `VerifyTrace` (BASE-3, #39);
-- `VerifyUnit`, agregado al contrato después de la versión 2.6.1 que gobierna
-  esta issue;
+  las verificaciones `VerifyTrace` y `VerifyUnit` (BASE-3, #39);
 - seed del dataset, contenedor de la API y CI de la baseline (BASE-4, #40);
 - emulación de MSP, PKI, endoso, canales o Private Data Collections.
