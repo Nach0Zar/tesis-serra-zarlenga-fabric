@@ -1,7 +1,7 @@
 COMPOSE := docker compose -f $(CURDIR)/compose.yaml
 SHELLCHECK ?= shellcheck
 
-.PHONY: check-env db-up db-down migrate-up migrate-down migrate-version lint test
+.PHONY: check-env db-up db-down migrate-up migrate-down migrate-version format-check lint test
 
 check-env:
 	@test -n "$$SNT_BASELINE_DB_PASSWORD" || { \
@@ -23,8 +23,12 @@ migrate-down: check-env
 migrate-version: check-env
 	./scripts/migrate.sh version
 
-lint:
+format-check:
+	@test -z "$$(gofmt -l cmd internal tests)" || { gofmt -l cmd internal tests; exit 1; }
+
+lint: format-check
 	$(SHELLCHECK) scripts/migrate.sh tests/schema-integration.sh
+	go vet ./...
 
 test: lint
 	./tests/schema-integration.sh
