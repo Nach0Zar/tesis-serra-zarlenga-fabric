@@ -41,7 +41,9 @@ func validateGTIN(gtin string) error {
 	return nil
 }
 
-func validateRegisterUnit(req RegisterUnitRequest) error {
+// ValidateRegisterUnitRequest aplica las mismas validaciones al alta HTTP y al
+// snapshot inicial de la baseline.
+func ValidateRegisterUnitRequest(req RegisterUnitRequest) error {
 	if err := validateUnitRef(req.GTIN, req.NumeroSerie); err != nil {
 		return err
 	}

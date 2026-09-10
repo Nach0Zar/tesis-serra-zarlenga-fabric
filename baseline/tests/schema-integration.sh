@@ -5,12 +5,13 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 BASELINE_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${BASELINE_DIR}/compose.yaml"
 
-export COMPOSE_PROJECT_NAME="snt_baseline_test_$$"
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-snt_baseline_test_$$}"
 export SNT_BASELINE_DB_NAME="snt_baseline_test"
 export SNT_BASELINE_DB_USER="snt_baseline_test"
 SNT_BASELINE_DB_PASSWORD="$(openssl rand -hex 32)"
 export SNT_BASELINE_DB_PASSWORD
 export SNT_BASELINE_DB_PORT=0
+export SNT_BASELINE_API_KEYS='[]'
 
 compose() {
     docker compose -f "${COMPOSE_FILE}" "$@"

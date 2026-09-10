@@ -83,19 +83,16 @@ func appendUnitEvent(ctx context.Context, tx pgx.Tx, txID, operation, invokerMSP
 	return nil
 }
 
-func (s *Store) RegisterUnit(ctx context.Context, credential Credential, req RegisterUnitRequest) (MedicationUnit, error) {
+func (s *Store) registerUnitInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	invoker Invoker,
+	req RegisterUnitRequest,
+	timestamp string,
+) (MedicationUnit, error) {
 	transition, ok := domain.LookupInitialTransition(domain.EventRegistrarUnidad)
 	if !ok || !transition.AllowsActor(domain.ActorLaboratory) {
 		return MedicationUnit{}, NewError(InvalidStateTransition, "la maquina de estados no declara el alta para LABORATORY")
-	}
-	tx, err := s.begin(ctx)
-	if err != nil {
-		return MedicationUnit{}, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	invoker, err := resolveInvoker(ctx, tx, credential)
-	if err != nil {
-		return MedicationUnit{}, err
 	}
 	if err := requireAgentType(invoker, domain.AgentLaboratory); err != nil {
 		return MedicationUnit{}, err
@@ -103,16 +100,15 @@ func (s *Store) RegisterUnit(ctx context.Context, credential Credential, req Reg
 	if err := requireRole(invoker, RoleOperator); err != nil {
 		return MedicationUnit{}, err
 	}
-	if err := validateRegisterUnit(req); err != nil {
+	if err := ValidateRegisterUnitRequest(req); err != nil {
 		return MedicationUnit{}, err
 	}
-	timestamp := formatTimestamp(s.now())
 	unit := MedicationUnit{
 		GTIN: req.GTIN, NumeroSerie: req.NumeroSerie, Lote: req.Lote,
 		FechaVencimiento: req.FechaVencimiento, CustodioActual: invoker.CanonicalID(),
 		Estado: transition.To, UltimaActualizacion: timestamp,
 	}
-	_, err = tx.Exec(ctx, `
+	_, err := tx.Exec(ctx, `
 		INSERT INTO public.medication_units
 		(gtin, numero_serie, lote, fecha_vencimiento, custodio_actual, estado, ultima_actualizacion)
 		VALUES ($1,$2,$3,$4,$5,$6,$7)`,
@@ -129,6 +125,23 @@ func (s *Store) RegisterUnit(ctx context.Context, credential Credential, req Reg
 		return MedicationUnit{}, internal(err, "no se pudo generar el identificador de transaccion")
 	}
 	if err := appendUnitEvent(ctx, tx, txID, opRegisterUnit, invoker.MSPID, unit); err != nil {
+		return MedicationUnit{}, err
+	}
+	return unit, nil
+}
+
+func (s *Store) RegisterUnit(ctx context.Context, credential Credential, req RegisterUnitRequest) (MedicationUnit, error) {
+	tx, err := s.begin(ctx)
+	if err != nil {
+		return MedicationUnit{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	invoker, err := resolveInvoker(ctx, tx, credential)
+	if err != nil {
+		return MedicationUnit{}, err
+	}
+	unit, err := s.registerUnitInTx(ctx, tx, invoker, req, formatTimestamp(s.now()))
+	if err != nil {
 		return MedicationUnit{}, err
 	}
 	if err := commit(ctx, tx); err != nil {

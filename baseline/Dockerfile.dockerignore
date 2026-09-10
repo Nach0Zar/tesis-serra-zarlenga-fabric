@@ -1,0 +1,12 @@
+**
+!baseline/
+!baseline/**
+baseline/.env
+baseline/.env.*
+!client/
+!client/go.mod
+!client/go.sum
+!client/dataset/
+!client/dataset/**
+!domain/
+!domain/**
