@@ -44,6 +44,8 @@ type manifest struct {
 type manifestOrganization struct {
 	MspID        string `json:"mspId"`
 	Slug         string `json:"slug"`
+	ID           string `json:"id"`
+	IDType       string `json:"idType"`
 	PeerHostname string `json:"peerHostname"`
 	Active       bool   `json:"active"`
 }
@@ -135,6 +137,29 @@ func Resolve(repoRoot, organization, endpointOverride, serverNameOverride string
 		CertificatePath: certificatePath,
 		PrivateKeyPath:  privateKeyPath,
 	}, nil
+}
+
+// CanonicalID devuelve el identificador que acepta el contrato para una
+// organización, derivado del manifiesto versionado de la red.
+func CanonicalID(repoRoot, organization string) (string, error) {
+	slug := strings.ToLower(strings.TrimSpace(organization))
+	organizationData, err := loadOrganization(repoRoot, slug)
+	if err != nil {
+		return "", err
+	}
+	if !organizationData.Active {
+		return "", fmt.Errorf("organization %q is inactive in the network manifest", slug)
+	}
+
+	id := strings.TrimSpace(organizationData.ID)
+	idType := strings.ToUpper(strings.TrimSpace(organizationData.IDType))
+	if id == "" || idType == "" {
+		return "", fmt.Errorf(
+			"organization %q has no canonical identifier in the network manifest",
+			slug,
+		)
+	}
+	return idType + ":" + id, nil
 }
 
 func loadOrganization(repoRoot, slug string) (manifestOrganization, error) {

@@ -1,12 +1,11 @@
 # Cliente Fabric Gateway
 
-Cliente CLI genérico para invocar y consultar el chaincode `snt` mediante
+Cliente CLI para ejecutar operaciones de negocio e invocar o consultar el chaincode `snt` mediante
 [Fabric Gateway](https://github.com/hyperledger/fabric-gateway). Implementa el alcance
-de CLI-1 (#34) contra el contrato público congelado en
+de CLI-1 (#34) y CLI-2 (#35) contra el contrato público congelado en
 [`docs/api-contract.md`](../docs/api-contract.md) (v2.7.1).
 
-No incluye comandos de negocio ni el recorrido de demostración, que corresponden a
-CLI-2 (#35).
+Es una interfaz de línea de comandos; no incluye frontend.
 
 ## Requisitos
 
@@ -29,6 +28,82 @@ go vet ./...
 ```
 
 ## Uso
+
+```text
+snt-client register-unit       --org <org> --gtin <gtin> --serial <serie> --lot <lote> --expiry <fecha>
+snt-client dispatch-transfer   --org <org> --gtin <gtin> --serial <serie> --transient-file <archivo|->
+snt-client receive-transfer    --org <org> --gtin <gtin> --serial <serie>
+snt-client reject-transfer     --org <org> --gtin <gtin> --serial <serie> --reason <motivo>
+snt-client dispense            --org <org> --gtin <gtin> --serial <serie>
+snt-client read-unit           --org <org> --gtin <gtin> --serial <serie>
+snt-client unit-history        --org <org> --gtin <gtin> --serial <serie>
+snt-client verify-unit         --org <org> --gtin <gtin> --serial <serie>
+snt-client query-units-by-gtin --org <org> --gtin <gtin>
+```
+
+Los comandos tipados cubren los tres procesos core:
+
+1. alta mediante `register-unit`;
+2. transferencia, separada en `dispatch-transfer`, `receive-transfer` y `reject-transfer`;
+3. dispensación mediante `dispense`.
+
+También exponen lectura puntual, historial cronológico, verificación previa a la
+adquisición y consulta por GTIN. Cada
+comando arma exactamente el request público de `docs/api-contract.md`; el destino
+de una transferencia nunca forma parte de ese argumento.
+
+Ejemplo desde `client/`:
+
+```bash
+go run ./cmd/snt-client register-unit \
+  --org lab \
+  --gtin 07791234567898 \
+  --serial SN-0001-ABCD \
+  --lot L2026-014 \
+  --expiry 2027-12-31
+
+printf '%s' '{"destinatario":{"destino":"GLN:7791234500024"},"commercial":{"numeroRemito":"R-0001","numeroFactura":"F-0001","cantidad":1}}' |
+  go run ./cmd/snt-client dispatch-transfer \
+    --org lab \
+    --gtin 07791234567898 \
+    --serial SN-0001-ABCD \
+    --transient-file -
+```
+
+Las respuestas se escriben en stdout. Si el payload es JSON, se indenta sin
+modificar su contenido.
+
+### Demo completa para la defensa
+
+Con una red limpia ya levantada, el canal creado y `snt` desplegado:
+
+```bash
+make demo-core
+```
+
+El comando ejecuta y muestra quince pasos. El flujo feliz registra una unidad,
+la despacha laboratorio → droguería y droguería → farmacia, ejecuta `VerifyUnit`
+antes de cada recepción, dispensa y consulta la unidad y su historial. Una segunda
+unidad demuestra `RejectTransfer` desde una transferencia activa y se lee en
+estado `DEVUELTO`; `QueryUnitsByGTIN` cierra la demo mostrando ambas unidades.
+
+Los destinos se derivan de `network/organizations-manifest.json`. La demo usa
+por defecto el GTIN `07791234567898`, las series `DEMO-CORE-0001` y
+`DEMO-CORE-REJECT-1`, el lote `LOTE-DEMO-2026` y vencimiento `2099-12-31`.
+El resultado es reproducible
+contra un ledger recién creado. Para repetirla sin reiniciar el ledger se debe
+usar otra serie, porque el contrato rechaza correctamente una unidad duplicada:
+
+```bash
+make demo-core DEMO_ARGS="--serial DEMO-CORE-0002 --reject-serial DEMO-CORE-REJECT-2"
+```
+
+Se pueden sobrescribir también `--gtin`, `--reject-serial`, `--lot`, `--expiry`, `--channel`,
+`--chaincode`, `--repo-root`, `--timeout` y `--retry-interval`.
+
+### Acceso genérico
+
+La interfaz de CLI-1 permanece disponible para cualquier función pública:
 
 ```text
 snt-client query  --org <org> --function <name> [--arg <value> ...]
@@ -57,9 +132,6 @@ go run ./cmd/snt-client invoke \
   --function RegisterUnit \
   --arg '{"gtin":"07791234567898","numeroSerie":"SN-0001-ABCD","lote":"L2026-014","fechaVencimiento":"2027-12-31"}'
 ```
-
-Las respuestas se escriben en stdout. Si el payload es JSON, se indenta sin
-modificar su contenido.
 
 ## Organizaciones e identidades
 
@@ -92,7 +164,12 @@ objeto JSON en un archivo:
 ```json
 {
   "destinatario": {
-    "gln": "7791234500048"
+    "destino": "GLN:7791234500048"
+  },
+  "commercial": {
+    "numeroRemito": "R-0001-2026",
+    "numeroFactura": "A-0001-00001234",
+    "cantidad": 1
   }
 }
 ```
@@ -109,6 +186,12 @@ El valor `--transient-file -` lee el objeto desde stdin. No existe una
 opción para incluir transient data directamente como argumento de proceso.
 
 ## Errores
+
+`receive-transfer` reintenta únicamente el error contractual
+`INTERNAL_ERROR` con `details.reintentable=true` y
+`details.causa=PRIVATE_DATA_NOT_DISSEMINATED`, hasta consumir su timeout. Cada
+reintento se informa en stderr como un evento JSON. Los demás errores, incluido
+`RECEIVER_MISMATCH`, se devuelven inmediatamente.
 
 Los errores del chaincode se conservan en stderr con el envelope de DES-5:
 

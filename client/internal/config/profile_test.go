@@ -106,6 +106,56 @@ func TestResolveRejectsAmbiguousPrivateKey(t *testing.T) {
 	}
 }
 
+func TestCanonicalIDUsesVersionedManifest(t *testing.T) {
+	repositoryRoot := t.TempDir()
+	organization := manifestOrganization{
+		MspID:        "DrogueriaMSP",
+		Slug:         "drogueria",
+		ID:           "7791234500024",
+		IDType:       "gln",
+		PeerHostname: "peer0.drogueria.snt.local",
+		Active:       true,
+	}
+	writeManifest(t, repositoryRoot, []manifestOrganization{organization})
+
+	got, err := CanonicalID(repositoryRoot, " DROGUERIA ")
+	if err != nil {
+		t.Fatalf("CanonicalID() error = %v", err)
+	}
+	if got != "GLN:7791234500024" {
+		t.Fatalf("CanonicalID() = %q", got)
+	}
+}
+
+func TestCanonicalIDRejectsMissingOrInactiveOrganization(t *testing.T) {
+	repositoryRoot := t.TempDir()
+	writeManifest(t, repositoryRoot, []manifestOrganization{
+		{
+			MspID:        "FarmaciaMSP",
+			Slug:         "farmacia",
+			PeerHostname: "peer0.farmacia.snt.local",
+			Active:       true,
+		},
+		{
+			MspID:        "DrogueriaMSP",
+			Slug:         "drogueria",
+			ID:           "7791234500024",
+			IDType:       "GLN",
+			PeerHostname: "peer0.drogueria.snt.local",
+			Active:       false,
+		},
+	})
+
+	if _, err := CanonicalID(repositoryRoot, "farmacia"); err == nil ||
+		!strings.Contains(err.Error(), "no canonical identifier") {
+		t.Fatalf("CanonicalID(farmacia) error = %v", err)
+	}
+	if _, err := CanonicalID(repositoryRoot, "drogueria"); err == nil ||
+		!strings.Contains(err.Error(), "inactive") {
+		t.Fatalf("CanonicalID(drogueria) error = %v", err)
+	}
+}
+
 func TestFindRepositoryRoot(t *testing.T) {
 	repositoryRoot := t.TempDir()
 	writeManifest(t, repositoryRoot, nil)
