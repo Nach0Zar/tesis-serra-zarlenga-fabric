@@ -302,8 +302,11 @@ func firstDeletion(history []UnitHistoryEntry) (UnitHistoryEntry, bool) {
 // `active` actual y no versiona habilitaciones --, no distingue versiones
 // historicas de la matriz -- ADR-008 declara matriz unica para toda la
 // evaluacion de v1 --, no ve transacciones rechazadas -- GetHistoryForKey solo
-// devuelve modificaciones confirmadas -- y no puede comprobar que el serial
-// corresponda a un afiliado del financiador invocante.
+// devuelve modificaciones confirmadas --, no puede comprobar que el serial
+// corresponda a un afiliado del financiador invocante y, heredado de los
+// "Limites de garantia" de ADR-003, acredita la traza REGISTRADA y no la
+// autenticidad fisica del producto: ni la posesion efectiva, ni la autenticidad
+// material del envase, ni la ausencia de clonacion del codigo serializado.
 func (c *SNTContract) VerifyTrace(
 	ctx contractapi.TransactionContextInterface,
 	gtin string,
