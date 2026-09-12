@@ -266,8 +266,12 @@ fundacional.
 Los formatos cerrados, versión `1.0.0`, están definidos con JSON Schema
 Draft 2020-12 en:
 
-- `dataset/schema/dataset.schema.json`
-- `dataset/schema/manifest.schema.json`
+- `../domain/dataset/schema/dataset.schema.json`
+- `../domain/dataset/schema/manifest.schema.json`
+
+El contrato, los schemas y el generador determinístico viven en el paquete
+neutral `domain/dataset`; este módulo conserva únicamente el adaptador CLI
+`cmd/datasetgen`.
 
 ## Validación
 

@@ -13,7 +13,6 @@ on:
     paths:
       - "baseline/**"
       - "client/cmd/datasetgen/**"
-      - "client/dataset/**"
       - "domain/**"
       - ".github/workflows/baseline-ci.yml"
 

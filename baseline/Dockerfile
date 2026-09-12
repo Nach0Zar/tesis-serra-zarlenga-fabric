@@ -5,12 +5,10 @@ FROM golang:1.23.5-alpine AS build
 WORKDIR /src
 
 COPY domain/go.mod domain/go.mod
-COPY client/go.mod client/go.sum client/
 COPY baseline/go.mod baseline/go.sum baseline/
 RUN cd baseline && go mod download
 
 COPY domain domain
-COPY client/dataset client/dataset
 COPY baseline baseline
 
 RUN cd baseline \

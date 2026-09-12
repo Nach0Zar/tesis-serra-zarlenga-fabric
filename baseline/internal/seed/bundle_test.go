@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/client/dataset"
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
+	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain/dataset"
 	foundational "github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain/manifest"
 )
 
