@@ -6,14 +6,25 @@ BASELINE_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${BASELINE_DIR}/compose.yaml"
 DB_NAME="${SNT_BASELINE_DB_NAME:-snt_baseline}"
 DB_USER="${SNT_BASELINE_DB_USER:-snt_baseline}"
+MIGRATION_URL="${SNT_BASELINE_MIGRATION_URL:-}"
+export SNT_BASELINE_API_KEYS="${SNT_BASELINE_API_KEYS:-[]}"
 
-: "${SNT_BASELINE_DB_PASSWORD:?SNT_BASELINE_DB_PASSWORD must be set}"
+if [[ -n "${MIGRATION_URL}" ]]; then
+    MIGRATIONS_CONTAINER_DIR="${SNT_BASELINE_MIGRATIONS_DIR:-${BASELINE_DIR}/migrations}"
+else
+    : "${SNT_BASELINE_DB_PASSWORD:?SNT_BASELINE_DB_PASSWORD must be set}"
+    MIGRATIONS_CONTAINER_DIR="/migrations"
+fi
 
 compose() {
     docker compose -f "${COMPOSE_FILE}" "$@"
 }
 
 psql_in_container() {
+    if [[ -n "${MIGRATION_URL}" ]]; then
+        psql "${MIGRATION_URL}" -v ON_ERROR_STOP=1 "$@"
+        return
+    fi
     compose exec -T postgres psql \
         --username "${DB_USER}" \
         --dbname "${DB_NAME}" \
@@ -64,7 +75,7 @@ migrate_up() {
         fi
 
         psql_in_container --single-transaction \
-            --file "/migrations/${base}" \
+            --file "${MIGRATIONS_CONTAINER_DIR}/${base}" \
             --command "INSERT INTO baseline_meta.schema_migrations(version) VALUES (${version});"
         echo "applied migration ${base}"
     done
@@ -92,7 +103,7 @@ migrate_down() {
 
     base="$(basename -- "${matches[0]}")"
     psql_in_container --single-transaction \
-        --file "/migrations/${base}" \
+        --file "${MIGRATIONS_CONTAINER_DIR}/${base}" \
         --command "DELETE FROM baseline_meta.schema_migrations WHERE version = ${version};"
     echo "reverted migration ${base}"
 }

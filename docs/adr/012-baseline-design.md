@@ -1,6 +1,6 @@
 # ADR-012: Diseño de la línea base centralizada y checklist de paridad funcional
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado (revisión 2)
 - **Fecha**: 2026-08-17
 - **Autores**: Serra, Zarlenga
 
@@ -27,7 +27,7 @@ Esta ADR resuelve la decisión D7 de `docs/adr-roadmap.md` (issue #87, DES-18) y
 
 - El mismo lenguaje del chaincode permite que la máquina de estados (ADR-001) y la función de decisión de la matriz (ADR-008) vivan en un paquete Go del repositorio que ambos binarios importan: no hay dos implementaciones de las reglas que mantener consistentes, hay una sola.
 - PostgreSQL en Docker satisface directamente los escenarios DB-1/API-1 del protocolo (§8.2) y la semántica de confirmación de escritura de §3.1.
-- Costo: el integrante responsable de la baseline trabaja en Go aunque no sea su stack preferido, y el layout de módulos del paquete compartido debe diseñarse (queda derivado, ver Decisión).
+- Costo: el integrante responsable de la baseline trabaja en Go aunque no sea su stack preferido, y los artefactos compartidos deben conservar un ownership neutral entre ambos SUT.
 - Se adopta.
 
 **C. Baseline sobre el propio Fabric con una sola organización**
@@ -46,6 +46,8 @@ Se adopta la **alternativa B**, con las siguientes reglas.
 La baseline es una **API REST implementada en Go** sobre **PostgreSQL**, ambos en contenedores Docker en el **mismo host** que la red Fabric. Fabric y baseline nunca se ejecutan concurrentemente durante las mediciones, conforme §5 del protocolo ("ejecución no concurrente de Fabric y baseline").
 
 La elección de Go es deliberada y es el corazón de esta decisión: la máquina de estados de ADR-001 y la función de decisión de la matriz de transferencias (ADR-008) viven en un **paquete Go compartido del repositorio** que el chaincode y la baseline importan por igual. La paridad de reglas queda así **garantizada por construcción, no por disciplina**: ante la misma operación sobre el mismo estado, ambas implementaciones ejecutan literalmente el mismo código de decisión y producen el mismo veredicto, el mismo `ruleId` y la misma razón de rechazo.
+
+El mismo criterio gobierna el dataset experimental. El contrato del bundle —tipos Go, nombres de archivo, versiones y JSON Schemas— y su generador determinístico viven en **`domain/dataset`**, dentro del módulo neutral `domain`. `client/cmd/datasetgen` es solamente el adaptador CLI de CLI-3; ni la baseline ni un futuro cargador Fabric deben depender del módulo `client` para interpretar el snapshot. Esta ubicación evita que cualquiera de los dos SUT sea dueño de una verdad que ambos consumen y mantiene una única implementación verificable del formato.
 
 ### 2. Esquema relacional mínimo
 
@@ -94,7 +96,7 @@ Lo que sigue queda fuera de la baseline porque es exactamente lo que la comparac
 
 La baseline representa el **modelo arquitectónico centralizado** — una API de servicios sobre base relacional con las mismas reglas de negocio — como **análogo funcional**. No representa, ni pretende representar, al SNT real operado por ANMAT: no se conoce ni se replica su implementación, su infraestructura ni su carga real. Todas las conclusiones cuantitativas y cualitativas del trabajo se formulan contra ese análogo, no contra el sistema productivo. Esta declaración es obligatoria en esta ADR y debe incorporarse como ítem del capítulo de limitaciones de la tesis.
 
-Queda fuera del alcance de esta ADR: el DDL, los índices y las migraciones concretas (BASE-1, #37); los paths, verbos y el mapeo HTTP definitivo por `code` (BASE-2, #38); la paridad de eventos extraordinarios y del veredicto del financiador (BASE-3, #39); el empaquetado Compose y el seed del dataset (BASE-4, #40); y el layout Go concreto del paquete compartido, ya derivado a CC-1 por ADR-008.
+Queda fuera del alcance de esta ADR: el DDL, los índices y las migraciones concretas (BASE-1, #37); los paths, verbos y el mapeo HTTP definitivo por `code` (BASE-2, #38); la paridad de eventos extraordinarios y del veredicto del financiador (BASE-3, #39); y el empaquetado Compose y la mecánica transaccional del seed (BASE-4, #40). La revisión 2 decide únicamente la ubicación neutral del contrato y generador del dataset en `domain/dataset`; no decide el ownership de otros contratos transversales, como el catálogo de errores.
 
 ## Justificación
 
@@ -111,12 +113,12 @@ Queda fuera del alcance de esta ADR: el DDL, los índices y las migraciones conc
 - **BASE-3 (#39)**: desbloqueada; implementa la paridad de eventos extraordinarios y el veredicto de verificación de ADR-011 sobre esta base.
 - **BASE-4 (#40)**: desbloqueada; empaqueta API + PostgreSQL en Compose y carga el seed del dataset compartido (§4 del protocolo).
 - **EVAL-3 (#43) y EVAL-5 (#45)**: desbloqueadas; las mediciones y la prueba de disponibilidad de la baseline ya tienen un SUT definido contra el cual escribirse.
-- **CLI-3 (#36)**: el generador de dataset comparte el mismo paquete Go para producir cadenas válidas e inválidas coherentes con ambas implementaciones, como ya anticipó ADR-008.
+- **CLI-3 (#36)**: `client/cmd/datasetgen` delega en `domain/dataset`, que contiene el contrato, los schemas y el generador compartido para producir cadenas válidas e inválidas coherentes con ambas implementaciones.
 - **Para la tesis**: el capítulo de limitaciones debe incorporar la declaración de alcance comparativo de la sección 6 (la baseline es un análogo del modelo centralizado, no el SNT real).
 
 - **Se gana**: una baseline cuyo diseño es defendible — paridad de reglas por construcción, esquema espejo de las estructuras decididas, asimetrías declaradas y acotadas a las propiedades comparadas — y seis issues de implementación desbloqueadas con criterios de aceptación claros.
 - **Se pierde / costo**: la baseline se implementa en Go aunque no sea el stack natural de una API de referencia; la comparación queda formalmente acotada a un análogo del modelo centralizado, lo que impide afirmar mediciones contra el sistema productivo de ANMAT (renuncia deliberada, no accidental).
-- **Queda pendiente**: el layout Go concreto del paquete compartido (módulo único del repositorio vs. módulos con `replace`), derivado a CC-1 y consumido por BASE-1; y el mapeo HTTP definitivo y exhaustivo por `code`, que fija BASE-2 sobre la orientación de la sección 4.
+- **Queda pendiente**: el ownership de otros contratos transversales no resueltos por esta revisión —incluido el catálogo de errores— y el mapeo HTTP definitivo y exhaustivo por `code`, que fija BASE-2 sobre la orientación de la sección 4.
 
 ## Divergencia con el trabajo escrito
 
@@ -125,6 +127,7 @@ No hay divergencia. El trabajo escrito define la baseline como "interfaz de serv
 ## Contexto utilizado
 
 - Issue GitHub #87: DES-18 · ADR-012: Diseño de la baseline centralizada y paridad funcional, consultada el 2026-08-17.
+- Pull request GitHub #107: review de BASE-4 sobre el ownership neutral del contrato del dataset, incorporada en la revisión 2 el 2026-09-12.
 - Issue GitHub #37: BASE-1 · Esquema relacional, consultada el 2026-08-17.
 - Issue GitHub #38: BASE-2 · API REST con los procesos core, consultada el 2026-08-17.
 - [`docs/measurement-protocol.md`](../measurement-protocol.md): objetivo y alcance de la comparación (§1–2), definición de latencia de la baseline (§3.1), medición bifásica de la transferencia (§3.4), dataset compartido (§4), condiciones idénticas (§5) y escenarios DB-1/API-1 (§8.2).

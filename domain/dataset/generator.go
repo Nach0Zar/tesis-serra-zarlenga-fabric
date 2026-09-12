@@ -1,4 +1,4 @@
-// Package dataset generates the deterministic synthetic workload shared by both backends.
+// Package dataset defines and generates the deterministic synthetic workload shared by both backends.
 package dataset
 
 import (

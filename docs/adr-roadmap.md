@@ -3,7 +3,7 @@
 - **Fecha**: 2026-08-16 (actualizado el 2026-08-17)
 - **Insumo**: revisión de congruencia completa del proyecto ([`consistency-review.md`](consistency-review.md)), los 5 ADRs vigentes al momento del relevamiento, DES-2/3/5/6/7 y el trabajo escrito.
 
-> **Estado: plan ejecutado.** Las siete decisiones D1–D7 quedaron registradas como ADR-006 a ADR-012 (estado *Propuesto*, pendientes de aprobación del equipo) y las dos decisiones documentales D8–D9 se aplicaron sobre `measurement-protocol.md` y `alcance-prototipo.md`. Este documento se conserva como registro del razonamiento que originó cada decisión y como checklist de sincronización con el trabajo escrito.
+> **Estado: plan ejecutado.** Las siete decisiones D1–D7 quedaron registradas como ADR-006 a ADR-012. ADR-006 a ADR-011 permanecen en estado *Propuesto* y ADR-012 está *Aceptado*. Las dos decisiones documentales D8–D9 se aplicaron sobre `measurement-protocol.md` y `alcance-prototipo.md`. Este documento se conserva como registro del razonamiento que originó cada decisión y como checklist de sincronización con el trabajo escrito.
 
 Este documento lista las decisiones de diseño que **todavía no están tomadas** y que son necesarias para que el prototipo pueda implementarse y evaluarse sin improvisar, y para que la tesis final pueda defenderse sin huecos. No son correcciones (esas están en `consistency-review.md`): son decisiones nuevas, cada una referenciada como pendiente por algún documento ya aceptado.
 
@@ -128,7 +128,7 @@ D7 (baseline) ◄── D3, D8 ──────────► BASE-*, benchma
 D8, D9: inmediatas (solo documentación), sin dependencias
 ```
 
-Las nueve decisiones quedaron resueltas: D8 y D9 sobre los documentos existentes, D1–D7 como ADR-006 a ADR-012 (estado *Propuesto*). El trabajo pendiente ya no es de decisión sino de implementación: las issues de las áreas CC-*, NET-*, EXT-*, BASE-* y EVAL-* fueron actualizadas con las dependencias que cada ADR resuelve.
+Las nueve decisiones quedaron resueltas: D8 y D9 sobre los documentos existentes, D1–D7 como ADR-006 a ADR-012 (ADR-006 a ADR-011 en estado *Propuesto*; ADR-012, *Aceptado*). El trabajo pendiente ya no es de decisión sino de implementación: las issues de las áreas CC-*, NET-*, EXT-*, BASE-* y EVAL-* fueron actualizadas con las dependencias que cada ADR resuelve.
 
 ## Checklist de sincronización con el trabajo escrito
 
