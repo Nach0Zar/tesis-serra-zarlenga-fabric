@@ -2,76 +2,104 @@
 
 Este directorio contiene la API REST en Go y el esquema PostgreSQL de la línea
 base centralizada definida por [ADR-012](../docs/adr/012-baseline-design.md).
-La implementación de BASE-2 (#38) cubre el subconjunto de procesos core de M2
-del contrato v2.7.1 y consume el paquete compartido
+La implementación cubre el subconjunto de procesos core de M2 y el empaquetado
+reproducible de BASE-4 (#40). La API y el seed consumen el paquete compartido
 [`domain`](../domain/README.md) para la máquina de estados y la matriz de
 transferencias.
 
-## Requisitos
+## Requisitos y configuración
 
-- Docker con el plugin Compose;
-- Bash y GNU Make;
-- Go 1.23;
-- `shellcheck` para la validación estática de los scripts.
+Para ejecutar la baseline sólo se requieren Docker y el plugin Compose. Los
+targets de desarrollo y CI también requieren Bash, GNU Make, Go 1.23 y
+`shellcheck`.
 
-La contraseña no tiene un valor por defecto y no debe guardarse en el
-repositorio. Para una sesión local puede generarse una credencial efímera:
+La contraseña y las API keys son obligatorias y no deben guardarse en el
+repositorio. La contraseña debe ser apta para una URL; `openssl rand -hex`
+produce un valor seguro para este uso.
 
 ```bash
 export SNT_BASELINE_DB_PASSWORD="$(openssl rand -hex 32)"
+export SNT_BASELINE_API_KEYS='[
+  {"key":"reemplazar-por-un-secreto-efimero","mspId":"LabMSP","role":"operator"}
+]'
 ```
-
-Variables opcionales:
 
 | Variable | Valor por defecto | Uso |
 |---|---|---|
+| `SNT_BASELINE_DB_PASSWORD` | — | Contraseña PostgreSQL obligatoria. |
+| `SNT_BASELINE_API_KEYS` | — | Array JSON de credenciales estáticas obligatorio. |
 | `SNT_BASELINE_DB_NAME` | `snt_baseline` | Base de datos creada por PostgreSQL. |
-| `SNT_BASELINE_DB_USER` | `snt_baseline` | Usuario administrador de las migraciones. |
-| `SNT_BASELINE_DB_PORT` | `5432` | Puerto publicado exclusivamente en `127.0.0.1`. |
-| `SNT_BASELINE_DATABASE_URL` | — | DSN PostgreSQL de la API. Obligatorio al iniciar el servidor. |
-| `SNT_BASELINE_API_KEYS` | — | Array JSON de credenciales estáticas. Obligatorio al iniciar el servidor. |
-| `SNT_BASELINE_LISTEN_ADDR` | `:8080` | Dirección HTTP de escucha. |
+| `SNT_BASELINE_DB_USER` | `snt_baseline` | Usuario de la baseline y las migraciones. |
+| `SNT_BASELINE_DB_PORT` | `5432` | Puerto PostgreSQL publicado sólo en `127.0.0.1`. |
+| `SNT_BASELINE_API_PORT` | `8080` | Puerto HTTP publicado sólo en `127.0.0.1`. |
+| `SNT_BASELINE_DATABASE_URL` | calculada por Compose | DSN interna compartida por migraciones, API y seed. |
+| `SNT_BASELINE_DATASET_DIR` | `../build/dataset` | Bundle CLI-3 montado en el servicio de seed. |
+| `SNT_BASELINE_IMAGE` | `snt-baseline:local` | Nombre local de la imagen compartida por API y seed. |
 
-## Uso
+## Arranque
 
-Desde la raíz del repositorio:
-
-```bash
-make -C baseline db-up
-make -C baseline migrate-up
-make -C baseline migrate-version
-```
-
-`migrate-down` revierte únicamente la última migración aplicada. `db-down`
-detiene PostgreSQL pero conserva el volumen de datos.
+Desde la raíz, cualquiera de estos comandos construye la imagen, inicia
+PostgreSQL y la API, aplica las migraciones y espera sus healthchecks:
 
 ```bash
-make -C baseline migrate-down
-make -C baseline db-down
+docker compose -f baseline/compose.yaml up -d --build --wait
+# equivalente:
+make -C baseline up
 ```
 
-La API se inicia después de aplicar las migraciones:
+El contenedor corre con un usuario sin privilegios, filesystem de sólo lectura y
+puertos ligados a loopback. `make -C baseline down` detiene los servicios y
+conserva los datos; para eliminar también el snapshot:
 
 ```bash
-export SNT_BASELINE_DATABASE_URL="postgres://snt_baseline:$SNT_BASELINE_DB_PASSWORD@127.0.0.1:5432/snt_baseline?sslmode=disable"
-export SNT_BASELINE_API_KEYS='[
-  {"key":"valor-no-versionado","mspId":"LabMSP","role":"operator"},
-  {"key":"otro-valor-no-versionado","mspId":"AnmatMSP","role":"regulatory-admin"}
-]'
-cd baseline && go run ./cmd/snt-baseline
+docker compose -f baseline/compose.yaml --profile seed \
+  down --volumes --remove-orphans
 ```
 
-La configuración admite exactamente una key por par `mspId`+rol y conserva en
-memoria solamente su SHA-256. Las operaciones de escritura requieren el header
-`X-Org-Key`; la organización se resuelve después contra `organizations` y se
-validan `active`, `agentType`, custodio y rol. Las lecturas no exigen esa key,
-igual que `ReadUnit`, `GetUnitHistory` y `QueryUnitsByGTIN` en el chaincode.
+Los targets `db-up`, `db-down`, `migrate-up`, `migrate-down` y
+`migrate-version` permanecen disponibles para trabajar sólo con PostgreSQL.
+`migrate-down` revierte únicamente la última migración aplicada.
 
-Una key ausente o desconocida devuelve `UNAUTHORIZED_ROLE`. Esta es una
-asimetría explícita de la identidad emulada: Fabric rechaza una identidad no
-reconocida antes de ejecutar el chaincode, mientras que la baseline debe
-expresarla con un `code` existente del contrato, que no define un error
-específico para credenciales API.
+## Dataset y seed
+
+El dataset no se duplica dentro de la baseline: se genera con CLI-3 y su seed
+fija `20260727`. Luego el servicio one-shot valida el manifiesto, el sidecar
+SHA-256, las versiones de las fuentes embebidas, las organizaciones, el orden y
+la unicidad antes de abrir la transacción de carga.
+
+```bash
+make -C baseline generate-dataset
+make -C baseline seed
+```
+
+El resultado correcto informa seed, hash, siete organizaciones y al menos
+50.000 unidades. El snapshot ejecuta exclusivamente `RegisterUnit`: cada
+unidad queda en `EN_LABORATORIO`, con el laboratorio como custodio y un único
+evento de secuencia 1. Las recetas de transferencia, rechazo y dispensa quedan
+sin ejecutar para EVAL-3.
+
+La carga es atómica y exige que las seis tablas de dominio estén vacías. Una
+segunda ejecución falla sin modificar filas. Para usar otro directorio:
+
+```bash
+make -C baseline generate-dataset DATASET_DIR=/ruta/absoluta
+make -C baseline seed DATASET_DIR=/ruta/absoluta
+```
+
+Una comprobación rápida del snapshot puede hacerse con:
+
+```bash
+docker compose -f baseline/compose.yaml exec -T postgres \
+  psql -U "${SNT_BASELINE_DB_USER:-snt_baseline}" \
+  -d "${SNT_BASELINE_DB_NAME:-snt_baseline}" \
+  -c 'SELECT count(*) FROM public.medication_units;'
+curl 'http://127.0.0.1:8080/v1/units?gtin=07791234567898'
+```
+
+La configuración admite exactamente una key por par `mspId`+rol y conserva
+en memoria solamente su SHA-256. Las escrituras requieren `X-Org-Key`; las
+lecturas no requieren credencial. Una key ausente o desconocida devuelve
+`UNAUTHORIZED_ROLE`, asimetría documentada de la identidad emulada.
 
 ## Endpoints core
 
@@ -129,20 +157,32 @@ triggers.
 
 ## Validación
 
-La prueba usa un proyecto Compose y un volumen aislados, aplica las migraciones,
-ejecuta los tests Go —incluido el recorrido HTTP→PostgreSQL y el orden bajo
-concurrencia—, verifica estructura y restricciones, comprueba la inmutabilidad
-de las devoluciones, ejecuta `down`, reaplica `up` y elimina todos sus recursos
-al finalizar. El target ejecuta `gofmt`, `shellcheck` y `go vet` antes de la
-integración:
+El gate local y de CI ejecuta formato, `shellcheck`, `go vet`, pruebas Go,
+migraciones `up → test → down → up` y el recorrido real
+API + PostgreSQL + generación CLI-3 + seed de 50.000 unidades. También verifica
+el rechazo de un segundo seed y que no se hayan ejecutado operaciones de
+workload. Cada script instala su cleanup antes de iniciar contenedores; el
+workflow repite la limpieza bajo `always()`.
 
 ```bash
 make -C baseline test
 ```
 
-## Fuera de alcance de BASE-2
+## Troubleshooting
 
-- eventos extraordinarios, devoluciones T21–T24, intervención de laboratorio y
-  las verificaciones `VerifyTrace` y `VerifyUnit` (BASE-3, #39);
-- seed del dataset, contenedor de la API y CI de la baseline (BASE-4, #40);
-- emulación de MSP, PKI, endoso, canales o Private Data Collections.
+- Si Compose informa una variable ausente, definir
+  `SNT_BASELINE_DB_PASSWORD` y `SNT_BASELINE_API_KEYS` en la misma shell.
+- Si el seed informa `ALREADY_INITIALIZED`, eliminar deliberadamente el volumen
+  o usar un proyecto Compose nuevo; no mezcla snapshots existentes.
+- Si falla el hash o una versión fuente, regenerar el bundle con el checkout
+  actual mediante `make -C baseline generate-dataset`.
+- Para inspeccionar fallos de arranque: `docker compose -f baseline/compose.yaml logs api postgres`.
+
+## Fuera de alcance de BASE-4
+
+- operaciones extraordinarias y verificaciones de BASE-3 (#39);
+- ejecución de workloads, benchmarks y análisis de disponibilidad de EVAL-2 a
+  EVAL-5;
+- carga del snapshot de Fabric, emulación de MSP/PKI, políticas de endoso,
+  canales o Private Data Collections;
+- cambios al contrato REST, al modelo relacional o a los ADRs.

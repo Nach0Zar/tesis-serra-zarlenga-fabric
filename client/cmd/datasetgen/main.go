@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/client/dataset"
+	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain/dataset"
 )
 
 func main() {
