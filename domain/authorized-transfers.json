@@ -1,0 +1,348 @@
+{
+  "$schema": "./authorized-transfers.schema.json",
+  "schemaVersion": "1.0.0",
+  "rulesetId": "PFI_SNT_AUTHORIZED_TRANSFERS",
+  "title": "Matriz de transferencias ordinarias autorizadas del SNT",
+  "transferScope": "ORDINARY_CUSTODY_TRANSFER",
+  "jurisdiction": {
+    "countryCode": "AR",
+    "country": "Argentina",
+    "authority": "ANMAT"
+  },
+  "regulatorySnapshot": "2026-07-20",
+  "defaultDecision": "DENY",
+  "agentTypes": [
+    {
+      "code": "LABORATORY",
+      "label": "Laboratorio"
+    },
+    {
+      "code": "DISTRIBUTOR",
+      "label": "Distribuidora"
+    },
+    {
+      "code": "LOGISTICS_OPERATOR",
+      "label": "Operador logístico"
+    },
+    {
+      "code": "DRUGSTORE",
+      "label": "Droguería"
+    },
+    {
+      "code": "PHARMACY",
+      "label": "Farmacia"
+    },
+    {
+      "code": "HEALTHCARE_FACILITY",
+      "label": "Establecimiento asistencial"
+    }
+  ],
+  "normativeReferences": [
+    {
+      "id": "DEC_1299_1997_ART_2",
+      "type": "DECREE",
+      "number": "1299/1997",
+      "title": "Comercialización de especialidades medicinales",
+      "locator": "Artículo 2",
+      "sourceUrl": "https://www.argentina.gob.ar/normativa/nacional/decreto-1299-1997-47637/texto",
+      "summary": "Los laboratorios, directamente o mediante distribuidoras que actúen por su cuenta y orden, comercializan con droguerías, farmacias y establecimientos asistenciales habilitados."
+    },
+    {
+      "id": "DEC_1299_1997_ART_4",
+      "type": "DECREE",
+      "number": "1299/1997",
+      "title": "Comercialización de especialidades medicinales",
+      "locator": "Artículo 4",
+      "sourceUrl": "https://www.argentina.gob.ar/normativa/nacional/decreto-1299-1997-47637/texto",
+      "summary": "Las farmacias adquieren a laboratorios, distribuidoras o droguerías y pueden vender a establecimientos asistenciales."
+    },
+    {
+      "id": "DEC_1299_1997_ART_5",
+      "type": "DECREE",
+      "number": "1299/1997",
+      "title": "Comercialización de especialidades medicinales",
+      "locator": "Artículo 5",
+      "sourceUrl": "https://www.argentina.gob.ar/normativa/nacional/decreto-1299-1997-47637/texto",
+      "summary": "Los establecimientos asistenciales pueden adquirir a laboratorios, distribuidoras, droguerías y farmacias habilitadas."
+    },
+    {
+      "id": "DEC_1299_1997_ART_6",
+      "type": "DECREE",
+      "number": "1299/1997",
+      "title": "Comercialización de especialidades medicinales",
+      "locator": "Artículo 6",
+      "sourceUrl": "https://www.argentina.gob.ar/normativa/nacional/decreto-1299-1997-47637/texto",
+      "summary": "Reconoce transacciones comerciales documentadas entre droguerías."
+    },
+    {
+      "id": "DISP_7439_1999_ART_2_5_7",
+      "type": "ANMAT_DISPOSITION",
+      "number": "7439/1999",
+      "title": "Habilitación de distribuidoras de medicamentos",
+      "locator": "Artículos 2, 5 y 7; definición de operador logístico",
+      "sourceUrl": "https://www.argentina.gob.ar/normativa/nacional/norma-61906/actualizacion",
+      "summary": "El operador logístico habilitado actúa por cuenta y orden de distribuidoras y entrega a destinos indicados por el titular."
+    },
+    {
+      "id": "DISP_3683_2011_ART_2",
+      "type": "ANMAT_DISPOSITION",
+      "number": "3683/2011",
+      "title": "Sistema de Trazabilidad de Medicamentos",
+      "locator": "Artículo 2",
+      "sourceUrl": "https://www.argentina.gob.ar/normativa/nacional/disposici%C3%B3n-3683-2011-182665/actualizacion",
+      "summary": "Define los agentes laboratorio, distribuidora, operador logístico, droguería, farmacia y establecimiento asistencial."
+    },
+    {
+      "id": "DISP_3683_2011_ART_9",
+      "type": "ANMAT_DISPOSITION",
+      "number": "3683/2011",
+      "title": "Sistema de Trazabilidad de Medicamentos",
+      "locator": "Artículo 9",
+      "sourceUrl": "https://www.argentina.gob.ar/normativa/nacional/disposici%C3%B3n-3683-2011-182665/actualizacion",
+      "summary": "Exige impedir operatorias no autorizadas, como ventas hacia un eslabón superior, y verificar la legitimidad de la cadena."
+    },
+    {
+      "id": "DISP_3683_2011_ANNEX_II",
+      "type": "ANMAT_DISPOSITION",
+      "number": "3683/2011",
+      "title": "Sistema de Trazabilidad de Medicamentos",
+      "locator": "Anexo II",
+      "sourceUrl": "https://www.argentina.gob.ar/normativa/nacional/disposici%C3%B3n-3683-2011-182665/actualizacion",
+      "summary": "Representa la cadena de distribución desde el laboratorio hasta farmacias y establecimientos asistenciales."
+    },
+    {
+      "id": "DISP_963_2015_ART_15",
+      "type": "ANMAT_DISPOSITION",
+      "number": "963/2015",
+      "title": "Sistema de Trazabilidad de Medicamentos",
+      "locator": "Artículo 15",
+      "sourceUrl": "https://www.argentina.gob.ar/normativa/nacional/disposici%C3%B3n-963-2015-241473/texto",
+      "summary": "La documentación de una distribución debe identificar mediante GLN o CUFE los establecimientos de origen y destino."
+    }
+  ],
+  "authorizedTransfers": [
+    {
+      "id": "LABORATORY_TO_DISTRIBUTOR",
+      "origin": "LABORATORY",
+      "destination": "DISTRIBUTOR",
+      "allowed": true,
+      "normativeReferences": [
+        "DEC_1299_1997_ART_2",
+        "DISP_3683_2011_ART_2"
+      ],
+      "rationale": "La distribuidora actúa por cuenta y orden del laboratorio."
+    },
+    {
+      "id": "LABORATORY_TO_LOGISTICS_OPERATOR",
+      "origin": "LABORATORY",
+      "destination": "LOGISTICS_OPERATOR",
+      "allowed": true,
+      "normativeReferences": [
+        "DISP_7439_1999_ART_2_5_7",
+        "DISP_3683_2011_ART_2"
+      ],
+      "rationale": "El operador logístico puede recibir físicamente productos cuando interviene dentro de una distribución autorizada."
+    },
+    {
+      "id": "LABORATORY_TO_DRUGSTORE",
+      "origin": "LABORATORY",
+      "destination": "DRUGSTORE",
+      "allowed": true,
+      "normativeReferences": [
+        "DEC_1299_1997_ART_2",
+        "DISP_3683_2011_ANNEX_II",
+        "DISP_963_2015_ART_15"
+      ],
+      "rationale": "El laboratorio puede comercializar directamente con una droguería habilitada."
+    },
+    {
+      "id": "LABORATORY_TO_PHARMACY",
+      "origin": "LABORATORY",
+      "destination": "PHARMACY",
+      "allowed": true,
+      "normativeReferences": [
+        "DEC_1299_1997_ART_2",
+        "DEC_1299_1997_ART_4",
+        "DISP_963_2015_ART_15"
+      ],
+      "rationale": "La farmacia puede adquirir directamente a un laboratorio habilitado."
+    },
+    {
+      "id": "LABORATORY_TO_HEALTHCARE_FACILITY",
+      "origin": "LABORATORY",
+      "destination": "HEALTHCARE_FACILITY",
+      "allowed": true,
+      "normativeReferences": [
+        "DEC_1299_1997_ART_2",
+        "DEC_1299_1997_ART_5",
+        "DISP_963_2015_ART_15"
+      ],
+      "rationale": "El establecimiento asistencial puede adquirir directamente a un laboratorio habilitado."
+    },
+    {
+      "id": "DISTRIBUTOR_TO_LOGISTICS_OPERATOR",
+      "origin": "DISTRIBUTOR",
+      "destination": "LOGISTICS_OPERATOR",
+      "allowed": true,
+      "normativeReferences": [
+        "DISP_7439_1999_ART_2_5_7",
+        "DISP_3683_2011_ART_2"
+      ],
+      "rationale": "El operador logístico actúa por cuenta y orden de la distribuidora."
+    },
+    {
+      "id": "DISTRIBUTOR_TO_DRUGSTORE",
+      "origin": "DISTRIBUTOR",
+      "destination": "DRUGSTORE",
+      "allowed": true,
+      "normativeReferences": [
+        "DEC_1299_1997_ART_2",
+        "DISP_3683_2011_ANNEX_II",
+        "DISP_963_2015_ART_15"
+      ],
+      "rationale": "La distribuidora puede abastecer a una droguería por cuenta y orden del laboratorio."
+    },
+    {
+      "id": "DISTRIBUTOR_TO_PHARMACY",
+      "origin": "DISTRIBUTOR",
+      "destination": "PHARMACY",
+      "allowed": true,
+      "normativeReferences": [
+        "DEC_1299_1997_ART_2",
+        "DEC_1299_1997_ART_4",
+        "DISP_963_2015_ART_15"
+      ],
+      "rationale": "La farmacia puede adquirir a una distribuidora habilitada."
+    },
+    {
+      "id": "DISTRIBUTOR_TO_HEALTHCARE_FACILITY",
+      "origin": "DISTRIBUTOR",
+      "destination": "HEALTHCARE_FACILITY",
+      "allowed": true,
+      "normativeReferences": [
+        "DEC_1299_1997_ART_2",
+        "DEC_1299_1997_ART_5",
+        "DISP_963_2015_ART_15"
+      ],
+      "rationale": "El establecimiento asistencial puede adquirir a una distribuidora habilitada."
+    },
+    {
+      "id": "LOGISTICS_OPERATOR_TO_DRUGSTORE",
+      "origin": "LOGISTICS_OPERATOR",
+      "destination": "DRUGSTORE",
+      "allowed": true,
+      "normativeReferences": [
+        "DISP_7439_1999_ART_2_5_7",
+        "DISP_963_2015_ART_15"
+      ],
+      "rationale": "El operador logístico puede entregar físicamente a una droguería indicada dentro de una distribución autorizada."
+    },
+    {
+      "id": "LOGISTICS_OPERATOR_TO_PHARMACY",
+      "origin": "LOGISTICS_OPERATOR",
+      "destination": "PHARMACY",
+      "allowed": true,
+      "normativeReferences": [
+        "DISP_7439_1999_ART_2_5_7",
+        "DISP_963_2015_ART_15"
+      ],
+      "rationale": "El operador logístico puede entregar físicamente a una farmacia indicada dentro de una distribución autorizada."
+    },
+    {
+      "id": "LOGISTICS_OPERATOR_TO_HEALTHCARE_FACILITY",
+      "origin": "LOGISTICS_OPERATOR",
+      "destination": "HEALTHCARE_FACILITY",
+      "allowed": true,
+      "normativeReferences": [
+        "DISP_7439_1999_ART_2_5_7",
+        "DISP_963_2015_ART_15"
+      ],
+      "rationale": "El operador logístico puede entregar físicamente a un establecimiento asistencial indicado."
+    },
+    {
+      "id": "DRUGSTORE_TO_DRUGSTORE",
+      "origin": "DRUGSTORE",
+      "destination": "DRUGSTORE",
+      "allowed": true,
+      "normativeReferences": [
+        "DEC_1299_1997_ART_6",
+        "DISP_963_2015_ART_15"
+      ],
+      "rationale": "La normativa reconoce transacciones comerciales documentadas entre droguerías."
+    },
+    {
+      "id": "DRUGSTORE_TO_PHARMACY",
+      "origin": "DRUGSTORE",
+      "destination": "PHARMACY",
+      "allowed": true,
+      "normativeReferences": [
+        "DEC_1299_1997_ART_4",
+        "DISP_3683_2011_ANNEX_II",
+        "DISP_963_2015_ART_15"
+      ],
+      "rationale": "La farmacia puede adquirir medicamentos a una droguería habilitada."
+    },
+    {
+      "id": "DRUGSTORE_TO_HEALTHCARE_FACILITY",
+      "origin": "DRUGSTORE",
+      "destination": "HEALTHCARE_FACILITY",
+      "allowed": true,
+      "normativeReferences": [
+        "DEC_1299_1997_ART_5",
+        "DISP_963_2015_ART_15"
+      ],
+      "rationale": "El establecimiento asistencial puede adquirir medicamentos a una droguería habilitada."
+    },
+    {
+      "id": "PHARMACY_TO_HEALTHCARE_FACILITY",
+      "origin": "PHARMACY",
+      "destination": "HEALTHCARE_FACILITY",
+      "allowed": true,
+      "normativeReferences": [
+        "DEC_1299_1997_ART_4",
+        "DEC_1299_1997_ART_5",
+        "DISP_963_2015_ART_15"
+      ],
+      "rationale": "La farmacia puede vender a establecimientos asistenciales habilitados."
+    }
+  ],
+  "prohibitedTransfers": [
+    {
+      "id": "PHARMACY_TO_UPSTREAM_AGENT",
+      "origins": [
+        "PHARMACY"
+      ],
+      "destinations": [
+        "LABORATORY",
+        "DISTRIBUTOR",
+        "LOGISTICS_OPERATOR",
+        "DRUGSTORE"
+      ],
+      "allowed": false,
+      "normativeReferences": [
+        "DEC_1299_1997_ART_4",
+        "DISP_3683_2011_ART_9"
+      ],
+      "reason": "Una farmacia no puede realizar una transferencia comercial ordinaria hacia un eslabón superior."
+    },
+    {
+      "id": "HEALTHCARE_FACILITY_TO_UPSTREAM_AGENT",
+      "origins": [
+        "HEALTHCARE_FACILITY"
+      ],
+      "destinations": [
+        "LABORATORY",
+        "DISTRIBUTOR",
+        "LOGISTICS_OPERATOR",
+        "DRUGSTORE",
+        "PHARMACY"
+      ],
+      "allowed": false,
+      "normativeReferences": [
+        "DEC_1299_1997_ART_5",
+        "DISP_3683_2011_ART_9"
+      ],
+      "reason": "Un establecimiento asistencial no puede realizar una transferencia comercial ordinaria hacia proveedores de la cadena."
+    }
+  ]
+}

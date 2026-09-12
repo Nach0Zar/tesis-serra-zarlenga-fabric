@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pfi-snt:synthetic-dataset-manifest:schema:1.0.0",
+  "title": "Manifiesto del dataset sintético CLI-3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "generator",
+    "seed",
+    "parameters",
+    "sources",
+    "dataset",
+    "organizations"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "urn:pfi-snt:synthetic-dataset-manifest:schema:1.0.0"
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "generator": {
+      "$ref": "#/$defs/generator"
+    },
+    "seed": {
+      "const": 20260727
+    },
+    "parameters": {
+      "$ref": "#/$defs/parameters"
+    },
+    "sources": {
+      "$ref": "#/$defs/sources"
+    },
+    "dataset": {
+      "$ref": "#/$defs/dataset"
+    },
+    "organizations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/organization"
+      }
+    }
+  },
+  "$defs": {
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "const": "cli-3-dataset-generator"
+        },
+        "version": {
+          "const": "1.0.0"
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "units"
+      ],
+      "properties": {
+        "units": {
+          "type": "integer",
+          "minimum": 50000
+        }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transferRulesetId",
+        "transferMatrixSchemaVersion",
+        "organizationsManifestSchemaVersion"
+      ],
+      "properties": {
+        "transferRulesetId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transferMatrixSchemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$"
+        },
+        "organizationsManifestSchemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$"
+        }
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "hashFile",
+        "sha256",
+        "units",
+        "happyPathUnits",
+        "rejectionUnits",
+        "explicitProhibitionCases",
+        "defaultDenyCases"
+      ],
+      "properties": {
+        "file": {
+          "const": "dataset.json"
+        },
+        "hashFile": {
+          "const": "dataset.sha256"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "units": {
+          "type": "integer",
+          "minimum": 50000
+        },
+        "happyPathUnits": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rejectionUnits": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "explicitProhibitionCases": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "defaultDenyCases": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "organization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mspId",
+        "canonicalId",
+        "agentType",
+        "clientRole"
+      ],
+      "properties": {
+        "mspId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9.-]+MSP$"
+        },
+        "canonicalId": {
+          "type": "string",
+          "pattern": "^(GLN|CUFE):[0-9]{13}$"
+        },
+        "agentType": {
+          "enum": [
+            "LABORATORY",
+            "DRUGSTORE",
+            "DISTRIBUTOR",
+            "LOGISTICS_OPERATOR",
+            "PHARMACY",
+            "HEALTHCARE_FACILITY"
+          ]
+        },
+        "clientRole": {
+          "const": "operator"
+        }
+      }
+    }
+  }
+}

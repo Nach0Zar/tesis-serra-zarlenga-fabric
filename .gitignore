@@ -1,0 +1,70 @@
+# Claude Code guidance (local only)
+CLAUDE.md
+AGENTS.md
+/context
+
+# Knowledge base (PDFs and derived files — do not commit)
+*.pdf
+.knowledge/
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+
+# Python validation caches
+__pycache__/
+*.py[cod]
+
+# Artefactos de empaquetado del chaincode. `make package` construye el arbol
+# staged y el tar.gz FUERA de chaincode/, para que una segunda corrida no
+# empaquete el artefacto de la primera (ADR-008 punto 5, ADR-010 punto 4).
+/build/
+
+# Directorios de vendoring. El del chaincode lo genera `make vendor` solo para
+# empaquetar (ver chaincode/README.md); no se versiona.
+vendor/
+
+# Go workspace
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+/.wslconfig
+
+# Hyperledger Fabric network artifacts (generated at runtime)
+network/crypto-config/
+network/channel-artifacts/
+network/system-genesis-block/
+network/*.tx
+network/*.block
+network/organizations/
+
+# Fabric test network downloaded by CI (local runs)
+fabric-samples/
+
+# Docker overrides
+docker-compose.override.yml
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Claude Code local settings (personales, no del proyecto)
+.claude/settings.json
+.claude/settings.local.json

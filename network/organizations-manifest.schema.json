@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pfi-snt:organizations-manifest:schema:1.0.0",
+  "title": "PFI SNT Organizations Manifest",
+  "description": "Fuente de verdad de despliegue para material criptográfico, colecciones privadas y bootstrap del registro de organizaciones.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "organizations"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "./organizations-manifest.schema.json"
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "organizations": {
+      "type": "array",
+      "minItems": 7,
+      "items": {
+        "$ref": "#/$defs/organization"
+      }
+    }
+  },
+  "$defs": {
+    "organization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mspId",
+        "slug",
+        "id",
+        "idType",
+        "agentType",
+        "active",
+        "clientRole",
+        "peerHostname"
+      ],
+      "properties": {
+        "mspId": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9]*MSP$"
+        },
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "idType": {
+          "enum": [
+            "GLN",
+            "CUFE",
+            "REG"
+          ]
+        },
+        "agentType": {
+          "enum": [
+            "LABORATORY",
+            "DISTRIBUTOR",
+            "LOGISTICS_OPERATOR",
+            "DRUGSTORE",
+            "PHARMACY",
+            "HEALTHCARE_FACILITY",
+            "REGULATOR",
+            "FINANCIER"
+          ]
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "clientRole": {
+          "enum": [
+            "operator",
+            "regulatory-admin",
+            "financier-auditor"
+          ]
+        },
+        "peerHostname": {
+          "type": "string",
+          "pattern": "^peer0\\.[a-z][a-z0-9-]*\\.snt\\.local$"
+        },
+        "ordererHostname": {
+          "type": "string",
+          "pattern": "^orderer\\.[a-z][a-z0-9-]*\\.snt\\.local$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "agentType": {
+                "enum": [
+                  "REGULATOR",
+                  "FINANCIER"
+                ]
+              }
+            },
+            "required": [
+              "agentType"
+            ]
+          },
+          "then": {
+            "properties": {
+              "idType": {
+                "const": "REG"
+              },
+              "id": {
+                "pattern": "^[A-Z0-9]+(?:-[A-Z0-9]+)*$"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "idType": {
+                "enum": [
+                  "GLN",
+                  "CUFE"
+                ]
+              },
+              "id": {
+                "pattern": "^[0-9]{13}$"
+              },
+              "clientRole": {
+                "const": "operator"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "agentType": {
+                "const": "REGULATOR"
+              }
+            },
+            "required": [
+              "agentType"
+            ]
+          },
+          "then": {
+            "properties": {
+              "clientRole": {
+                "const": "regulatory-admin"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "agentType": {
+                "const": "FINANCIER"
+              }
+            },
+            "required": [
+              "agentType"
+            ]
+          },
+          "then": {
+            "properties": {
+              "clientRole": {
+                "const": "financier-auditor"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
