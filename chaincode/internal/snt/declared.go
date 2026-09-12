@@ -26,7 +26,6 @@ import "github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 //	Restock ................................ EXT-5 (#31)
 //	WithdrawFromMarket/ProhibitProduct ..... EXT-6 (#32)
 //	FinalDisposition ....................... EXT-8 (#63)
-//	VerifyTrace ............................ CC-8 (#62)
 
 // Quarantine cubre T07, T08 y T09 de ADR-001. Estado resultante:
 // EN_CUARENTENA. Actor habilitado: custodio actual, destinatario declarado
@@ -91,11 +90,4 @@ func (c *SNTContract) Restock(_ contractapi.TransactionContextInterface, _ UnitE
 // FinalDisposition cubre T28-T33. Estado resultante: DISPUESTO_FINAL (terminal).
 func (c *SNTContract) FinalDisposition(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
 	return nil, notImplemented("FinalDisposition", "EXT-8 (#63)")
-}
-
-// VerifyTrace es la verificacion de trazabilidad del organismo financiador:
-// checklist determinística de cinco comprobaciones y veredicto estructurado
-// (ADR-011). Es de solo lectura y no muta estado.
-func (c *SNTContract) VerifyTrace(_ contractapi.TransactionContextInterface, _ string, _ string) (*TraceVerdict, error) {
-	return nil, notImplemented("VerifyTrace", "CC-8 (#62)")
 }

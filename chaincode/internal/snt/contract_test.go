@@ -154,10 +154,6 @@ func TestDeclaredOperationsReportTheirOwner(t *testing.T) {
 			_, err := contract.FinalDisposition(ctx, UnitEventRequest{})
 			return err
 		},
-		"VerifyTrace": func() error {
-			_, err := contract.VerifyTrace(ctx, validGTIN, validSerial)
-			return err
-		},
 	}
 
 	for name, invoke := range pending {
