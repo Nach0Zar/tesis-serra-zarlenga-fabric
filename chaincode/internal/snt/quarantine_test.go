@@ -231,3 +231,20 @@ func requireRegulatoryMarker(t *testing.T, stub *mockStub, operation string) {
 		t.Fatalf("marcador = %+v", decoded)
 	}
 }
+
+// TestQuarantineRequiresMotivo: un evento extraordinario deja un asiento
+// permanente en la traza y la causa regulatoria es parte del asiento, con el
+// mismo criterio que RejectTransfer y AuthorizeLabIntervention.
+func TestQuarantineRequiresMotivo(t *testing.T) {
+	stub, contract := verifyFixture(t)
+
+	_, err := contract.Quarantine(
+		testContext(stub, drogueriaMSP, RoleOperator),
+		UnitEventRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+	requireCode(t, err, cerr.InvalidRequest)
+
+	_, err = contract.ReleaseQuarantine(
+		testContext(stub, drogueriaMSP, RoleOperator),
+		UnitEventRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+	requireCode(t, err, cerr.InvalidRequest)
+}

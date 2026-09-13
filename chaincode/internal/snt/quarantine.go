@@ -78,6 +78,14 @@ func applyQuarantineTransition(
 	if err := validateUnitRef(req.GTIN, req.NumeroSerie); err != nil {
 		return nil, err
 	}
+	// `motivo` es obligatorio con el mismo criterio que en RejectTransfer y
+	// AuthorizeLabIntervention: un evento extraordinario deja un asiento
+	// permanente en la traza y la causa regulatoria es parte del asiento. El
+	// contrato lo acota a texto breve y neutro, sin datos personales, clinicos
+	// ni comerciales.
+	if req.Motivo == "" {
+		return nil, invalidRequest("motivo es obligatorio para documentar la causa del evento")
+	}
 
 	unit, err := readUnit(ctx, req.GTIN, req.NumeroSerie)
 	if err != nil {
