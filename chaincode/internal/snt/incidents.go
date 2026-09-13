@@ -46,7 +46,7 @@ func (c *SNTContract) ReportStolen(
 	ctx contractapi.TransactionContextInterface,
 	req UnitEventRequest,
 ) (*MedicationUnitView, error) {
-	return applyExtraordinaryEvent(ctx, req, domain.EventInformarRobo, opReportStolen)
+	return applyExtraordinaryEvent(ctx, req, domain.EventInformarRobo, opReportStolen, nil)
 }
 
 // ReportLost implementa T15. Estado resultante: EXTRAVIADO, terminal.
@@ -54,7 +54,7 @@ func (c *SNTContract) ReportLost(
 	ctx contractapi.TransactionContextInterface,
 	req UnitEventRequest,
 ) (*MedicationUnitView, error) {
-	return applyExtraordinaryEvent(ctx, req, domain.EventInformarExtravio, opReportLost)
+	return applyExtraordinaryEvent(ctx, req, domain.EventInformarExtravio, opReportLost, nil)
 }
 
 // ReportDamaged implementa T16. Estado resultante: DETERIORADO, bloqueante
@@ -65,12 +65,13 @@ func (c *SNTContract) ReportLost(
 // por separado -- es la clave compuesta GTIN + numero de serie, que identifica a
 // la unidad y no se borra nunca (ADR-013 recomputa la unicidad desde el
 // historial justamente para detectar una recreacion). Lo que se da de baja es
-// la APTITUD de la unidad, y eso es exactamente lo que expresa el estado
-// terminal DETERIORADO: toda operacion posterior queda rechazada y VerifyUnit
-// devuelve ESTADO_TERMINAL a quien consulte antes de adquirirla.
+// la APTITUD de la unidad, y eso es exactamente lo que expresa DETERIORADO:
+// toda operacion ORDINARIA posterior queda rechazada y VerifyUnit devuelve
+// ESTADO_BLOQUEANTE -- no ESTADO_TERMINAL -- a quien consulte antes de
+// adquirirla, porque queda abierta la salida T29 hacia la disposicion final.
 func (c *SNTContract) ReportDamaged(
 	ctx contractapi.TransactionContextInterface,
 	req UnitEventRequest,
 ) (*MedicationUnitView, error) {
-	return applyExtraordinaryEvent(ctx, req, domain.EventInformarDeterioro, opReportDamaged)
+	return applyExtraordinaryEvent(ctx, req, domain.EventInformarDeterioro, opReportDamaged, nil)
 }

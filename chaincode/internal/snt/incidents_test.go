@@ -36,10 +36,14 @@ func incidentCases() []incidentCase {
 	}
 }
 
-// TestIncidentsReachTerminalStates cubre las tres operaciones desde EN_CUSTODIA
-// y el criterio "unidad bloqueada para operaciones futuras": los tres estados
-// son terminales en ADR-001, de modo que el bloqueo no necesita regla propia.
-func TestIncidentsReachTerminalStates(t *testing.T) {
+// TestIncidentsBlockFurtherOperations cubre las tres operaciones desde
+// EN_CUSTODIA y el criterio "unidad bloqueada para operaciones futuras".
+//
+// El bloqueo no necesita regla propia del chaincode: lo produce ADR-001. Pero
+// los tres estados NO son equivalentes, y el test lo afirma por separado:
+// ROBADO y EXTRAVIADO son terminales, mientras DETERIORADO es bloqueante y
+// conserva la salida T29 hacia DISPUESTO_FINAL.
+func TestIncidentsBlockFurtherOperations(t *testing.T) {
 	for _, c := range incidentCases() {
 		t.Run(c.name, func(t *testing.T) {
 			stub, contract := verifyFixture(t)
