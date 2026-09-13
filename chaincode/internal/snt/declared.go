@@ -19,25 +19,12 @@ import "github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 //	Dispense ............................... CC-4 (#17)
 //	ReadUnit/GetUnitHistory/
 //	  QueryUnitsByGTIN ..................... CC-5 (#18)
-//	Quarantine/ReleaseQuarantine ........... EXT-1 (#27)
 //	ReportExpired .......................... EXT-2 (#28)
 //	ReportStolen/ReportLost/ReportDamaged .. EXT-3 (#29)
 //	ReturnProduct .......................... EXT-4 (#30)
 //	Restock ................................ EXT-5 (#31)
 //	WithdrawFromMarket/ProhibitProduct ..... EXT-6 (#32)
 //	FinalDisposition ....................... EXT-8 (#63)
-
-// Quarantine cubre T07, T08 y T09 de ADR-001. Estado resultante:
-// EN_CUARENTENA. Actor habilitado: custodio actual, destinatario declarado
-// (solo T09, unidad en EN_TRANSITO) o ANMAT.
-func (c *SNTContract) Quarantine(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
-	return nil, notImplemented("Quarantine", "EXT-1 (#27)")
-}
-
-// ReleaseQuarantine cubre T10. Estado resultante: EN_CUSTODIA.
-func (c *SNTContract) ReleaseQuarantine(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
-	return nil, notImplemented("ReleaseQuarantine", "EXT-1 (#27)")
-}
 
 // ReportExpired cubre T11, T12 y T13. Estado resultante: VENCIDO. Actor
 // habilitado: custodio actual, destinatario declarado (solo T13 desde
