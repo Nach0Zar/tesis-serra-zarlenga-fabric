@@ -86,9 +86,15 @@ func (c *SNTContract) ReturnProduct(
 	if err != nil {
 		return nil, err
 	}
-	var receptorOrg OrganizationRecord
+	var receptorOrg, custodioOrg OrganizationRecord
 	if declared {
-		receptorOrg, err = validateReturnReceiver(ctx, receptor, unit)
+		// El custodio se resuelve UNA vez: lo necesitan la validacion 6 y, sobre
+		// todo, el nombre de la coleccion.
+		custodioOrg, err = lookupOrganizationByCanonicalID(ctx, unit.CustodioActual)
+		if err != nil {
+			return nil, err
+		}
+		receptorOrg, err = validateReturnReceiver(ctx, receptor, custodioOrg)
 		if err != nil {
 			return nil, err
 		}
@@ -105,7 +111,7 @@ func (c *SNTContract) ReturnProduct(
 		}
 	}
 	if declared {
-		if err := writeReturnOperation(ctx, unit, invoker, receptorOrg, req.Motivo, timestamp); err != nil {
+		if err := writeReturnOperation(ctx, unit, custodioOrg, receptorOrg, req.Motivo, timestamp); err != nil {
 			return nil, err
 		}
 	}
@@ -147,10 +153,14 @@ func readDevolucionTransient(ctx contractapi.TransactionContextInterface) (strin
 // orden que fija el contrato, cada una con su codigo propio. El orden no es
 // estetico: cada paso presupone el anterior, y la sexta es la que hace que la
 // coleccion del par exista.
+//
+// Recibe el custodio ya resuelto porque tambien lo necesita quien escribe la
+// coleccion: resolverlo dos veces invitaba a que una de las dos resoluciones
+// usara el invocador, que es justamente el defecto que esta funcion evita.
 func validateReturnReceiver(
 	ctx contractapi.TransactionContextInterface,
 	receptor string,
-	unit MedicationUnit,
+	custodioOrg OrganizationRecord,
 ) (OrganizationRecord, error) {
 	// 1. Forma canonica. A diferencia del destino de un despacho, aca NO se
 	// admite declarar por mspId: ADR-003 reserva el mspId a la configuracion de
@@ -187,7 +197,7 @@ func validateReturnReceiver(
 
 	// 5. No es la propia organizacion declarante: una devolucion a uno mismo no
 	// describe ningun movimiento.
-	if org.CanonicalID() == unit.CustodioActual {
+	if org.CanonicalID() == custodioOrg.CanonicalID() {
 		return OrganizationRecord{}, cerr.New(cerr.InvalidDestination,
 			"el receptor declarado es el propio custodio de la unidad").
 			WithDetails(map[string]any{"receptor": receptor})
@@ -202,10 +212,6 @@ func validateReturnReceiver(
 	// NO se exige que el receptor sea el proveedor REAL de esta unidad: ADR-009
 	// punto 2 lo declara fuera de alcance de v1 bajo "Que no se exige en v1, y
 	// por que".
-	custodioOrg, err := lookupOrganizationByCanonicalID(ctx, unit.CustodioActual)
-	if err != nil {
-		return OrganizationRecord{}, err
-	}
 	decision, err := domain.DecideTransfer(org.AgentType, custodioOrg.AgentType)
 	if err != nil {
 		return OrganizationRecord{}, cerr.Internal(err, "no se pudo evaluar la matriz de transferencias")
@@ -229,11 +235,21 @@ func validateReturnReceiver(
 func writeReturnOperation(
 	ctx contractapi.TransactionContextInterface,
 	unit MedicationUnit,
-	invoker Invoker,
+	custodio OrganizationRecord,
 	receptor OrganizationRecord,
 	motivo, timestamp string,
 ) error {
-	collection := pairCollectionName(invoker.MSPID, receptor.MSPID)
+	// La coleccion es la del par CUSTODIO <-> receptor declarado, nunca la del
+	// invocador. T22 y T23 habilitan a ANMAT a declarar la devolucion, y ANMAT
+	// no es un agente custodial: no existe coleccion transfer_AnmatMSP_*, de
+	// modo que resolverla con el invocador haria fallar PutPrivateData sobre una
+	// coleccion inexistente en toda devolucion regulatoria con transient.
+	//
+	// ADR-006 punto 1 define una coleccion por PAR DE ORGANIZACIONES entre las
+	// que la matriz autorice una transferencia en alguna direccion, con nombre
+	// derivado de ambos mspId ordenados lexicograficamente: la devolucion en
+	// sentido inverso resuelve al mismo nombre que la transferencia ordinaria.
+	collection := pairCollectionName(custodio.MSPID, receptor.MSPID)
 	key, err := returnOpKey(ctx.GetStub(), unit.GTIN, unit.NumeroSerie, ctx.GetStub().GetTxID())
 	if err != nil {
 		return cerr.Internal(err, "no se pudo construir la clave del registro de devolucion")

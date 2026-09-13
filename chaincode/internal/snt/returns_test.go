@@ -115,13 +115,13 @@ func TestReturnProductKeepsHistoryOnSecondReturn(t *testing.T) {
 	// una segunda escritura con otro txID no toca la primera.
 	stub.txID = "tx-devolucion-2"
 	ctx := testContext(stub, drogueriaMSP, RoleOperator)
-	invoker, err := resolveInvoker(ctx)
+	custodio, err := lookupOrganizationByCanonicalID(ctx, "GLN:"+drogueriaGLN)
 	requireNoError(t, err)
 	unit, err := readUnit(ctx, validGTIN, validSerial)
 	requireNoError(t, err)
 	receptor, err := lookupOrganizationByCanonicalID(ctx, "GLN:"+labGLN)
 	requireNoError(t, err)
-	requireNoError(t, writeReturnOperation(ctx, unit, invoker, receptor, "segunda devolucion", "2026-09-13T00:00:00Z"))
+	requireNoError(t, writeReturnOperation(ctx, unit, custodio, receptor, "segunda devolucion", "2026-09-13T00:00:00Z"))
 
 	collection := pairCollectionName(drogueriaMSP, labMSP)
 	first, err := returnOpKey(stub, validGTIN, validSerial, "tx-devolucion-1")
@@ -241,4 +241,114 @@ func registerNonCustodial(t *testing.T, stub *mockStub, mspID, id string, agentT
 			AgentType: agentType, Active: true,
 		})
 	requireNoError(t, err)
+}
+
+// TestReturnProductFromEveryOrigin cubre los cuatro origenes que ADR-001
+// declara para la devolucion, con sus actores habilitados. Los estados que
+// todavia no tienen operacion propia -- RETIRADO_MERCADO y PROHIBIDO son EXT-6,
+// VENCIDO se alcanza con EXT-2 -- se siembran directamente: lo que este test
+// ejercita es el camino de la devolucion, no como se llego al estado de origen.
+func TestReturnProductFromEveryOrigin(t *testing.T) {
+	cases := []struct {
+		transicion string
+		origen     domain.State
+		invocador  string
+		rol        string
+	}{
+		{"T21", domain.StateEnCustodia, drogueriaMSP, RoleOperator},
+		{"T22 custodio", domain.StateEnCuarentena, drogueriaMSP, RoleOperator},
+		{"T22 ANMAT", domain.StateEnCuarentena, anmatMSP, RoleRegulatoryAdmin},
+		{"T23 retirado", domain.StateRetiradoMercado, drogueriaMSP, RoleOperator},
+		{"T23 prohibido ANMAT", domain.StateProhibido, anmatMSP, RoleRegulatoryAdmin},
+		{"T24", domain.StateVencido, drogueriaMSP, RoleOperator},
+	}
+	for _, c := range cases {
+		t.Run(c.transicion, func(t *testing.T) {
+			stub, contract := verifyFixture(t)
+			if c.origen != domain.StateEnCustodia {
+				stub.txID = "tx-origen"
+				seedUnit(t, stub, c.origen, "GLN:"+drogueriaGLN)
+			}
+
+			stub.txID = "tx-devolucion-" + c.transicion
+			view, err := contract.ReturnProduct(
+				testContext(stub, c.invocador, c.rol), returnRequest())
+			requireNoError(t, err)
+			if view.Estado != domain.StateDevuelto {
+				t.Fatalf("estado = %s, se esperaba DEVUELTO", view.Estado)
+			}
+			// La custodia no cambia en ninguno de los origenes, ni siquiera
+			// cuando la declara ANMAT (ADR-009, punto 1).
+			if view.CustodioActual != "GLN:"+drogueriaGLN {
+				t.Fatalf("custodio = %s, ADR-009 no mueve la custodia", view.CustodioActual)
+			}
+		})
+	}
+}
+
+// TestReturnProductByRegulatorResolvesCustodianCollection es el test que faltaba
+// y que habria detectado el defecto: ANMAT declara la devolucion con receptor
+// declarado, y la PDC debe ser la del par CUSTODIO <-> receptor.
+//
+// Resolverla con el invocador daria transfer_AnmatMSP_<receptor>, que no existe
+// porque ANMAT no es un agente custodial y ADR-006 solo genera colecciones para
+// pares autorizados por la matriz. PutPrivateData fallaria sobre una coleccion
+// inexistente y la unidad nunca alcanzaria DEVUELTO.
+func TestReturnProductByRegulatorResolvesCustodianCollection(t *testing.T) {
+	stub, contract := verifyFixture(t)
+	stub.txID = "tx-cuarentena"
+	seedUnit(t, stub, domain.StateEnCuarentena, "GLN:"+drogueriaGLN)
+
+	stub.txID = "tx-devolucion-anmat"
+	withTransient(stub, devolucionTransientFor("GLN:"+labGLN))
+	view, err := contract.ReturnProduct(
+		testContext(stub, anmatMSP, RoleRegulatoryAdmin), returnRequest())
+	requireNoError(t, err)
+	if view.Estado != domain.StateDevuelto {
+		t.Fatalf("estado = %s, se esperaba DEVUELTO", view.Estado)
+	}
+
+	// La coleccion correcta es la del custodio, no la del invocador.
+	custodial := pairCollectionName(drogueriaMSP, labMSP)
+	regulatory := pairCollectionName(anmatMSP, labMSP)
+	key, err := returnOpKey(stub, validGTIN, validSerial, "tx-devolucion-anmat")
+	requireNoError(t, err)
+	if stub.privateData[custodial][key] == nil {
+		t.Fatalf("el registro debe escribirse en la coleccion del par custodio-receptor (%s)", custodial)
+	}
+	if stub.privateData[regulatory][key] != nil {
+		t.Fatalf("no debe escribirse en una coleccion del invocador regulatorio (%s)", regulatory)
+	}
+
+	// Y el marcador regulatorio sigue siendo obligatorio.
+	requireRegulatoryMarker(t, stub, opReturnProduct)
+}
+
+// TestReturnProductValidation4RejectsNonCustodialAgentType ejercita la
+// validacion 4 DE VERDAD, sobre el helper y con un registro preparado a
+// proposito.
+//
+// Por el camino publico es inalcanzable -- una organizacion no custodial solo
+// puede registrarse con idType=REG y parseCanonicalID rechaza REG: en la
+// validacion 1 --, pero la validacion existe como invariante del registro y
+// documentarla no es demostrarla. Se siembra directamente en el world state una
+// entrada con identificador GLN y agentType no custodial, que es la unica forma
+// de alcanzar esa rama.
+func TestReturnProductValidation4RejectsNonCustodialAgentType(t *testing.T) {
+	stub, contract := verifyFixture(t)
+	_ = contract
+	ctx := testContext(stub, anmatMSP, RoleRegulatoryAdmin)
+
+	// Entrada imposible por el alta publica: GLN con agentType FINANCIER.
+	_, err := putOrganization(ctx, OrganizationRecord{
+		MSPID: financiadorMSP, ID: "7791234500079", IDType: IDTypeGLN,
+		AgentType: domain.AgentFinancier, Active: true,
+	})
+	requireNoError(t, err)
+
+	custodio, err := lookupOrganizationByCanonicalID(ctx, "GLN:"+drogueriaGLN)
+	requireNoError(t, err)
+
+	_, err = validateReturnReceiver(ctx, "GLN:7791234500079", custodio)
+	requireCode(t, err, cerr.InvalidDestination)
 }
