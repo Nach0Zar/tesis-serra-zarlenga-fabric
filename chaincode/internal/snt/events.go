@@ -6,6 +6,15 @@ import (
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 )
 
+// eventPrecondition expresa una precondicion que ADR-001 declara para una
+// transicion concreta y que no se deriva del par (estado, actor). El motor la
+// evalua entre la resolucion de la transicion y la primera escritura.
+type eventPrecondition func(
+	ctx contractapi.TransactionContextInterface,
+	unit MedicationUnit,
+	transition domain.Transition,
+) error
+
 // Motor comun de los eventos extraordinarios sobre una unidad (ADR-001,
 // T07-T20). Cada operacion EXT aporta unicamente su evento; el flujo -- roles
 // de DES-6, resolucion del actor logico contra el ledger, cierre del transito
@@ -23,6 +32,7 @@ func applyExtraordinaryEvent(
 	req UnitEventRequest,
 	event domain.Event,
 	operation string,
+	precondition eventPrecondition,
 ) (*MedicationUnitView, error) {
 	invoker, err := resolveInvoker(ctx)
 	if err != nil {
@@ -58,6 +68,16 @@ func applyExtraordinaryEvent(
 	transition, err := requireTransition(unit.Estado, event, actor)
 	if err != nil {
 		return nil, err
+	}
+
+	// Precondicion propia de la transicion, cuando ADR-001 declara una que va
+	// mas alla del par (estado, actor). Se evalua DESPUES de resolver la
+	// transicion porque varias operaciones tienen preconciones distintas segun
+	// el estado de origen, y antes de cualquier escritura.
+	if precondition != nil {
+		if err := precondition(ctx, unit, transition); err != nil {
+			return nil, err
+		}
 	}
 
 	// T09 saca la unidad de EN_TRANSITO, y por lo tanto cierra el transito: sin

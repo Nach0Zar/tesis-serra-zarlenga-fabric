@@ -1,25 +1,48 @@
 package snt
 
 import (
+	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 )
 
-const opReportExpired = "ReportExpired"
+const (
+	opReportExpired = "ReportExpired"
+
+	// transitionReportExpiredFromTransitOrQuarantine es el ID de T13 en ADR-001.
+	transitionReportExpiredFromTransitOrQuarantine = "T13_MARK_EXPIRED_FROM_TRANSIT_OR_QUARANTINE"
+)
 
 // ReportExpired implementa T11, T12 y T13 de ADR-001: el asiento de la
 // caducidad de una unidad. Estado resultante: VENCIDO.
 //
-// NO exige que la fecha de vencimiento ya haya pasado, y es deliberado. La
-// precondicion de T11/T12 en ADR-001 es una DISYUNCION: "la fecha de
-// vencimiento fue alcanzada O SE DOCUMENTA LA CADUCIDAD". Exigir la fecha
-// dejaria sin camino a la segunda rama -- un lote caducado antes de termino por
-// corte de cadena de frio, una caducidad declarada por el titular o por la
-// autoridad -- que es exactamente el caso que el SNT necesita registrar y que
-// ninguna otra operacion del contrato cubre.
+// La precondicion temporal NO es la misma para las tres transiciones, y ADR-001
+// las distingue con cuidado:
 //
-// Lo que el chaincode SI puede exigir es que la causa quede documentada, y por
-// eso `motivo` es obligatorio: es la mitad verificable de esa disyuncion. El
+//   - T11 (EN_LABORATORIO) y T12 (EN_CUSTODIA): "la fecha de vencimiento fue
+//     alcanzada O SE DOCUMENTA LA CADUCIDAD". Es una DISYUNCION, y por eso estas
+//     dos no exigen que la fecha haya pasado: dejarian sin camino a la segunda
+//     rama -- un lote caducado antes de termino por corte de cadena de frio, una
+//     caducidad declarada por el titular o por la autoridad --, que es
+//     exactamente el caso que el SNT necesita registrar y que ninguna otra
+//     operacion del contrato cubre.
+//   - T13 (EN_TRANSITO o EN_CUARENTENA): "la fecha de vencimiento FUE ALCANZADA
+//     durante traslado o inmovilizacion". Sin disyuncion. Aca la fecha SI se
+//     exige, y requireExpiredByDateInTransit la comprueba.
+//
+// La diferencia no es un descuido de redaccion del ADR. Durante el transito, T13
+// habilita al DESTINATARIO DECLARADO -- que no es el custodio -- y ademas cierra
+// la transferencia activa. Sin la precondicion temporal, ese invocador podria
+// declarar vencida cualquier unidad con fecha futura y cerrar unilateralmente el
+// transito: exactamente el poder que la ventana de EN_TRANSITO no debe dar a una
+// sola parte.
+//
+// En T11/T12 lo que el chaincode si puede exigir es que la causa quede
+// documentada, y por eso `motivo` es obligatorio: es la mitad verificable de esa
+// disyuncion. La notificacion de PROXIMIDAD del vencimiento, que la issue
+// menciona, se satisface por esa via en los estados donde el custodio es quien
+// informa; no equivale a declarar vencida una unidad con fecha futura durante el
+// transito. El
 // contrato lo acota a texto breve y neutro, sin datos personales, clinicos ni
 // comerciales, porque viaja como argumento publico del canal.
 //
@@ -54,5 +77,39 @@ func (c *SNTContract) ReportExpired(
 	ctx contractapi.TransactionContextInterface,
 	req UnitEventRequest,
 ) (*MedicationUnitView, error) {
-	return applyExtraordinaryEvent(ctx, req, domain.EventInformarVencimiento, opReportExpired)
+	return applyExtraordinaryEvent(
+		ctx, req, domain.EventInformarVencimiento, opReportExpired, requireExpiredByDateInTransit)
+}
+
+// requireExpiredByDateInTransit materializa la precondicion propia de T13: la
+// fecha de vencimiento debe haber sido alcanzada. T11 y T12 no la tienen,
+// porque ADR-001 les admite la caducidad documentada como alternativa.
+//
+// La comparacion sale de GetTxTimestamp() y nunca del reloj local: time.Now()
+// rompe el determinismo del endoso, porque cada peer endosante la evaluaria en
+// un instante distinto y sus read-write sets podrian no coincidir.
+func requireExpiredByDateInTransit(
+	ctx contractapi.TransactionContextInterface,
+	unit MedicationUnit,
+	transition domain.Transition,
+) error {
+	if transition.ID != transitionReportExpiredFromTransitOrQuarantine {
+		return nil
+	}
+	expired, err := unitExpiredByDate(ctx, unit)
+	if err != nil {
+		return err
+	}
+	if expired {
+		return nil
+	}
+	return cerr.New(cerr.InvalidStateTransition,
+		"T13 exige que la fecha de vencimiento %s ya haya sido alcanzada; ADR-001 no admite "+
+			"la caducidad documentada como alternativa durante el traslado o la inmovilizacion",
+		unit.FechaVencimiento).
+		WithDetails(map[string]any{
+			"estado":           string(unit.Estado),
+			"fechaVencimiento": unit.FechaVencimiento,
+			"transicion":       transition.ID,
+		})
 }

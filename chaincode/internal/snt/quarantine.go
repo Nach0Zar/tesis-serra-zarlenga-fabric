@@ -38,7 +38,7 @@ func (c *SNTContract) Quarantine(
 	ctx contractapi.TransactionContextInterface,
 	req UnitEventRequest,
 ) (*MedicationUnitView, error) {
-	return applyExtraordinaryEvent(ctx, req, domain.EventPonerEnCuarentena, opQuarantine)
+	return applyExtraordinaryEvent(ctx, req, domain.EventPonerEnCuarentena, opQuarantine, nil)
 }
 
 // ReleaseQuarantine implementa T10: el retorno al flujo normal cuando la
@@ -53,5 +53,5 @@ func (c *SNTContract) ReleaseQuarantine(
 	ctx contractapi.TransactionContextInterface,
 	req UnitEventRequest,
 ) (*MedicationUnitView, error) {
-	return applyExtraordinaryEvent(ctx, req, domain.EventLiberarCuarentena, opReleaseQuarantine)
+	return applyExtraordinaryEvent(ctx, req, domain.EventLiberarCuarentena, opReleaseQuarantine, nil)
 }
