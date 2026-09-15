@@ -1,0 +1,385 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pfi-snt:synthetic-dataset:schema:1.0.0",
+  "title": "Dataset sintético CLI-3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "units"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "urn:pfi-snt:synthetic-dataset:schema:1.0.0"
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "units": {
+      "type": "array",
+      "minItems": 50000,
+      "items": {
+        "$ref": "#/$defs/unitScenario"
+      }
+    }
+  },
+  "$defs": {
+    "unitRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gtin",
+        "numeroSerie"
+      ],
+      "properties": {
+        "gtin": {
+          "type": "string",
+          "pattern": "^[0-9]{14}$"
+        },
+        "numeroSerie": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20,
+          "pattern": "^[A-Z0-9-]+$",
+          "not": {
+            "pattern": "^779.{17}$"
+          }
+        }
+      }
+    },
+    "registerRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gtin",
+        "numeroSerie",
+        "lote",
+        "fechaVencimiento"
+      ],
+      "properties": {
+        "gtin": {
+          "type": "string",
+          "pattern": "^[0-9]{14}$"
+        },
+        "numeroSerie": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20,
+          "pattern": "^[A-Z0-9-]+$",
+          "not": {
+            "pattern": "^779.{17}$"
+          }
+        },
+        "lote": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fechaVencimiento": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        }
+      }
+    },
+    "registration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "invokerMspId",
+        "request"
+      ],
+      "properties": {
+        "operation": {
+          "const": "RegisterUnit"
+        },
+        "invokerMspId": {
+          "$ref": "#/$defs/mspId"
+        },
+        "request": {
+          "$ref": "#/$defs/registerRequest"
+        }
+      }
+    },
+    "destinationPrivateData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "destino"
+      ],
+      "properties": {
+        "destino": {
+          "$ref": "#/$defs/canonicalId"
+        }
+      }
+    },
+    "commercialPrivateData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "numeroRemito",
+        "numeroFactura",
+        "cantidad"
+      ],
+      "properties": {
+        "numeroRemito": {
+          "type": "string",
+          "minLength": 1
+        },
+        "numeroFactura": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cantidad": {
+          "const": 1
+        }
+      }
+    },
+    "dispatchPrivateData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "destinatario",
+        "commercial"
+      ],
+      "properties": {
+        "destinatario": {
+          "$ref": "#/$defs/destinationPrivateData"
+        },
+        "commercial": {
+          "$ref": "#/$defs/commercialPrivateData"
+        }
+      }
+    },
+    "dispatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "invokerMspId",
+        "request",
+        "privateData"
+      ],
+      "properties": {
+        "operation": {
+          "const": "DispatchTransfer"
+        },
+        "invokerMspId": {
+          "$ref": "#/$defs/mspId"
+        },
+        "request": {
+          "$ref": "#/$defs/unitRef"
+        },
+        "privateData": {
+          "$ref": "#/$defs/dispatchPrivateData"
+        }
+      }
+    },
+    "receive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "invokerMspId",
+        "request"
+      ],
+      "properties": {
+        "operation": {
+          "const": "ReceiveTransfer"
+        },
+        "invokerMspId": {
+          "$ref": "#/$defs/mspId"
+        },
+        "request": {
+          "$ref": "#/$defs/unitRef"
+        }
+      }
+    },
+    "dispense": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "invokerMspId",
+        "request"
+      ],
+      "properties": {
+        "operation": {
+          "const": "Dispense"
+        },
+        "invokerMspId": {
+          "$ref": "#/$defs/mspId"
+        },
+        "request": {
+          "$ref": "#/$defs/unitRef"
+        }
+      }
+    },
+    "validTransfer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ruleId",
+        "matrixSchemaVersion",
+        "dispatch",
+        "receive"
+      ],
+      "properties": {
+        "ruleId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "matrixSchemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$"
+        },
+        "dispatch": {
+          "$ref": "#/$defs/dispatch"
+        },
+        "receive": {
+          "$ref": "#/$defs/receive"
+        }
+      }
+    },
+    "expectedRejection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decisionKind",
+        "reason",
+        "expectedErrorCode",
+        "dispatch"
+      ],
+      "properties": {
+        "decisionKind": {
+          "enum": [
+            "EXPLICIT_PROHIBITION",
+            "DEFAULT_DENY"
+          ]
+        },
+        "ruleId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expectedErrorCode": {
+          "const": "TRANSFER_NOT_AUTHORIZED"
+        },
+        "dispatch": {
+          "$ref": "#/$defs/dispatch"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "decisionKind": {
+                "const": "EXPLICIT_PROHIBITION"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "ruleId"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "ruleId"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "unitScenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "initialState",
+        "initialCustodian",
+        "registration",
+        "validTransfers"
+      ],
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "initialState": {
+          "const": "EN_LABORATORIO"
+        },
+        "initialCustodian": {
+          "$ref": "#/$defs/canonicalId"
+        },
+        "registration": {
+          "$ref": "#/$defs/registration"
+        },
+        "validTransfers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/validTransfer"
+          }
+        },
+        "dispense": {
+          "$ref": "#/$defs/dispense"
+        },
+        "expectedRejection": {
+          "$ref": "#/$defs/expectedRejection"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "dispense"
+          ],
+          "not": {
+            "required": [
+              "expectedRejection"
+            ]
+          }
+        },
+        {
+          "required": [
+            "expectedRejection"
+          ],
+          "not": {
+            "required": [
+              "dispense"
+            ]
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "dispense"
+            ]
+          },
+          "then": {
+            "properties": {
+              "validTransfers": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "mspId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9.-]+MSP$"
+    },
+    "canonicalId": {
+      "type": "string",
+      "pattern": "^(GLN|CUFE):[0-9]{13}$"
+    }
+  }
+}

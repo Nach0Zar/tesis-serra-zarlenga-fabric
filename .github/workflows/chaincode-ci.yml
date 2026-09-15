@@ -1,0 +1,177 @@
+name: Chaincode CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+    paths:
+      - "chaincode/**"
+      - "domain/**"
+      - "go.work"
+      - "go.work.sum"
+      - ".github/workflows/chaincode-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chaincode-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    name: Detect chaincode module
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      chaincode_exists: ${{ steps.detect.outputs.exists }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # El modulo Go del chaincode todavia no existe: lo crea CC-1 (#14). Sin este
+      # preflight, `setup-go` falla al resolver `go-version-file: chaincode/go.mod`
+      # y los tres jobs quedan en rojo cada vez que el propio workflow entra en el
+      # diff de un PR, sin que haya nada que compilar.
+      - name: Detect chaincode module
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f chaincode/go.mod ]]; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::chaincode/go.mod todavia no existe; los jobs de build, lint y test se habilitan solos cuando CC-1 (#14) lo cree."
+          fi
+
+  build:
+    needs: preflight
+    if: needs.preflight.outputs.chaincode_exists == 'true'
+    name: Build chaincode
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: chaincode/go.mod
+          cache: true
+          cache-dependency-path: chaincode/go.sum
+
+      - name: Download dependencies
+        working-directory: chaincode
+        run: go mod download
+
+      - name: Verify dependencies
+        working-directory: chaincode
+        run: go mod verify
+
+      - name: Build shared domain package
+        working-directory: domain
+        run: go build -v ./...
+
+      - name: Build chaincode
+        working-directory: chaincode
+        run: go build -v ./...
+
+      # El artefacto que se instala en los peers debe ser autocontenido: el
+      # `replace ../domain` de go.mod apunta fuera del directorio que el peer
+      # empaqueta. `make vendor` materializa el paquete compartido y verifica
+      # que los dos JSON embebidos (matriz DES-3 y manifiesto fundacional)
+      # hayan quedado adentro; `make stage` arma ademas el arbol limpio que se
+      # empaqueta -- fuera de chaincode/, para que el artefacto no dependa del
+      # estado del arbol de trabajo -- y lo compila. Ver chaincode/README.md.
+      #
+      # El empaquetado en si (`make package`) necesita el binario `peer` y vive
+      # en el workflow de integracion, que ademas verifica con
+      # `make package-reproducible` que el packageID no cambie entre corridas.
+      - name: Verify packaged tree is self-contained
+        working-directory: chaincode
+        run: make stage
+
+  lint:
+    needs: preflight
+    if: needs.preflight.outputs.chaincode_exists == 'true'
+    name: Lint chaincode
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: chaincode/go.mod
+          cache: true
+          cache-dependency-path: chaincode/go.sum
+
+      - name: Run golangci-lint on chaincode
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+          working-directory: chaincode
+          args: --timeout=5m
+
+      - name: Run golangci-lint on shared domain package
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+          working-directory: domain
+          args: --timeout=5m
+
+  test:
+    needs: preflight
+    if: needs.preflight.outputs.chaincode_exists == 'true'
+    name: Test chaincode
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: chaincode/go.mod
+          cache: true
+          cache-dependency-path: chaincode/go.sum
+
+      - name: Download dependencies
+        working-directory: chaincode
+        run: go mod download
+
+      # Incluye TestTransitionTableMatchesADR001, que contrasta la maquina de
+      # estados del paquete contra la tabla de ADR-001, y el test que verifica
+      # que la copia embebida del manifiesto fundacional no divergio de
+      # network/organizations-manifest.json.
+      - name: Run shared domain package tests
+        working-directory: domain
+        run: go test -v -race ./...
+
+      - name: Run unit tests
+        working-directory: chaincode
+        run: |
+          go test \
+            -v \
+            -race \
+            -covermode=atomic \
+            -coverprofile=coverage.out \
+            ./...
+
+      - name: Show coverage summary
+        working-directory: chaincode
+        run: go tool cover -func=coverage.out
