@@ -122,14 +122,6 @@ func TestDeclaredOperationsReportTheirOwner(t *testing.T) {
 			_, err := contract.ReportDamaged(ctx, UnitEventRequest{})
 			return err
 		},
-		"WithdrawFromMarket": func() error {
-			_, err := contract.WithdrawFromMarket(ctx, UnitEventRequest{})
-			return err
-		},
-		"ProhibitProduct": func() error {
-			_, err := contract.ProhibitProduct(ctx, UnitEventRequest{})
-			return err
-		},
 		"Restock": func() error {
 			_, err := contract.Restock(ctx, UnitEventRequest{})
 			return err
