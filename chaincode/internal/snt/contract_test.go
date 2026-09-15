@@ -110,10 +110,6 @@ func TestDeclaredOperationsReportTheirOwner(t *testing.T) {
 	contract := new(SNTContract)
 
 	pending := map[string]func() error{
-		"ReportExpired": func() error {
-			_, err := contract.ReportExpired(ctx, UnitEventRequest{})
-			return err
-		},
 		"ReportStolen": func() error {
 			_, err := contract.ReportStolen(ctx, UnitEventRequest{})
 			return err

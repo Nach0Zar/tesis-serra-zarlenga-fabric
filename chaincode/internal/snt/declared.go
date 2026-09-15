@@ -19,19 +19,11 @@ import "github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 //	Dispense ............................... CC-4 (#17)
 //	ReadUnit/GetUnitHistory/
 //	  QueryUnitsByGTIN ..................... CC-5 (#18)
-//	ReportExpired .......................... EXT-2 (#28)
 //	ReportStolen/ReportLost/ReportDamaged .. EXT-3 (#29)
 //	ReturnProduct .......................... EXT-4 (#30)
 //	Restock ................................ EXT-5 (#31)
 //	WithdrawFromMarket/ProhibitProduct ..... EXT-6 (#32)
 //	FinalDisposition ....................... EXT-8 (#63)
-
-// ReportExpired cubre T11, T12 y T13. Estado resultante: VENCIDO. Actor
-// habilitado: custodio actual, destinatario declarado (solo T13 desde
-// EN_TRANSITO) o ANMAT.
-func (c *SNTContract) ReportExpired(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
-	return nil, notImplemented("ReportExpired", "EXT-2 (#28)")
-}
 
 // ReportStolen cubre T14. Estado resultante: ROBADO (terminal). ADR-001 reserva
 // T14-T16 al custodio actual o a ANMAT aun cuando la unidad este en transito.
