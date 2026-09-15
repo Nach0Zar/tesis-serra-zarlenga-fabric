@@ -21,7 +21,6 @@ import "github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 //	  QueryUnitsByGTIN ..................... CC-5 (#18)
 //	ReportStolen/ReportLost/ReportDamaged .. EXT-3 (#29)
 //	Restock ................................ EXT-5 (#31)
-//	WithdrawFromMarket/ProhibitProduct ..... EXT-6 (#32)
 //	FinalDisposition ....................... EXT-8 (#63)
 
 // ReportStolen cubre T14. Estado resultante: ROBADO (terminal). ADR-001 reserva
@@ -38,18 +37,6 @@ func (c *SNTContract) ReportLost(_ contractapi.TransactionContextInterface, _ Un
 // ReportDamaged cubre T16. Estado resultante: DETERIORADO.
 func (c *SNTContract) ReportDamaged(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
 	return nil, notImplemented("ReportDamaged", "EXT-3 (#29)")
-}
-
-// WithdrawFromMarket cubre T17, T18 y T19. Estado resultante:
-// RETIRADO_MERCADO. Un laboratorio no custodio exige una AuthorizeLabIntervention
-// ACTIVA y vigente (ADR-007, punto 6.e).
-func (c *SNTContract) WithdrawFromMarket(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
-	return nil, notImplemented("WithdrawFromMarket", "EXT-6 (#32)")
-}
-
-// ProhibitProduct cubre T20. Estado resultante: PROHIBIDO. Solo ANMAT.
-func (c *SNTContract) ProhibitProduct(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
-	return nil, notImplemented("ProhibitProduct", "EXT-6 (#32)")
 }
 
 // Restock cubre T25, T26 y T27. Estado resultante: EN_CUSTODIA, con
