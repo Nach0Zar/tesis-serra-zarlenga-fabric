@@ -163,6 +163,17 @@ func resolveExtraordinaryEventActor(
 		return domain.ActorCurrentCustodian, nil
 	}
 
+	// El LABORATORIO titular es actor habilitado de T17-T19 (retiro del
+	// mercado), T27 (reingreso desde RETIRADO_MERCADO) y T31 (disposicion
+	// final), aunque no sea el custodio actual: sigue siendo responsable del
+	// producto que puso en el mercado. Su habilitacion la termina de decidir
+	// requireTransition contra la transicion concreta, y el contrato le exige
+	// ademas una autorizacion de intervencion previa cuando no es custodio
+	// (ADR-007, punto 6.e).
+	if invoker.Org.AgentType == domain.AgentLaboratory && eventAllowsTitularLaboratory(event) {
+		return domain.ActorLaboratory, nil
+	}
+
 	if unit.Estado == domain.StateEnTransito && eventAllowsDeclaredRecipient(event) {
 		op, _, found, err := findActiveTransferOperation(ctx, unit, invoker)
 		if err != nil {
@@ -182,6 +193,17 @@ func resolveExtraordinaryEventActor(
 // destinatario declarado durante el transito: T09 y T13. Es una lista explicita
 // y no una propiedad derivada, porque la habilitacion es una decision de ADR-001
 // por transicion y no una regla general sobre los eventos extraordinarios.
+// eventAllowsTitularLaboratory enumera los eventos que ADR-001 abre al
+// LABORATORIO titular aunque no sea el custodio actual. Es una lista explicita y
+// no una propiedad derivada, por la misma razon que la del destinatario
+// declarado: la habilitacion es una decision de ADR-001 por transicion.
+//
+// REINGRESAR_STOCK (T27) y DISPONER_FINAL (T31) tambien lo habilitan, y se
+// agregan cuando EXT-5 (#31) y EXT-8 (#63) implementen esas operaciones.
+func eventAllowsTitularLaboratory(event domain.Event) bool {
+	return event == domain.EventRetirarMercado
+}
+
 func eventAllowsDeclaredRecipient(event domain.Event) bool {
 	return event == domain.EventPonerEnCuarentena || event == domain.EventInformarVencimiento
 }

@@ -110,12 +110,16 @@ func TestDeclaredOperationsReportTheirOwner(t *testing.T) {
 	contract := new(SNTContract)
 
 	pending := map[string]func() error{
-		"WithdrawFromMarket": func() error {
-			_, err := contract.WithdrawFromMarket(ctx, UnitEventRequest{})
+		"ReportStolen": func() error {
+			_, err := contract.ReportStolen(ctx, UnitEventRequest{})
 			return err
 		},
-		"ProhibitProduct": func() error {
-			_, err := contract.ProhibitProduct(ctx, UnitEventRequest{})
+		"ReportLost": func() error {
+			_, err := contract.ReportLost(ctx, UnitEventRequest{})
+			return err
+		},
+		"ReportDamaged": func() error {
+			_, err := contract.ReportDamaged(ctx, UnitEventRequest{})
 			return err
 		},
 		"Restock": func() error {
