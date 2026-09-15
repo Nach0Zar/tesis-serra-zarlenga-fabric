@@ -185,6 +185,27 @@ type UnitHistoryEntry struct {
 	Value     *MedicationUnit `json:"value"`
 }
 
+// ReturnOperation es el registro historico de una devolucion, persistido en la
+// clave propia ReturnOp+[gtin, numeroSerie, txIdDevolucion] de la PDC del par
+// (ADR-006, punto 4).
+//
+// No tiene txIdDespacho ni estado activo/cerrado, y no es una omision: una
+// devolucion T21-T24 no nace de un despacho y no espera la confirmacion de
+// nadie, de modo que no hay ciclo que administrar. Por eso ADR-006 le da clave
+// propia en vez de adosarla a un TransferOp.
+type ReturnOperation struct {
+	GTIN           string `json:"gtin"`
+	NumeroSerie    string `json:"numeroSerie"`
+	TxIDDevolucion string `json:"txIdDevolucion"`
+
+	// Declarante es el custodio que declara la devolucion, y sigue siendo el
+	// CustodioActual de la unidad: ADR-009 no mueve la custodia.
+	Declarante        string `json:"declarante"`
+	ReceptorDeclarado string `json:"receptorDeclarado"`
+	Motivo            string `json:"motivo"`
+	DevueltaEn        string `json:"devueltaEn"`
+}
+
 // TraceVerdict es el veredicto estructurado de VerifyTrace (ADR-011).
 type TraceVerdict struct {
 	Legitima       bool         `json:"legitima"`

@@ -20,7 +20,6 @@ import "github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 //	ReadUnit/GetUnitHistory/
 //	  QueryUnitsByGTIN ..................... CC-5 (#18)
 //	ReportStolen/ReportLost/ReportDamaged .. EXT-3 (#29)
-//	ReturnProduct .......................... EXT-4 (#30)
 //	Restock ................................ EXT-5 (#31)
 //	WithdrawFromMarket/ProhibitProduct ..... EXT-6 (#32)
 //	FinalDisposition ....................... EXT-8 (#63)
@@ -51,13 +50,6 @@ func (c *SNTContract) WithdrawFromMarket(_ contractapi.TransactionContextInterfa
 // ProhibitProduct cubre T20. Estado resultante: PROHIBIDO. Solo ANMAT.
 func (c *SNTContract) ProhibitProduct(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
 	return nil, notImplemented("ProhibitProduct", "EXT-6 (#32)")
-}
-
-// ReturnProduct cubre T21-T24. Estado resultante: DEVUELTO. Es un evento unico
-// que NO modifica custodioActual (ADR-009, punto 1); admite un transient
-// opcional `devolucion` con el receptor declarado.
-func (c *SNTContract) ReturnProduct(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
-	return nil, notImplemented("ReturnProduct", "EXT-4 (#30)")
 }
 
 // Restock cubre T25, T26 y T27. Estado resultante: EN_CUSTODIA, con
