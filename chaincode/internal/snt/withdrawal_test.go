@@ -272,14 +272,22 @@ func TestWithdrawFromMarketByTitularLaboratoryFromLab(t *testing.T) {
 	}
 }
 
-// TestWithdrawFromMarketByEmitterInTransit cubre T19 con el laboratorio como
-// EMISOR de la transferencia en curso. Durante el transito el custodio
-// registrado sigue siendo el emisor (ADR-004), de modo que aca tambien fallaba
-// por el orden de resolucion del actor.
+// TestWithdrawFromMarketInTransitExcludesTitularLaboratory fija la decision de
+// DES-19 (#116), incorporada a ADR-001 en su revision 2: desde EN_TRANSITO el
+// retiro queda reservado a ANMAT.
 //
-// El emisor SI es miembro de la coleccion del par, asi que puede cerrar el
-// transito: se comprueban las tres piezas.
-func TestWithdrawFromMarketByEmitterInTransit(t *testing.T) {
+// El caso que fija es el mas incomodo de la decision y por eso se testea: el
+// laboratorio de este escenario es el EMISOR de la transferencia, de modo que si
+// es miembro de la coleccion del par y podria, tecnicamente, cerrar el registro
+// de la operacion. Queda excluido igual, porque la columna "actor habilitado" de
+// ADR-001 es por transicion y no admite la condicion "laboratorio que ademas es
+// parte del par": introducirla seria agregar un actor logico que ninguna ADR
+// declara. La potestad del titular sigue viva en T17, T18 y en el retiro desde
+// EN_CUARENTENA o DEVUELTO.
+//
+// El test verifica ademas que el rechazo no deja rastro: la unidad sigue
+// EN_TRANSITO y el registro de la operacion activa sigue abierto.
+func TestWithdrawFromMarketInTransitExcludesTitularLaboratory(t *testing.T) {
 	stub, contract := transferFixture(t)
 	stub.txID = "tx-despacho"
 	withTransient(stub, dispatchTransient("GLN:"+drogueriaGLN))
@@ -290,36 +298,33 @@ func TestWithdrawFromMarketByEmitterInTransit(t *testing.T) {
 	stub.transient = map[string][]byte{}
 
 	stub.txID = "tx-retiro-en-transito"
-	view, err := contract.WithdrawFromMarket(
+	_, err = contract.WithdrawFromMarket(
 		testContext(stub, labMSP, RoleOperator), withdrawalRequest())
-	requireNoError(t, err)
-	if view.Estado != domain.StateRetiradoMercado {
-		t.Fatalf("estado = %s, se esperaba RETIRADO_MERCADO", view.Estado)
-	}
+	requireCode(t, err, cerr.InvalidStateTransition)
 
 	ctx := testContext(stub, anmatMSP, RoleRegulatoryAdmin)
+	view, err := contract.ReadUnit(ctx, validGTIN, validSerial)
+	requireNoError(t, err)
+	if view.Estado != domain.StateEnTransito {
+		t.Fatalf("estado = %s, se esperaba EN_TRANSITO intacto", view.Estado)
+	}
 	_, found, err := readActiveTransferOperation(
 		ctx, pairCollectionName(labMSP, drogueriaMSP), validGTIN, validSerial)
 	requireNoError(t, err)
-	if found {
-		t.Fatal("T19 desde EN_TRANSITO debe cerrar el registro de la operacion activa")
-	}
-	key, err := medicationUnitKey(stub, validGTIN, validSerial)
-	requireNoError(t, err)
-	orgs := endorsingOrganizations(t, stub.validation[key])
-	if len(orgs) != 1 || orgs[0] != labMSP {
-		t.Fatalf("politica de reposo = %v, se esperaba el emisor %s", orgs, labMSP)
+	if !found {
+		t.Fatal("el retiro rechazado no debe cerrar el registro de la operacion activa")
 	}
 }
 
-// TestWithdrawFromMarketInTransitByRegulator cubre el camino de tránsito que SI
-// esta aprobado: ANMAT es miembro de toda coleccion de par (ADR-006, punto 1), de
-// modo que puede cerrar el transito.
+// TestWithdrawFromMarketInTransitByRegulator cubre el unico camino que ADR-001
+// revision 2 deja abierto para T19 desde EN_TRANSITO: ANMAT es miembro de toda
+// coleccion de par (ADR-006, punto 1), de modo que puede cerrar el registro de la
+// operacion activa, cierre que ADR-007 punto 6.c exige para salir del transito.
 //
-// El caso del laboratorio AJENO al par queda deliberadamente sin test: ADR-001 lo
-// habilita y ADR-006 lo impide, y fijar cualquiera de las dos salidas en un test
-// seria decidir desde una issue de implementacion algo que ningun ADR aprobo. La
-// decision esta abierta en DES-19 (#116).
+// Verifica las tres consecuencias de ese cierre: el estado resultante, que el
+// registro de la operacion queda cerrado y que la clave de la unidad vuelve a la
+// politica de reposo del emisor (ADR-007, punto 6.a), porque la custodia no se
+// movio -- solo T04 la mueve (ADR-004).
 func TestWithdrawFromMarketInTransitByRegulator(t *testing.T) {
 	stub, contract := verifyFixture(t)
 	stub.txID = "tx-despacho-2"
@@ -336,5 +341,19 @@ func TestWithdrawFromMarketInTransitByRegulator(t *testing.T) {
 	requireNoError(t, err)
 	if view.Estado != domain.StateRetiradoMercado {
 		t.Fatalf("estado = %s, se esperaba RETIRADO_MERCADO", view.Estado)
+	}
+
+	ctx := testContext(stub, anmatMSP, RoleRegulatoryAdmin)
+	_, found, err := readActiveTransferOperation(
+		ctx, pairCollectionName(drogueriaMSP, farmaciaMSP), validGTIN, validSerial)
+	requireNoError(t, err)
+	if found {
+		t.Fatal("T19 desde EN_TRANSITO debe cerrar el registro de la operacion activa")
+	}
+	key, err := medicationUnitKey(stub, validGTIN, validSerial)
+	requireNoError(t, err)
+	orgs := endorsingOrganizations(t, stub.validation[key])
+	if len(orgs) != 1 || orgs[0] != drogueriaMSP {
+		t.Fatalf("politica de reposo = %v, se esperaba el emisor %s", orgs, drogueriaMSP)
 	}
 }

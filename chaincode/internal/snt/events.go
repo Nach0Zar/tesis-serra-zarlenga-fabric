@@ -160,13 +160,20 @@ func resolveExtraordinaryEventActor(
 		return domain.ActorANMAT, nil
 	}
 	// El LABORATORIO titular se resuelve ANTES del caso generico de custodio, y
-	// el orden es una correccion, no una preferencia. ADR-001 habilita T17-T19
+	// el orden es una correccion, no una preferencia. ADR-001 habilita el retiro
 	// unicamente a ANMAT y a LABORATORY: si el laboratorio tambien es el
-	// custodio -- el caso normal de T17, con la unidad todavia EN_LABORATORIO, y
-	// el de T19 cuando el laboratorio es el emisor de la transferencia en
-	// curso -- devolver ActorCurrentCustodian lo hacia rechazar por
-	// requireTransition, y con eso el retiro VOLUNTARIO, que es el caso de uso
-	// principal de la operacion, quedaba inalcanzable.
+	// custodio -- el caso normal de T17, con la unidad todavia EN_LABORATORIO --
+	// devolver ActorCurrentCustodian lo hacia rechazar por requireTransition, y
+	// con eso el retiro VOLUNTARIO, que es el caso de uso principal de la
+	// operacion, quedaba inalcanzable.
+	//
+	// Esta resolucion es por EVENTO y no por transicion, de modo que un
+	// laboratorio queda resuelto como LABORATORY tambien cuando la unidad esta
+	// EN_TRANSITO; el rechazo lo produce entonces requireTransition, porque
+	// ADR-001 revision 2 reserva ese origen a ANMAT (DES-19). Esa division es
+	// deliberada: quien puede pedir la operacion lo decide el caracter del
+	// invocador, y en que estados procede lo decide la tabla de ADR-001, que es
+	// la unica fuente de esa regla.
 	//
 	// La lista de eventos es explicita por la misma razon que la del
 	// destinatario declarado: la habilitacion es una decision de ADR-001 por

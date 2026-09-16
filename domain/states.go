@@ -188,10 +188,31 @@ var transitions = []Transition{
 		Actors: []Actor{ActorANMAT, ActorLaboratory},
 	},
 	{
-		ID:    "T19_MARK_WITHDRAWN_FROM_TRANSIT_QUARANTINE_OR_RETURN",
-		From:  []State{StateEnTransito, StateEnCuarentena, StateDevuelto},
+		ID:    "T19_MARK_WITHDRAWN_FROM_QUARANTINE_OR_RETURN",
+		From:  []State{StateEnCuarentena, StateDevuelto},
 		Event: EventRetirarMercado, To: StateRetiradoMercado,
 		Actors: []Actor{ActorANMAT, ActorLaboratory},
+	},
+	{
+		// DES-19 (#116), alternativa B acotada: durante el TRANSITO el retiro
+		// queda reservado a ANMAT.
+		//
+		// El laboratorio titular se excluye porque la salida de EN_TRANSITO
+		// obliga a cerrar el registro de la operacion en la coleccion privada
+		// del par (ADR-007, punto 6.c), y ADR-006 punto 1 limita su membresia a
+		// {emisor, receptor, regulador}: un laboratorio ajeno al par no puede
+		// leerla ni escribirla. Habilitarlo exigiria ampliar esa membresia y
+		// darle acceso al remito, la factura y la contraparte de transferencias
+		// de las que no es parte, contra el proposito de ADR-002 y ADR-006.
+		//
+		// La potestad del titular no desaparece, se acota a la ventana del
+		// traslado: conserva T17, T18 y T19 desde EN_CUARENTENA o DEVUELTO, y
+		// durante el transito ANMAT -- miembro de toda coleccion de par -- si
+		// puede retirar.
+		ID:    "T19_MARK_WITHDRAWN_FROM_TRANSIT",
+		From:  []State{StateEnTransito},
+		Event: EventRetirarMercado, To: StateRetiradoMercado,
+		Actors: []Actor{ActorANMAT},
 	},
 	{
 		ID: "T20_MARK_PROHIBITED",

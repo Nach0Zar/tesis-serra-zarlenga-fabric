@@ -34,8 +34,13 @@ const (
 // custodio actual -- este ultimo impuesto por la politica de la clave de la
 // unidad --, que es el par que pide DES-6 mas el custodio (ADR-007, punto 6.e).
 //
-// Durante el transito son CUATRO y no tres: la SBE de la clave exige a emisor y
-// receptor declarado (ADR-007, punto 6.b), y a eso se suman los dos marcadores.
+// Durante el transito el retiro queda reservado a la organizacion regulatoria:
+// ADR-001 revision 2 (DES-19) excluye al LABORATORIO del origen EN_TRANSITO,
+// porque salir de ese estado obliga a cerrar el registro de la operacion en la
+// coleccion privada del par y ADR-006 punto 1 limita su membresia a {emisor,
+// receptor, regulador}. El endoso de ese camino lo componen el emisor y el
+// receptor declarado, que impone la SBE de la clave (ADR-007, punto 6.b), mas el
+// marcador regulatorio del cierre.
 //
 // Sin autorizacion, o con una vencida, ya consumida o revocada:
 // LAB_INTERVENTION_REQUIRED. La autorizacion es por unidad, laboratorio y
@@ -88,6 +93,16 @@ func (c *SNTContract) ProhibitProduct(
 // organizacion regulatoria: en esos dos casos la politica de la clave ya exige
 // al peer que corresponde y no hay una tercera organizacion cuyo endoso haya
 // que forzar.
+//
+// Solo alcanza estados de REPOSO. DES-19 (#116) resolvio la contradiccion entre
+// ADR-001 -- que habilitaba al laboratorio a retirar desde EN_TRANSITO -- y
+// ADR-006 punto 1, que limita la membresia de la coleccion del par a {emisor,
+// receptor, regulador} y por lo tanto le impide cerrar el registro de la
+// operacion activa, cierre que ADR-007 punto 6.c exige para salir del transito.
+// ADR-001 revision 2 reserva ese origen a ANMAT, de modo que un laboratorio no
+// custodio nunca llega aca con la unidad en transito: cuando llega, la unidad
+// esta EN_CUSTODIA, EN_CUARENTENA o DEVUELTO y no hay registro de par que
+// cerrar.
 func consumeLabInterventionIfNonCustodial(
 	ctx contractapi.TransactionContextInterface,
 	unit MedicationUnit,
@@ -104,22 +119,6 @@ func consumeLabInterventionIfNonCustodial(
 		return nil
 	}
 
-	// NOTA: el camino de T19 para un laboratorio AJENO al par de la
-	// transferencia esta bloqueado por una contradiccion entre ADR-001 -- que lo
-	// habilita -- y ADR-006 punto 1, que limita la membresia de la coleccion del
-	// par a {emisor, receptor, regulador} y por lo tanto le impide leer y cerrar
-	// el registro de la operacion activa, cierre que ADR-007 punto 6.c exige
-	// para salir de EN_TRANSITO.
-	//
-	// Este codigo NO elige una salida a esa contradiccion: hacerlo desde una
-	// issue de implementacion seria decidir, en los hechos, algo que ningun ADR
-	// ni el contrato aprobaron. La decision esta abierta en DES-19 (#116).
-	//
-	// Mientras no se resuelva, ese camino falla al intentar cerrar el transito,
-	// con el INTERNAL_ERROR que CloseTransitForExtraordinaryEvent ya devuelve
-	// cuando no encuentra el registro de operacion activa. Es un estado
-	// inconsistente y se reporta como tal, que es preferible a inventarle una
-	// regla de negocio.
 	authorization, found, err := readLabIntervention(ctx, unit.GTIN, unit.NumeroSerie)
 	if err != nil {
 		return err

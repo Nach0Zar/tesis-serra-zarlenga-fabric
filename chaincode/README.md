@@ -107,13 +107,13 @@ Tres tests distintos custodian el congelamiento del contrato, y hacen falta los 
 | `ReportStolen`, `ReportLost`, `ReportDamaged` | Implementadas | EXT-3 (#29) |
 | `ReturnProduct` | Implementada | EXT-4 (#30) |
 | `Restock` | Declarada | EXT-5 (#31) |
-| `WithdrawFromMarket`, `ProhibitProduct` | Implementadas, con una dependencia abierta | EXT-6 (#32) |
+| `WithdrawFromMarket`, `ProhibitProduct` | Implementadas | EXT-6 (#32) |
 | `FinalDisposition` | Declarada | EXT-8 (#63) |
 | `VerifyTrace` | Implementada | CC-8 (#62) |
 
 Las operaciones que siguen **declaradas** —`Restock` y `FinalDisposition`— devuelven `INTERNAL_ERROR` con el detalle `{"operacion": …, "issue": …}`. El catálogo del contrato no tiene un código para «operación declarada sin implementar», y agregarlo sería un cambio MINOR del contrato que una issue de implementación no puede hacer.
 
-**Dependencia abierta de EXT-6**: `WithdrawFromMarket` está implementada para T17, T18 y T19 **cuando el invocador es parte del par** de la transferencia —el emisor, que durante el tránsito es el custodio registrado— y para la organización regulatoria, que es miembro de toda colección de par. El caso del **laboratorio titular ajeno al par con la unidad en `EN_TRANSITO`** no está resuelto: [ADR-001](../docs/adr/001-maquina-estados-medicamento.md) habilita esa transición, pero [ADR-006](../docs/adr/006-private-data-collections.md) punto 1 limita la membresía de la colección del par a `{emisor, receptor, regulador}` y le impide cerrar el registro de operación que [ADR-007](../docs/adr/007-network-topology.md) punto 6.c exige cerrar. La decisión está abierta en DES-19 (#116) y el chaincode **no elige** una salida: ese camino termina en el `INTERNAL_ERROR` de estado inconsistente.
+**Alcance de `WithdrawFromMarket` en tránsito** (DES-19, #116): el retiro desde `EN_TRANSITO` está reservado a la organización regulatoria. El laboratorio titular conserva T17, T18 y el retiro desde `EN_CUARENTENA` o `DEVUELTO`, pero no el origen `EN_TRANSITO`: salir de ese estado obliga a cerrar el registro de la operación en la colección privada del par ([ADR-007](../docs/adr/007-network-topology.md) punto 6.c) y [ADR-006](../docs/adr/006-private-data-collections.md) punto 1 limita su membresía a `{emisor, receptor, regulador}`, de modo que un laboratorio ajeno al par no puede cerrarla. [ADR-001](../docs/adr/001-maquina-estados-medicamento.md) habilitaba ambos actores sobre ese origen; su revisión 2 parte la fila `T19` en dos y resuelve la contradicción a favor de la membresía de las colecciones, que es la propiedad de confidencialidad que el trabajo demuestra. El rechazo del laboratorio en tránsito es `INVALID_STATE_TRANSITION`: proviene de la tabla de ADR-001, no de la autorización de intervención.
 
 ## Mecanismos de endoso implementados
 
