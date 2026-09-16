@@ -249,3 +249,105 @@ func TestWithdrawalBlocksOrdinaryOperations(t *testing.T) {
 		})
 	}
 }
+
+// TestWithdrawFromMarketByTitularLaboratoryFromLab cubre T17, que es el caso de
+// uso PRINCIPAL de la operacion y que la primera version dejaba inalcanzable:
+// el laboratorio retira voluntariamente su propio producto, con la unidad
+// todavia EN_LABORATORIO y con el mismo laboratorio como custodio.
+//
+// El orden de resolucion del actor lo rompia: devolvia ActorCurrentCustodian y
+// T17 solo admite ANMAT o LABORATORY. Tampoco necesita autorizacion de
+// intervencion, porque el laboratorio ES el custodio.
+func TestWithdrawFromMarketByTitularLaboratoryFromLab(t *testing.T) {
+	stub, contract := transferFixture(t)
+
+	view, err := contract.WithdrawFromMarket(
+		testContext(stub, labMSP, RoleOperator), withdrawalRequest())
+	requireNoError(t, err)
+	if view.Estado != domain.StateRetiradoMercado {
+		t.Fatalf("estado = %s, se esperaba RETIRADO_MERCADO", view.Estado)
+	}
+	if view.CustodioActual != "GLN:"+labGLN {
+		t.Fatalf("custodio = %s", view.CustodioActual)
+	}
+}
+
+// TestWithdrawFromMarketByEmitterInTransit cubre T19 con el laboratorio como
+// EMISOR de la transferencia en curso. Durante el transito el custodio
+// registrado sigue siendo el emisor (ADR-004), de modo que aca tambien fallaba
+// por el orden de resolucion del actor.
+//
+// El emisor SI es miembro de la coleccion del par, asi que puede cerrar el
+// transito: se comprueban las tres piezas.
+func TestWithdrawFromMarketByEmitterInTransit(t *testing.T) {
+	stub, contract := transferFixture(t)
+	stub.txID = "tx-despacho"
+	withTransient(stub, dispatchTransient("GLN:"+drogueriaGLN))
+	_, err := contract.DispatchTransfer(
+		testContext(stub, labMSP, RoleOperator),
+		DispatchTransferRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+	requireNoError(t, err)
+	stub.transient = map[string][]byte{}
+
+	stub.txID = "tx-retiro-en-transito"
+	view, err := contract.WithdrawFromMarket(
+		testContext(stub, labMSP, RoleOperator), withdrawalRequest())
+	requireNoError(t, err)
+	if view.Estado != domain.StateRetiradoMercado {
+		t.Fatalf("estado = %s, se esperaba RETIRADO_MERCADO", view.Estado)
+	}
+
+	ctx := testContext(stub, anmatMSP, RoleRegulatoryAdmin)
+	_, found, err := readActiveTransferOperation(
+		ctx, pairCollectionName(labMSP, drogueriaMSP), validGTIN, validSerial)
+	requireNoError(t, err)
+	if found {
+		t.Fatal("T19 desde EN_TRANSITO debe cerrar el registro de la operacion activa")
+	}
+	key, err := medicationUnitKey(stub, validGTIN, validSerial)
+	requireNoError(t, err)
+	orgs := endorsingOrganizations(t, stub.validation[key])
+	if len(orgs) != 1 || orgs[0] != labMSP {
+		t.Fatalf("politica de reposo = %v, se esperaba el emisor %s", orgs, labMSP)
+	}
+}
+
+// TestWithdrawFromMarketRejectsLaboratoryOutsideTransferPair fija el LIMITE
+// ARQUITECTONICO que ADR-001 y ADR-006 no resuelven entre si.
+//
+// ADR-001 habilita T19 desde EN_TRANSITO al laboratorio titular, pero ADR-006
+// punto 1 limita la membresia de la coleccion del par a {emisor, receptor,
+// regulador}: un laboratorio ajeno a ese par no puede leer ni cerrar el registro
+// de la operacion activa, y cerrarlo es obligatorio para salir de EN_TRANSITO.
+//
+// Se rechaza con un codigo del contrato en lugar de fallar en la plataforma
+// sobre una coleccion invisible para el invocador. La resolucion de fondo
+// requiere una decision de ADR.
+func TestWithdrawFromMarketRejectsLaboratoryOutsideTransferPair(t *testing.T) {
+	stub, contract := verifyFixture(t)
+	registerOrg(t, stub, "Lab2MSP", "7791234500079", domain.AgentLaboratory)
+	authorizeWithdrawal(t, stub, "GLN:7791234500079")
+
+	// La drogueria despacha a la farmacia: el par es drogueria-farmacia y el
+	// laboratorio 2 queda afuera.
+	stub.txID = "tx-despacho-2"
+	withTransient(stub, dispatchTransient("GLN:"+farmaciaGLN))
+	_, err := contract.DispatchTransfer(
+		testContext(stub, drogueriaMSP, RoleOperator),
+		DispatchTransferRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+	requireNoError(t, err)
+	stub.transient = map[string][]byte{}
+
+	_, err = contract.WithdrawFromMarket(
+		testContext(stub, "Lab2MSP", RoleOperator), withdrawalRequest())
+	requireCode(t, err, cerr.InvalidStateTransition)
+
+	// ANMAT si puede: es miembro de toda coleccion de par (ADR-006, punto 1).
+	stub.txID = "tx-retiro-anmat-transito"
+	view, err := contract.WithdrawFromMarket(
+		testContext(stub, anmatMSP, RoleRegulatoryAdmin), withdrawalRequest())
+	requireNoError(t, err)
+	if view.Estado != domain.StateRetiradoMercado {
+		t.Fatalf("estado = %s, se esperaba RETIRADO_MERCADO", view.Estado)
+	}
+}

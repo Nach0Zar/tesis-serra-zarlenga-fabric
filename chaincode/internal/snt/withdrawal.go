@@ -102,6 +102,38 @@ func consumeLabInterventionIfNonCustodial(
 		return nil
 	}
 
+	// LIMITE ARQUITECTONICO, no una omision de esta issue. ADR-001 habilita T19
+	// desde EN_TRANSITO al laboratorio titular, pero ADR-006 punto 1 limita la
+	// membresia de la coleccion del par a {emisor, receptor, regulador}: un
+	// laboratorio ajeno a ese par NO es miembro y no puede leer ni cerrar el
+	// registro de operacion activa. Y cerrar el transito es obligatorio para
+	// salir de EN_TRANSITO (ADR-007, punto 6.c).
+	//
+	// Se rechaza con un codigo del contrato en lugar de dejar que falle en la
+	// plataforma sobre una coleccion que el invocador no puede ver. La
+	// contradiccion entre ADR-001 y ADR-006/ADR-007 debe resolverse antes de
+	// habilitar este camino; mientras no se resuelva, el retiro durante el
+	// transito lo puede iniciar ANMAT -- que si es miembro de toda coleccion de
+	// par -- o el propio emisor, que es parte del par.
+	if unit.Estado == domain.StateEnTransito {
+		_, _, inPair, findErr := findActiveTransferOperation(ctx, unit, invoker)
+		if findErr != nil {
+			return findErr
+		}
+		if !inPair {
+			return cerr.New(cerr.InvalidStateTransition,
+				"un laboratorio ajeno al par de la transferencia en curso no puede retirar del mercado "+
+					"una unidad EN_TRANSITO: no es miembro de la coleccion privada del par (ADR-006, punto 1) "+
+					"y no puede cerrar el registro de la operacion activa, que ADR-007 punto 6.c exige "+
+					"para salir de EN_TRANSITO").
+				WithDetails(map[string]any{
+					"estado":         string(unit.Estado),
+					"custodioActual": unit.CustodioActual,
+					"causa":          "LABORATORIO_AJENO_AL_PAR",
+				})
+		}
+	}
+
 	authorization, found, err := readLabIntervention(ctx, unit.GTIN, unit.NumeroSerie)
 	if err != nil {
 		return err

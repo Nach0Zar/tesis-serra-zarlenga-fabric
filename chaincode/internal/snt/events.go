@@ -159,19 +159,25 @@ func resolveExtraordinaryEventActor(
 	if invoker.Org.AgentType == domain.AgentRegulator {
 		return domain.ActorANMAT, nil
 	}
-	if unit.CustodioActual == invoker.CanonicalID() {
-		return domain.ActorCurrentCustodian, nil
-	}
-
-	// El LABORATORIO titular es actor habilitado de T17-T19 (retiro del
-	// mercado), T27 (reingreso desde RETIRADO_MERCADO) y T31 (disposicion
-	// final), aunque no sea el custodio actual: sigue siendo responsable del
-	// producto que puso en el mercado. Su habilitacion la termina de decidir
-	// requireTransition contra la transicion concreta, y el contrato le exige
-	// ademas una autorizacion de intervencion previa cuando no es custodio
-	// (ADR-007, punto 6.e).
+	// El LABORATORIO titular se resuelve ANTES del caso generico de custodio, y
+	// el orden es una correccion, no una preferencia. ADR-001 habilita T17-T19
+	// unicamente a ANMAT y a LABORATORY: si el laboratorio tambien es el
+	// custodio -- el caso normal de T17, con la unidad todavia EN_LABORATORIO, y
+	// el de T19 cuando el laboratorio es el emisor de la transferencia en
+	// curso -- devolver ActorCurrentCustodian lo hacia rechazar por
+	// requireTransition, y con eso el retiro VOLUNTARIO, que es el caso de uso
+	// principal de la operacion, quedaba inalcanzable.
+	//
+	// La lista de eventos es explicita por la misma razon que la del
+	// destinatario declarado: la habilitacion es una decision de ADR-001 por
+	// transicion. Para cualquier otro evento un laboratorio cae al caso de
+	// custodio, como corresponde.
 	if invoker.Org.AgentType == domain.AgentLaboratory && eventAllowsTitularLaboratory(event) {
 		return domain.ActorLaboratory, nil
+	}
+
+	if unit.CustodioActual == invoker.CanonicalID() {
+		return domain.ActorCurrentCustodian, nil
 	}
 
 	if unit.Estado == domain.StateEnTransito && eventAllowsDeclaredRecipient(event) {
