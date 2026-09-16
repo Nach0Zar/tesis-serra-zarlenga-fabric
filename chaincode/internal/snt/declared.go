@@ -19,26 +19,9 @@ import "github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 //	Dispense ............................... CC-4 (#17)
 //	ReadUnit/GetUnitHistory/
 //	  QueryUnitsByGTIN ..................... CC-5 (#18)
-//	ReportStolen/ReportLost/ReportDamaged .. EXT-3 (#29)
 //	Restock ................................ EXT-5 (#31)
 //	WithdrawFromMarket/ProhibitProduct ..... EXT-6 (#32)
 //	FinalDisposition ....................... EXT-8 (#63)
-
-// ReportStolen cubre T14. Estado resultante: ROBADO (terminal). ADR-001 reserva
-// T14-T16 al custodio actual o a ANMAT aun cuando la unidad este en transito.
-func (c *SNTContract) ReportStolen(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
-	return nil, notImplemented("ReportStolen", "EXT-3 (#29)")
-}
-
-// ReportLost cubre T15. Estado resultante: EXTRAVIADO (terminal).
-func (c *SNTContract) ReportLost(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
-	return nil, notImplemented("ReportLost", "EXT-3 (#29)")
-}
-
-// ReportDamaged cubre T16. Estado resultante: DETERIORADO.
-func (c *SNTContract) ReportDamaged(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
-	return nil, notImplemented("ReportDamaged", "EXT-3 (#29)")
-}
 
 // WithdrawFromMarket cubre T17, T18 y T19. Estado resultante:
 // RETIRADO_MERCADO. Un laboratorio no custodio exige una AuthorizeLabIntervention
