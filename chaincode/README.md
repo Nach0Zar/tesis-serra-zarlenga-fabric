@@ -108,10 +108,14 @@ Tres tests distintos custodian el congelamiento del contrato, y hacen falta los 
 | `ReturnProduct` | Implementada | EXT-4 (#30) |
 | `Restock` | Implementada | EXT-5 (#31) |
 | `WithdrawFromMarket`, `ProhibitProduct` | Implementadas | EXT-6 (#32) |
-| `FinalDisposition` | Declarada | EXT-8 (#63) |
+| `FinalDisposition` | Implementada | EXT-8 (#63) |
 | `VerifyTrace` | Implementada | CC-8 (#62) |
 
-La operación que sigue **declarada** —`FinalDisposition`— devuelve `INTERNAL_ERROR` con el detalle `{"operacion": …, "issue": …}`. El catálogo del contrato no tiene un código para «operación declarada sin implementar», y agregarlo sería un cambio MINOR del contrato que una issue de implementación no puede hacer.
+**No queda ninguna operación declarada sin implementar.** EXT-8 (#63) cerró la última, y con eso se retiró la maquinaria que CC-1 (#14) había dejado para los stubs: `internal/snt/declared.go`, el helper `notImplemented` y el salteo condicional de `TestPublicKeyCreationWritesMarker`. El test que comprobaba que un stub nombrara a su issue dueña se reemplazó por su inverso —`TestNoOperationRemainsAStub`—, que recorre la superficie congelada e impide reintroducir uno en silencio.
+
+**`DISPUESTO_FINAL` es el único estado terminal que alcanza una operación del contrato**, y su bloqueo no tiene regla propia: ADR-001 no declara ninguna fila con ese estado de origen, de modo que `requireTransition` rechaza las trece operaciones de escritura sobre la unidad. `TestDisposedUnitBlocksEveryOperation` las recorre todas y verifica además que el rechazo venga del estado y no de otra validación que devuelva el mismo código.
+
+**La asimetría entre T31 y T27** dice algo que ninguna de las dos filas dice sola: desde `RETIRADO_MERCADO` el custodio **puede** disponer finalmente la unidad pero **no** puede reingresarla a stock. Destruir lo retirado es una salida siempre admisible; devolverlo a la circulación es una decisión que solo el titular o la autoridad pueden tomar.
 
 **Cómo se resuelve el actor lógico de un evento extraordinario** (EXT-5): los caracteres de ADR-001 **no son excluyentes** —el laboratorio titular que además custodia la unidad reúne dos—, de modo que cuál aplica no lo decide el código sino la columna «actor habilitado» de la fila que corresponde al estado de origen observado: se toma el primer carácter que esa fila habilita. De ahí sale, sin regla propia, que el destinatario declarado pueda poner en cuarentena (T09) e informar vencimiento (T13) durante el tránsito pero no informar robo, extravío ni deterioro (T14–T16). `RECOVERY_OR_DISPOSAL_AGENT` se resuelve como el custodio actual registrado ([ADR-009](../docs/adr/009-return-and-recovery-semantics.md) punto 3), que es lo que hace alcanzable T25. Los dos rechazos no son intercambiables: `UNAUTHORIZED_CUSTODIAN` cuando el invocador no reúne **ningún** carácter, `INVALID_STATE_TRANSITION` cuando reúne alguno que esa fila no habilita — ahí el problema no es quién pide, es desde dónde.
 

@@ -369,14 +369,9 @@ func TestParticipationMarkerKeyPutsTxIDLast(t *testing.T) {
 // ninguna: RegisterUnit (laboratorio invocante), RegisterOrganization
 // (regulador) y AuthorizeLabIntervention (regulador).
 //
-// El campo `pendingOwner` es la maquinaria que CC-1 (#14) dejo para las
-// operaciones todavia no implementadas: mientras una operacion siga devolviendo
-// el error de stub de su issue duena, su caso se saltea; el dia que esa issue le
-// ponga logica, el caso deja de saltearse por si solo y exige el marcador. Con
-// `RegisterUnit` ya implementada por CC-2 (#15) ningun caso lo usa hoy, pero se
-// conserva para las operaciones que CC-3 (#16) y siguientes agreguen a la lista:
-// la invariante queda cubierta por un mecanismo y no por que alguien se acuerde
-// de agregar el caso.
+// La maquinaria de salteo que CC-1 (#14) dejo para las operaciones todavia no
+// implementadas se retira con EXT-8 (#63): con la ultima operacion declarada ya
+// implementada, no queda ninguna que pudiera devolver el error de stub.
 func TestPublicKeyCreationWritesMarker(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -384,10 +379,6 @@ func TestPublicKeyCreationWritesMarker(t *testing.T) {
 		run         func(t *testing.T, stub *mockStub) error
 		// markerOwnerOp es la operacion que debe figurar en el marcador.
 		markerOwnerOp string
-		// pendingOwner, si no es vacio, es la issue duena de la logica
-		// todavia no implementada. El caso se saltea SOLO mientras la
-		// operacion siga devolviendo el error de stub de esa issue.
-		pendingOwner string
 	}{
 		{
 			// Unica de las tres cuya organizacion responsable NO es la
@@ -446,10 +437,6 @@ func TestPublicKeyCreationWritesMarker(t *testing.T) {
 			seedRegistry(t, stub)
 			err := tc.run(t, stub)
 
-			if tc.pendingOwner != "" && isStubOf(err, tc.pendingOwner) {
-				t.Skipf("%s todavia es un stub de %s; este caso se activa solo cuando esa issue le ponga logica",
-					tc.name, tc.pendingOwner)
-			}
 			requireNoError(t, err)
 
 			collection := stub.privateData[implicitCollection(tc.responsable)]
@@ -469,15 +456,4 @@ func TestPublicKeyCreationWritesMarker(t *testing.T) {
 			}
 		})
 	}
-}
-
-// isStubOf informa si el error es el que devuelve una operacion declarada pero
-// todavia no implementada por la issue indicada (ver notImplemented).
-func isStubOf(err error, owner string) bool {
-	parsed, ok := cerr.Parse(err)
-	if !ok || parsed.Code != cerr.InternalError {
-		return false
-	}
-	issue, _ := parsed.Details["issue"].(string)
-	return issue == owner
 }
