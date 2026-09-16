@@ -20,20 +20,7 @@ import "github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 //	ReadUnit/GetUnitHistory/
 //	  QueryUnitsByGTIN ..................... CC-5 (#18)
 //	Restock ................................ EXT-5 (#31)
-//	WithdrawFromMarket/ProhibitProduct ..... EXT-6 (#32)
 //	FinalDisposition ....................... EXT-8 (#63)
-
-// WithdrawFromMarket cubre T17, T18 y T19. Estado resultante:
-// RETIRADO_MERCADO. Un laboratorio no custodio exige una AuthorizeLabIntervention
-// ACTIVA y vigente (ADR-007, punto 6.e).
-func (c *SNTContract) WithdrawFromMarket(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
-	return nil, notImplemented("WithdrawFromMarket", "EXT-6 (#32)")
-}
-
-// ProhibitProduct cubre T20. Estado resultante: PROHIBIDO. Solo ANMAT.
-func (c *SNTContract) ProhibitProduct(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
-	return nil, notImplemented("ProhibitProduct", "EXT-6 (#32)")
-}
 
 // Restock cubre T25, T26 y T27. Estado resultante: EN_CUSTODIA, con
 // custodioActual sin cambios (ADR-009, punto 5).

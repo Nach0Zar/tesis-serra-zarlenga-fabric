@@ -1,6 +1,6 @@
 # ADR-001: Máquina de estados del medicamento
 
-- **Estado**: Aceptado
+- **Estado**: Aceptado (revisión 2)
 - **Fecha**: 2026-08-07
 - **Autores**: Serra, Zarlenga
 
@@ -134,7 +134,8 @@ Las precondiciones listadas son mínimas y acumulativas: además de cumplir la f
 | `T16_REPORT_DAMAGED` | `EN_LABORATORIO`, `EN_TRANSITO`, `EN_CUSTODIA`, `EN_CUARENTENA` o `DEVUELTO` | `INFORMAR_DETERIORO` | `DETERIORADO` | `CURRENT_CUSTODIAN` o `ANMAT` | Se documenta daño, rotura, destrucción del soporte o imposibilidad de lectura segura. |
 | `T17_MARK_WITHDRAWN_FROM_LAB` | `EN_LABORATORIO` | `RETIRAR_MERCADO` | `RETIRADO_MERCADO` | `ANMAT` o `LABORATORY` | Existe retiro, recupero o instrucción equivalente aplicable a la unidad o lote. |
 | `T18_MARK_WITHDRAWN_FROM_CUSTODY` | `EN_CUSTODIA` | `RETIRAR_MERCADO` | `RETIRADO_MERCADO` | `ANMAT` o `LABORATORY` | Existe retiro, recupero o instrucción equivalente aplicable a la unidad o lote; el custodio debe inmovilizarla. |
-| `T19_MARK_WITHDRAWN_FROM_TRANSIT_QUARANTINE_OR_RETURN` | `EN_TRANSITO`, `EN_CUARENTENA` o `DEVUELTO` | `RETIRAR_MERCADO` | `RETIRADO_MERCADO` | `ANMAT` o `LABORATORY` | La unidad queda alcanzada por retiro durante traslado, cuarentena o devolución. |
+| `T19_MARK_WITHDRAWN_FROM_QUARANTINE_OR_RETURN` | `EN_CUARENTENA` o `DEVUELTO` | `RETIRAR_MERCADO` | `RETIRADO_MERCADO` | `ANMAT` o `LABORATORY` | La unidad queda alcanzada por retiro durante inmovilización o devolución. |
+| `T19_MARK_WITHDRAWN_FROM_TRANSIT` | `EN_TRANSITO` | `RETIRAR_MERCADO` | `RETIRADO_MERCADO` | `ANMAT` | La unidad queda alcanzada por retiro durante traslado. El retiro en tránsito cierra la operación de transferencia activa, cuyo registro vive en la colección privada del par emisor-receptor; ADR-006 limita su membresía a `{emisor, receptor, regulador}`, de modo que un laboratorio titular ajeno al par no puede cerrarla (revisión 2, DES-19). |
 | `T20_MARK_PROHIBITED` | `EN_LABORATORIO`, `EN_TRANSITO`, `EN_CUSTODIA`, `EN_CUARENTENA`, `DEVUELTO` o `RETIRADO_MERCADO` | `PROHIBIR_PRODUCTO` | `PROHIBIDO` | `ANMAT` | Existe prohibición regulatoria o medida que impide circulación y dispensación ordinaria. |
 | `T21_RETURN_FROM_CUSTODY` | `EN_CUSTODIA` | `DEVOLVER_PRODUCTO` | `DEVUELTO` | `CURRENT_CUSTODIAN` | Se documenta devolución hacia un actor de la cadena por error, inconsistencia documental, vencimiento próximo u otra causa válida. |
 | `T22_RETURN_FROM_QUARANTINE` | `EN_CUARENTENA` | `DEVOLVER_PRODUCTO` | `DEVUELTO` | `CURRENT_CUSTODIAN` o `ANMAT` | La resolución de cuarentena requiere devolución a proveedor, laboratorio o importador. |
@@ -149,6 +150,8 @@ Las precondiciones listadas son mínimas y acumulativas: además de cumplir la f
 | `T31_FINAL_DISPOSITION_FROM_WITHDRAWN` | `RETIRADO_MERCADO` | `DISPONER_FINAL` | `DISPUESTO_FINAL` | `ANMAT`, `LABORATORY` o `RECOVERY_OR_DISPOSAL_AGENT` | El retiro culmina en destrucción, descarte o disposición final autorizada. |
 | `T32_FINAL_DISPOSITION_FROM_PROHIBITED` | `PROHIBIDO` | `DISPONER_FINAL` | `DISPUESTO_FINAL` | `ANMAT` o `RECOVERY_OR_DISPOSAL_AGENT` | La prohibición culmina en destrucción, descarte o disposición final autorizada. |
 | `T33_FINAL_DISPOSITION_FROM_RETURNED` | `DEVUELTO` | `DISPONER_FINAL` | `DISPUESTO_FINAL` | `RECOVERY_OR_DISPOSAL_AGENT` | La devolución no puede reingresar a stock y se documenta salida definitiva. |
+
+**Revisión 2 (2026-09-16, DES-19):** la fila `T19` original habilitaba `ANMAT` o `LABORATORY` desde `EN_TRANSITO`, `EN_CUARENTENA` o `DEVUELTO`. La habilitación del laboratorio titular sobre el origen `EN_TRANSITO` era irrealizable: el retiro en tránsito obliga a cerrar el registro de la operación de transferencia (ADR-007, punto 6.c), ese registro vive en la colección privada del par emisor-receptor, y ADR-006 punto 1 fija su membresía en `{emisor, receptor, regulador}`. Un laboratorio que no es parte del par no puede leerla ni escribirla, y ampliarle la membresía le daría acceso al remito, la factura y la contraparte de transferencias ajenas, contra el propósito de ADR-002 y ADR-006. La revisión parte la fila en dos: `T19_MARK_WITHDRAWN_FROM_QUARANTINE_OR_RETURN` conserva ambos actores, y `T19_MARK_WITHDRAWN_FROM_TRANSIT` queda reservada a `ANMAT`, que es miembro de toda colección de par. La potestad del titular no desaparece: conserva `T17`, `T18` y el retiro desde `EN_CUARENTENA` o `DEVUELTO`, y durante la ventana del traslado el retiro lo ejecuta el regulador. Esta revisión no altera estados, eventos ni el diagrama.
 
 ## Diagrama Mermaid
 
@@ -258,6 +261,7 @@ Los estados `VENCIDO`, `DETERIORADO`, `RETIRADO_MERCADO`, `PROHIBIDO`, `DEVUELTO
 ## Contexto utilizado
 
 - Issue GitHub #7: DES-1 - Máquina de estados del medicamento (ADR-001), consultada el 2026-08-07, sin comentarios.
+- Issue GitHub #116: DES-19 - contradicción entre el actor habilitado de `T19` y la membresía de las colecciones privadas de ADR-006; decisión tomada el 2026-09-16 e incorporada en la revisión 2.
 - Resolución MS 435/2011, artículos 1 y 2: sistema de trazabilidad desde producción o importación hasta adquisición por usuario o paciente, con identificación individual y seguimiento de la unidad. URL oficial: https://www.argentina.gob.ar/normativa/nacional/resoluci%C3%B3n-435-2011-180934/texto
 - Disposición ANMAT 3683/2011, artículo 8: comunicación de códigos unívocos y movimientos logísticos, incluyendo los eventos usados como base de esta máquina. URL oficial: https://www.argentina.gob.ar/normativa/nacional/disposici%C3%B3n-3683-2011-182665/texto
 - Disposición ANMAT 3683/2011, artículo 9: restricciones y alertas para impedir operatorias no autorizadas, verificar legitimidad de la cadena e informar irregularidades. URL oficial: https://www.argentina.gob.ar/normativa/nacional/disposici%C3%B3n-3683-2011-182665/texto
