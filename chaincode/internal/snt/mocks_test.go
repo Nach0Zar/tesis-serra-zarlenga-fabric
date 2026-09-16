@@ -245,6 +245,32 @@ func (s *mockStub) SetEvent(name string, payload []byte) error {
 	return nil
 }
 
+// SplitCompositeKey reproduce el formato de clave compuesta de Fabric, que no
+// expone una funcion de paquete para descomponerla -- es un metodo del stub.
+//
+// La forma es \x00objectType\x00attr1\x00attr2...\x00, y la implementacion es
+// la inversa exacta de shim.CreateCompositeKey, que el mock si delega. El test
+// TestSplitCompositeKeyIsInverseOfCreate lo deja verificado en lugar de
+// asumirlo: si el formato de Fabric cambiara, la consulta por estado leeria
+// claves mal descompuestas y el mock no lo detectaria.
+func (s *mockStub) SplitCompositeKey(key string) (string, []string, error) {
+	if len(key) == 0 || key[0] != 0x00 {
+		return "", nil, fmt.Errorf("clave compuesta malformada: %q", key)
+	}
+	var components []string
+	start := 1
+	for i := 1; i < len(key); i++ {
+		if key[i] == 0x00 {
+			components = append(components, key[start:i])
+			start = i + 1
+		}
+	}
+	if len(components) == 0 {
+		return "", nil, fmt.Errorf("clave compuesta sin componentes: %q", key)
+	}
+	return components[0], components[1:], nil
+}
+
 func (s *mockStub) GetStateByPartialCompositeKey(objectType string, keys []string) (shim.StateQueryIteratorInterface, error) {
 	if err := s.injected("GetStateByPartialCompositeKey"); err != nil {
 		return nil, err
