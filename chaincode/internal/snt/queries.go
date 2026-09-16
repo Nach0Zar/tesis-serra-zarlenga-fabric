@@ -2,8 +2,9 @@ package snt
 
 import (
 	"encoding/json"
-	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
 	"time"
+
+	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
 
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
