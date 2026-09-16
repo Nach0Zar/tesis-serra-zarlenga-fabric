@@ -111,10 +111,6 @@ func TestDeclaredOperationsReportTheirOwner(t *testing.T) {
 	contract := new(SNTContract)
 
 	pending := map[string]func() error{
-		"Restock": func() error {
-			_, err := contract.Restock(ctx, UnitEventRequest{})
-			return err
-		},
 		"FinalDisposition": func() error {
 			_, err := contract.FinalDisposition(ctx, UnitEventRequest{})
 			return err

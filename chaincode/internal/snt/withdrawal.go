@@ -108,6 +108,20 @@ func consumeLabInterventionIfNonCustodial(
 	unit MedicationUnit,
 	_ domain.Transition,
 ) error {
+	return consumeLabIntervention(ctx, unit, opWithdrawFromMarket, LabOpWithdrawFromMarket)
+}
+
+// consumeLabIntervention es el cuerpo compartido de esa precondicion. La
+// operacion viaja como parametro porque la autorizacion es POR OPERACION: una
+// emitida para retirar del mercado no habilita el reingreso a stock ni la
+// disposicion final, y el contrato lo declara asi para las tres
+// (docs/api-contract.md, "Valores de `operacion`").
+func consumeLabIntervention(
+	ctx contractapi.TransactionContextInterface,
+	unit MedicationUnit,
+	operation string,
+	expected LabInterventionOperation,
+) error {
 	invoker, err := resolveInvoker(ctx)
 	if err != nil {
 		return err
@@ -130,7 +144,7 @@ func consumeLabInterventionIfNonCustodial(
 		return labInterventionRequired(unit,
 			"la autorizacion vigente designa a otro laboratorio")
 	}
-	if authorization.Operacion != LabOpWithdrawFromMarket {
+	if authorization.Operacion != expected {
 		return labInterventionRequired(unit,
 			"la autorizacion vigente habilita la operacion "+string(authorization.Operacion))
 	}
@@ -172,7 +186,7 @@ func consumeLabInterventionIfNonCustodial(
 	// laboratorio designado y el de la organizacion regulatoria. La firma de
 	// creador del laboratorio acredita identidad pero no es un endoso de peer.
 	if err := writeUnitParticipationMarker(
-		ctx, invoker.MSPID, opWithdrawFromMarket, invoker.MSPID,
+		ctx, invoker.MSPID, operation, invoker.MSPID,
 		unit.GTIN, unit.NumeroSerie); err != nil {
 		return err
 	}
@@ -181,7 +195,7 @@ func consumeLabInterventionIfNonCustodial(
 		return err
 	}
 	return writeUnitParticipationMarker(
-		ctx, regulator, opWithdrawFromMarket, invoker.MSPID, unit.GTIN, unit.NumeroSerie)
+		ctx, regulator, operation, invoker.MSPID, unit.GTIN, unit.NumeroSerie)
 }
 
 func labInterventionRequired(unit MedicationUnit, detail string) error {

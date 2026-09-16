@@ -189,7 +189,11 @@ func TestReportExpiredRejections(t *testing.T) {
 	// T14-T16 quedan reservadas al custodio o a ANMAT aunque la unidad este en
 	// transito: la habilitacion del destinatario declarado es de T09 y T13, no
 	// una regla general de los eventos extraordinarios.
-	t.Run("el destinatario declarado no alcanza estados terminales", func(t *testing.T) {
+	//
+	// La version anterior de este caso comprobaba el valor de un helper en lugar
+	// del comportamiento, y con eso no habria detectado que la resolucion del
+	// actor dejara de consultarlo. Ahora invoca la operacion.
+	t.Run("el destinatario declarado no informa robo", func(t *testing.T) {
 		stub, contract := transferFixture(t)
 		withTransient(stub, dispatchTransient("GLN:"+drogueriaGLN))
 		_, err := contract.DispatchTransfer(
@@ -198,9 +202,9 @@ func TestReportExpiredRejections(t *testing.T) {
 		requireNoError(t, err)
 		stub.transient = map[string][]byte{}
 
-		if eventAllowsDeclaredRecipient(domain.EventInformarRobo) {
-			t.Fatal("T14 no habilita al destinatario declarado")
-		}
+		_, err = contract.ReportStolen(
+			testContext(stub, drogueriaMSP, RoleOperator), expiredRequest())
+		requireCode(t, err, cerr.UnauthorizedCustodian)
 	})
 }
 
