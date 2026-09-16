@@ -102,16 +102,18 @@ Tres tests distintos custodian el congelamiento del contrato, y hacen falta los 
 | `DispatchTransfer`, `ReceiveTransfer`, `RejectTransfer` | Implementadas | CC-3 (#16) |
 | `Dispense` | Implementada | CC-4 (#17) |
 | `ReadUnit`, `GetUnitHistory`, `QueryUnitsByGTIN` | Implementadas | CC-5 (#18) |
-| `Quarantine`, `ReleaseQuarantine` | Declaradas | EXT-1 (#27) |
-| `ReportExpired` | Declarada | EXT-2 (#28) |
-| `ReportStolen`, `ReportLost`, `ReportDamaged` | Declaradas | EXT-3 (#29) |
-| `ReturnProduct` | Declarada | EXT-4 (#30) |
+| `Quarantine`, `ReleaseQuarantine` | Implementadas | EXT-1 (#27) |
+| `ReportExpired` | Implementada | EXT-2 (#28) |
+| `ReportStolen`, `ReportLost`, `ReportDamaged` | Implementadas | EXT-3 (#29) |
+| `ReturnProduct` | Implementada | EXT-4 (#30) |
 | `Restock` | Declarada | EXT-5 (#31) |
-| `WithdrawFromMarket`, `ProhibitProduct` | Declaradas | EXT-6 (#32) |
+| `WithdrawFromMarket`, `ProhibitProduct` | Implementadas, con una dependencia abierta | EXT-6 (#32) |
 | `FinalDisposition` | Declarada | EXT-8 (#63) |
 | `VerifyTrace` | Implementada | CC-8 (#62) |
 
-Las operaciones declaradas devuelven `INTERNAL_ERROR` con el detalle `{"operacion": …, "issue": …}`. El catálogo del contrato no tiene un código para «operación declarada sin implementar», y agregarlo sería un cambio MINOR del contrato que una issue de implementación no puede hacer.
+Las operaciones que siguen **declaradas** —`Restock` y `FinalDisposition`— devuelven `INTERNAL_ERROR` con el detalle `{"operacion": …, "issue": …}`. El catálogo del contrato no tiene un código para «operación declarada sin implementar», y agregarlo sería un cambio MINOR del contrato que una issue de implementación no puede hacer.
+
+**Dependencia abierta de EXT-6**: `WithdrawFromMarket` está implementada para T17, T18 y T19 **cuando el invocador es parte del par** de la transferencia —el emisor, que durante el tránsito es el custodio registrado— y para la organización regulatoria, que es miembro de toda colección de par. El caso del **laboratorio titular ajeno al par con la unidad en `EN_TRANSITO`** no está resuelto: [ADR-001](../docs/adr/001-maquina-estados-medicamento.md) habilita esa transición, pero [ADR-006](../docs/adr/006-private-data-collections.md) punto 1 limita la membresía de la colección del par a `{emisor, receptor, regulador}` y le impide cerrar el registro de operación que [ADR-007](../docs/adr/007-network-topology.md) punto 6.c exige cerrar. La decisión está abierta en DES-19 (#116) y el chaincode **no elige** una salida: ese camino termina en el `INTERNAL_ERROR` de estado inconsistente.
 
 ## Mecanismos de endoso implementados
 
