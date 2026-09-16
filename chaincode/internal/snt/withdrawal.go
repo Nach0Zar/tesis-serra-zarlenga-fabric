@@ -30,10 +30,12 @@ const (
 // AUTORIZACION PREVIA de intervencion en estado ACTIVA y no vencida, la marca
 // CONSUMIDA y escribe marcadores de participacion en la coleccion implicita del
 // laboratorio y en la de la organizacion regulatoria. Lo que la plataforma
-// obtiene con eso es el endoso de TRES organizaciones -- laboratorio designado,
-// regulador y custodio actual, este ultimo impuesto por la politica de la clave
-// de la unidad --, que es el par que pide DES-6 mas el custodio (ADR-007,
-// punto 6.e).
+// obtiene con eso es el endoso del laboratorio designado, del regulador y del
+// custodio actual -- este ultimo impuesto por la politica de la clave de la
+// unidad --, que es el par que pide DES-6 mas el custodio (ADR-007, punto 6.e).
+//
+// Durante el transito son CUATRO y no tres: la SBE de la clave exige a emisor y
+// receptor declarado (ADR-007, punto 6.b), y a eso se suman los dos marcadores.
 //
 // Sin autorizacion, o con una vencida, ya consumida o revocada:
 // LAB_INTERVENTION_REQUIRED. La autorizacion es por unidad, laboratorio y
