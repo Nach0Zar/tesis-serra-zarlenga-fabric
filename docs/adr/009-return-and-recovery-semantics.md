@@ -1,6 +1,6 @@
 # ADR-009: Semántica de la devolución, custodia en DEVUELTO y actor de recupero/disposición
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-08-17
 - **Autores**: Serra, Zarlenga
 

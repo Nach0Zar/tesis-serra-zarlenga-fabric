@@ -1,6 +1,6 @@
 # ADR-013: Criterios de verificación de autenticidad por el adquirente
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-08-28
 - **Autores**: Serra, Zarlenga
 

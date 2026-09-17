@@ -1,6 +1,6 @@
 # ADR-007: Topología física de la red del prototipo
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-08-17
 - **Autores**: Serra, Zarlenga
 

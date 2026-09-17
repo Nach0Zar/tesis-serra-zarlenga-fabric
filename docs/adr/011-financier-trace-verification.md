@@ -1,6 +1,6 @@
 # ADR-011: Criterios de verificación de traza para el organismo financiador
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-08-17
 - **Autores**: Serra, Zarlenga
 
