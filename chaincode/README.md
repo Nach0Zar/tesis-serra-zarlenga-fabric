@@ -1,6 +1,6 @@
 # Chaincode `snt`
 
-Smart contract Go del prototipo, implementado con `contractapi`. Su interfaz pública está congelada en [`docs/api-contract.md`](../docs/api-contract.md) (v2.6.1); el chaincode se llama `snt` y el canal `snt-channel` ([ADR-007](../docs/adr/007-network-topology.md), punto 4).
+Smart contract Go del prototipo, implementado con `contractapi`. Su interfaz pública está congelada en [`docs/api-contract.md`](../docs/api-contract.md) —la versión vigente es la que declara su encabezado—; el chaincode se llama `snt` y el canal `snt-channel` ([ADR-007](../docs/adr/007-network-topology.md), punto 4).
 
 La lógica respeta:
 
