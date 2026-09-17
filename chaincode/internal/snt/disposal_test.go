@@ -12,7 +12,9 @@ import (
 func disposalRequest() UnitEventRequest {
 	return UnitEventRequest{
 		GTIN: validGTIN, NumeroSerie: validSerial,
-		Motivo: "destruccion autorizada, Ley 24.051 de residuos peligrosos, acta 118/2026",
+		// El motivo de un caso de uso real cita la norma y el acto; el chaincode
+		// solo exige que no este vacio (ver TestFinalDispositionRequiresMotivo).
+		Motivo: "destruccion autorizada, Ley 24.051 Anexo I Y3, acta 118/2026",
 	}
 }
 
@@ -173,82 +175,158 @@ func TestFinalDispositionAsymmetryWithRestock(t *testing.T) {
 	}
 }
 
-// TestDisposedUnitBlocksEveryOperation es el criterio "ninguna operacion
-// posterior es valida" del issue, y se comprueba sobre TODAS las operaciones de
-// escritura sobre una unidad, no sobre una muestra.
+// TestDisposedUnitCannotLeaveItsState es el criterio "ninguna operacion
+// posterior es valida" del issue, con la precision que el review de #118 exigio:
+// la garantia de ADR-001 es que ninguna TRANSICION declara DISPUESTO_FINAL como
+// estado de origen, y por lo tanto la unidad no puede salir de ese estado. NO es
+// que toda escritura publica devuelva el mismo codigo.
 //
-// El bloqueo no tiene regla propia: ADR-001 no declara ninguna fila con
-// DISPUESTO_FINAL como estado de origen, y requireTransition las rechaza todas.
-func TestDisposedUnitBlocksEveryOperation(t *testing.T) {
+// La version anterior de este test recorria trece operaciones y afirmaba
+// INVALID_STATE_TRANSITION para todas, omitiendo justamente las cuatro que
+// devuelven otra cosa. Ahora estan las diecisiete escrituras publicas sobre la
+// unidad, cada una con lo que realmente hace, y la invariante que se comprueba
+// en todas es la unica que ADR-001 garantiza: el estado no se mueve.
+//
+// Los codigos distintos no son un defecto: cada operacion valida lo suyo antes
+// de llegar a la maquina de estados, y el codigo que devuelve describe la
+// primera condicion que falla.
+func TestDisposedUnitCannotLeaveItsState(t *testing.T) {
 	// `custodio` no es decorativo: una operacion cuya comprobacion de identidad
 	// no pasa nunca llega a requireTransition, y el test estaria comprobando el
 	// rechazo equivocado. Dispense es el caso: con la unidad en custodia de la
 	// drogueria, la farmacia recibe UNAUTHORIZED_CUSTODIAN y el estado terminal
 	// no se ejercita. Es el mismo error que EXT-2 tuvo que corregir.
+	//
+	// `codigo` vacio significa que la operacion NO falla: es el caso de
+	// AuthorizeLabIntervention, comentado abajo.
 	operaciones := []struct {
 		nombre   string
 		custodio string
+		codigo   cerr.Code
 		invocar  func(*SNTContract, *mockStub) error
 	}{
-		{nombre: "DispatchTransfer", invocar: func(c *SNTContract, stub *mockStub) error {
-			withTransient(stub, dispatchTransient("GLN:"+farmaciaGLN))
-			_, err := c.DispatchTransfer(
-				testContext(stub, drogueriaMSP, RoleOperator),
-				DispatchTransferRequest{GTIN: validGTIN, NumeroSerie: validSerial})
-			return err
-		}},
-		{nombre: "Dispense", custodio: "GLN:" + farmaciaGLN, invocar: func(c *SNTContract, stub *mockStub) error {
-			_, err := c.Dispense(
-				testContext(stub, farmaciaMSP, RoleOperator),
-				UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial})
-			return err
-		}},
-		{nombre: "Quarantine", invocar: func(c *SNTContract, stub *mockStub) error {
-			_, err := c.Quarantine(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
-			return err
-		}},
-		{nombre: "ReleaseQuarantine", invocar: func(c *SNTContract, stub *mockStub) error {
-			_, err := c.ReleaseQuarantine(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
-			return err
-		}},
-		{nombre: "ReportExpired", invocar: func(c *SNTContract, stub *mockStub) error {
-			_, err := c.ReportExpired(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
-			return err
-		}},
-		{nombre: "ReportStolen", invocar: func(c *SNTContract, stub *mockStub) error {
-			_, err := c.ReportStolen(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
-			return err
-		}},
-		{nombre: "ReportLost", invocar: func(c *SNTContract, stub *mockStub) error {
-			_, err := c.ReportLost(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
-			return err
-		}},
-		{nombre: "ReportDamaged", invocar: func(c *SNTContract, stub *mockStub) error {
-			_, err := c.ReportDamaged(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
-			return err
-		}},
-		{nombre: "WithdrawFromMarket", invocar: func(c *SNTContract, stub *mockStub) error {
-			_, err := c.WithdrawFromMarket(
-				testContext(stub, anmatMSP, RoleRegulatoryAdmin), disposalRequest())
-			return err
-		}},
-		{nombre: "ProhibitProduct", invocar: func(c *SNTContract, stub *mockStub) error {
-			_, err := c.ProhibitProduct(
-				testContext(stub, anmatMSP, RoleRegulatoryAdmin), disposalRequest())
-			return err
-		}},
-		{nombre: "ReturnProduct", invocar: func(c *SNTContract, stub *mockStub) error {
-			_, err := c.ReturnProduct(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
-			return err
-		}},
-		{nombre: "Restock", invocar: func(c *SNTContract, stub *mockStub) error {
-			_, err := c.Restock(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
-			return err
-		}},
-		{nombre: "FinalDisposition", invocar: func(c *SNTContract, stub *mockStub) error {
-			_, err := c.FinalDisposition(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
-			return err
-		}},
+		// Las trece que llegan a la maquina de estados.
+		{nombre: "DispatchTransfer", codigo: cerr.InvalidStateTransition,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				withTransient(stub, dispatchTransient("GLN:"+farmaciaGLN))
+				_, err := c.DispatchTransfer(
+					testContext(stub, drogueriaMSP, RoleOperator),
+					DispatchTransferRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+				return err
+			}},
+		{nombre: "Dispense", custodio: "GLN:" + farmaciaGLN, codigo: cerr.InvalidStateTransition,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.Dispense(
+					testContext(stub, farmaciaMSP, RoleOperator),
+					UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+				return err
+			}},
+		{nombre: "Quarantine", codigo: cerr.InvalidStateTransition,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.Quarantine(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
+				return err
+			}},
+		{nombre: "ReleaseQuarantine", codigo: cerr.InvalidStateTransition,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.ReleaseQuarantine(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
+				return err
+			}},
+		{nombre: "ReportExpired", codigo: cerr.InvalidStateTransition,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.ReportExpired(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
+				return err
+			}},
+		{nombre: "ReportStolen", codigo: cerr.InvalidStateTransition,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.ReportStolen(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
+				return err
+			}},
+		{nombre: "ReportLost", codigo: cerr.InvalidStateTransition,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.ReportLost(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
+				return err
+			}},
+		{nombre: "ReportDamaged", codigo: cerr.InvalidStateTransition,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.ReportDamaged(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
+				return err
+			}},
+		{nombre: "WithdrawFromMarket", codigo: cerr.InvalidStateTransition,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.WithdrawFromMarket(
+					testContext(stub, anmatMSP, RoleRegulatoryAdmin), disposalRequest())
+				return err
+			}},
+		{nombre: "ProhibitProduct", codigo: cerr.InvalidStateTransition,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.ProhibitProduct(
+					testContext(stub, anmatMSP, RoleRegulatoryAdmin), disposalRequest())
+				return err
+			}},
+		{nombre: "ReturnProduct", codigo: cerr.InvalidStateTransition,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.ReturnProduct(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
+				return err
+			}},
+		{nombre: "Restock", codigo: cerr.InvalidStateTransition,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.Restock(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
+				return err
+			}},
+		{nombre: "FinalDisposition", codigo: cerr.InvalidStateTransition,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.FinalDisposition(testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
+				return err
+			}},
+
+		// Las cuatro que NO llegan a la maquina de estados, y que la version
+		// anterior de este test omitia.
+		//
+		// ReceiveTransfer y RejectTransfer comprueban primero que la unidad este
+		// EN_TRANSITO: una unidad dispuesta no lo esta, y NOT_IN_TRANSIT describe
+		// esa condicion mejor que un rechazo de transicion.
+		{nombre: "ReceiveTransfer", custodio: "GLN:" + farmaciaGLN, codigo: cerr.NotInTransit,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.ReceiveTransfer(
+					testContext(stub, farmaciaMSP, RoleOperator),
+					UnitRefRequest{GTIN: validGTIN, NumeroSerie: validSerial})
+				return err
+			}},
+		{nombre: "RejectTransfer", custodio: "GLN:" + farmaciaGLN, codigo: cerr.NotInTransit,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.RejectTransfer(
+					testContext(stub, farmaciaMSP, RoleOperator), disposalRequest())
+				return err
+			}},
+		// RegisterUnit no intenta una transicion: intenta crear la clave, que ya
+		// existe. UNIT_ALREADY_EXISTS es lo que corresponde, y ademas es lo que
+		// impide reciclar una unidad dispuesta registrandola de nuevo.
+		{nombre: "RegisterUnit", codigo: cerr.UnitAlreadyExists,
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.RegisterUnit(
+					testContext(stub, labMSP, RoleOperator), validRegisterUnitRequest())
+				return err
+			}},
+		// AuthorizeLabIntervention NO falla, y queda documentado como limite del
+		// prototipo en el contrato: la autoridad puede emitir una autorizacion de
+		// intervencion sobre una unidad ya dispuesta. Es inocua -- ejercerla
+		// exige una transicion que ADR-001 no declara, de modo que la
+		// autorizacion nunca puede consumirse -- pero deja un asiento que
+		// promete algo irrealizable. Bloquearla seria una regla nueva que ninguna
+		// ADR decide, y EXT-8 no la inventa.
+		{nombre: "AuthorizeLabIntervention", codigo: "",
+			invocar: func(c *SNTContract, stub *mockStub) error {
+				_, err := c.AuthorizeLabIntervention(
+					testContext(stub, anmatMSP, RoleRegulatoryAdmin),
+					AuthorizeLabInterventionRequest{
+						GTIN: validGTIN, NumeroSerie: validSerial,
+						Laboratorio: "GLN:" + labGLN,
+						Operacion:   LabOpFinalDisposition,
+						Motivo:      "autorizacion sobre unidad ya dispuesta",
+						ExpiraEn:    "2027-01-01T00:00:00Z",
+					})
+				return err
+			}},
 	}
 
 	for _, caso := range operaciones {
@@ -262,19 +340,40 @@ func TestDisposedUnitBlocksEveryOperation(t *testing.T) {
 			seedUnit(t, stub, domain.StateDispuestoFinal, custodio)
 
 			err := caso.invocar(contract, stub)
-			if err == nil {
-				t.Fatal("DISPUESTO_FINAL es terminal: la operacion no debe tener exito")
+			if caso.codigo == "" {
+				requireNoError(t, err)
+			} else {
+				requireCode(t, err, caso.codigo)
 			}
-			requireCode(t, err, cerr.InvalidStateTransition)
 
-			// El codigo solo no alcanza: se comprueba que el rechazo venga de la
-			// maquina de estados sobre el estado terminal y no de otra
-			// validacion que devuelva el mismo codigo.
-			parsed, ok := cerr.Parse(err)
-			if !ok || parsed.Details["estado"] != string(domain.StateDispuestoFinal) {
-				t.Fatalf("el rechazo debe provenir del estado terminal: %v", err)
+			// La invariante que ADR-001 SI garantiza, y la unica que vale para
+			// las diecisiete: el estado no se mueve.
+			view, readErr := contract.ReadUnit(
+				testContext(stub, anmatMSP, RoleAuditor), validGTIN, validSerial)
+			requireNoError(t, readErr)
+			if view.Estado != domain.StateDispuestoFinal {
+				t.Fatalf("estado = %s: DISPUESTO_FINAL es terminal y no admite salida", view.Estado)
 			}
 		})
+	}
+}
+
+// TestDisposedUnitRejectsTransitionsFromTheStateMachine complementa al anterior
+// sobre las operaciones que SI llegan a la maquina de estados: comprueba que su
+// rechazo provenga del estado terminal y no de otra validacion que devuelva el
+// mismo codigo. Sin esta asercion, un UNAUTHORIZED_CUSTODIAN mal escrito o un
+// INVALID_STATE_TRANSITION de otra causa pasarian por cobertura del criterio.
+func TestDisposedUnitRejectsTransitionsFromTheStateMachine(t *testing.T) {
+	stub, contract := labInterventionFixture(t)
+	seedUnit(t, stub, domain.StateDispuestoFinal, "GLN:"+drogueriaGLN)
+
+	_, err := contract.FinalDisposition(
+		testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
+	requireCode(t, err, cerr.InvalidStateTransition)
+
+	parsed, ok := cerr.Parse(err)
+	if !ok || parsed.Details["estado"] != string(domain.StateDispuestoFinal) {
+		t.Fatalf("el rechazo debe provenir del estado terminal: %v", err)
 	}
 }
 
@@ -344,11 +443,16 @@ func TestFinalDispositionByRegulatorWritesMarker(t *testing.T) {
 	requireRegulatoryMarker(t, stub, opFinalDisposition)
 }
 
-// TestFinalDispositionRequiresMotivo: el motivo es donde viaja la causa
-// regulatoria del asiento, incluida la referencia a la normativa de residuos
-// peligrosos que el issue pide documentar. El contrato no tiene un campo
-// dedicado y agregarlo seria un cambio MINOR que una issue de implementacion no
-// puede hacer.
+// TestFinalDispositionRequiresMotivo comprueba lo unico que el chaincode puede
+// comprobar sobre el motivo: que no este vacio.
+//
+// El review de #118 señalo con razon que este test NO demuestra trazabilidad
+// normativa: acepta cualquier texto. Y no puede demostrarla -- exigir que el
+// motivo cite la Ley 24.051 seria una condicion de rechazo nueva que ningun ADR
+// decide, y un texto libre no es verificable por el chaincode. La referencia
+// normativa (Ley 24.051, Anexo I, categoria Y3, con URL oficial) queda donde
+// corresponde: declarada en el contrato y en el godoc de la operacion, que son
+// artefactos versionados, y no afirmada por un fixture de test.
 func TestFinalDispositionRequiresMotivo(t *testing.T) {
 	stub, contract := labInterventionFixture(t)
 	seedUnit(t, stub, domain.StateVencido, "GLN:"+drogueriaGLN)
@@ -359,11 +463,19 @@ func TestFinalDispositionRequiresMotivo(t *testing.T) {
 	requireCode(t, err, cerr.InvalidRequest)
 }
 
-// TestFinalDispositionIsAuditableByRegulator cubre el criterio "la ANMAT puede
-// auditar todas las disposiciones finales". No necesita una operacion nueva: las
-// lecturas publicas del canal no son restringibles (ADR-005), de modo que la
-// autoridad lee el estado y el historial de cualquier unidad.
-func TestFinalDispositionIsAuditableByRegulator(t *testing.T) {
+// TestDisposedUnitIsReadableByRegulator cubre la auditoria POR UNIDAD: partiendo
+// de un GTIN y un numero de serie, la autoridad lee estado e historial sin
+// autorizacion alguna, porque las lecturas publicas del canal no son
+// restringibles (ADR-005).
+//
+// Lo que este test NO demuestra, y el review de #118 señalo con razon, es el
+// criterio del issue en su forma global -- "la ANMAT puede auditar TODAS las
+// disposiciones finales" --: parte de una unidad conocida y no enumera el
+// conjunto. La enumeracion por estado la aporta QueryUnitsByState, que
+// implementa CC-9 (#112, PR #115) y que no esta en esta rama ni en su base. Por
+// eso EXT-8 usa `Refs #63` y no `Closes`, y el criterio global queda registrado
+// en la issue como dependiente de #112.
+func TestDisposedUnitIsReadableByRegulator(t *testing.T) {
 	stub, contract := labInterventionFixture(t)
 	seedUnit(t, stub, domain.StateVencido, "GLN:"+drogueriaGLN)
 

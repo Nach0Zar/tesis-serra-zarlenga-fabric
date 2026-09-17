@@ -40,20 +40,33 @@ const opFinalDisposition = "FinalDisposition"
 // Destruir lo retirado es una salida siempre admisible; devolverlo a la
 // circulacion es una decision que solo el titular o la autoridad pueden tomar.
 //
-// Registro del hecho: `motivo` es obligatorio -- lo exige el motor comun -- y es
-// donde viaja la causa regulatoria, incluida la referencia a la normativa de
-// residuos peligrosos que la issue pide documentar. El contrato ya declara ese
-// campo como el lugar de la causa regulatoria del evento, en texto breve y
-// neutro; agregar un campo dedicado seria un cambio MINOR del contrato
-// congelado, que una issue de implementacion no puede hacer. La fecha sale de
-// GetTxTimestamp() y la escribe el motor en UltimaActualizacion, nunca del
-// reloj local.
+// Registro del hecho y norma aplicable: el destino de una unidad dispuesta
+// finalmente es un residuo peligroso. La Ley 24.051, Anexo I, categoria Y3
+// ("Desechos de medicamentos y productos farmaceuticos") lo clasifica como tal
+// -- https://www.argentina.gob.ar/normativa/nacional/450/actualizacion -- y de
+// ahi la obligacion de que la destruccion quede documentada y atribuida a un
+// responsable.
 //
-// Auditoria de la autoridad: las lecturas publicas del canal no son
-// restringibles (ADR-005), de modo que ANMAT audita cualquier disposicion con
-// ReadUnit y GetUnitHistory, y la transaccion emite ademas su evento de unidad.
-// La enumeracion de todas las unidades en DISPUESTO_FINAL la aporta
-// QueryUnitsByState, que implementa CC-9 (#112).
+// El contrato la satisface por dos vias, ambas ya existentes: `motivo`, que el
+// motor exige y donde viaja la referencia normativa y el acto que la respalda, y
+// CustodioActual, que esta operacion NO mueve, de modo que el responsable
+// registrado al momento de la disposicion queda en la traza.
+//
+// Lo que el chaincode NO hace es validar el CONTENIDO de `motivo`: exigir que
+// cite una norma seria una condicion de rechazo nueva que ningun ADR decide, y
+// un texto libre no es verificable. Un campo dedicado para la referencia seria
+// ademas un cambio MINOR del contrato congelado, que una issue de
+// implementacion no puede hacer. La fecha sale de GetTxTimestamp() y la escribe
+// el motor en UltimaActualizacion, nunca del reloj local.
+//
+// Auditoria de la autoridad, en dos alcances que conviene no confundir. POR
+// UNIDAD esta cubierta: las lecturas publicas del canal no son restringibles
+// (ADR-005), de modo que ANMAT audita cualquier disposicion con ReadUnit y
+// GetUnitHistory partiendo de su GTIN y numero de serie, y la transaccion emite
+// ademas su evento de unidad. GLOBAL -- enumerar todas las unidades en
+// DISPUESTO_FINAL -- exige QueryUnitsByState, que implementa CC-9 (#112) y que
+// NO esta disponible todavia: hasta que se integre, el criterio de #63 en su
+// forma global queda pendiente y asi esta registrado en la issue.
 //
 // El custodio NO cambia: ADR-004 acopla custodia y estado y solo T04 la mueve.
 // El custodio registrado al momento de la disposicion queda en la traza como el
