@@ -43,11 +43,17 @@ const opFinalDisposition = "FinalDisposition"
 // Registro del hecho y norma aplicable: el destino de una unidad dispuesta
 // finalmente es un residuo peligroso. La Ley 24.051, Anexo I, categoria Y3
 // ("Desechos de medicamentos y productos farmaceuticos") lo clasifica como tal
-// -- https://www.argentina.gob.ar/normativa/nacional/450/actualizacion -- y de
-// ahi la obligacion de que la destruccion quede documentada y atribuida a un
-// responsable.
+// -- https://www.argentina.gob.ar/normativa/nacional/450/actualizacion --.
 //
-// El contrato la satisface por dos vias, ambas ya existentes: `motivo`, que el
+// Esa ley NO queda satisfecha por esta operacion, y conviene no afirmarlo: su
+// regimen exige un MANIFIESTO que acompane al residuo identificando generador,
+// transportista y operador de tratamiento, con la naturaleza y cantidad de lo
+// transportado. El prototipo no modela el traslado de residuos ni esos tres
+// actores -- ninguno es una organizacion del SNT --, y el faltante esta
+// declarado como limite de alcance en docs/alcance-prototipo.md.
+//
+// Lo que esta operacion SI aporta son los dos datos que vuelven atribuible el
+// hecho, y es lo que el criterio de EXT-8 pide del chaincode: `motivo`, que el
 // motor exige y donde viaja la referencia normativa y el acto que la respalda, y
 // CustodioActual, que esta operacion NO mueve, de modo que el responsable
 // registrado al momento de la disposicion queda en la traza.
