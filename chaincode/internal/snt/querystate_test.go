@@ -196,3 +196,45 @@ func TestSplitCompositeKeyIsInverseOfCreate(t *testing.T) {
 		}
 	}
 }
+
+// TestQueryUnitsByStateCoversEveryDeclaredState recorre el catalogo COMPLETO de
+// ADR-001 y demuestra dos cosas por cada uno de los trece estados: que la
+// consulta lo acepta -- ninguno cae en INVALID_REQUEST -- y que el indice
+// UnitByState se mantiene tambien para el, devolviendo la unidad sembrada.
+//
+// El catalogo NO se repite aca: sale de domain.States(), y
+// TestStateCatalogMatchesADR001 lo contrasta contra el Markdown de ADR-001. Con
+// una lista propia, agregar un estado a la ADR dejaria este test pasando sobre
+// trece de catorce; derivandolo, el estado nuevo entra solo.
+//
+// Los casos con resultados y vacios de los tests anteriores cubrian ocho de los
+// trece: faltaban VENCIDO, EXTRAVIADO, DETERIORADO, RETIRADO_MERCADO y
+// DEVUELTO, precisamente los estados a los que llegan los eventos
+// extraordinarios, que son el caso de auditoria que motivo la operacion.
+func TestQueryUnitsByStateCoversEveryDeclaredState(t *testing.T) {
+	catalog := domain.States()
+	if len(catalog) == 0 {
+		t.Fatal("el catalogo de estados de ADR-001 no puede estar vacio")
+	}
+
+	for _, estado := range catalog {
+		t.Run(string(estado), func(t *testing.T) {
+			stub, contract := transferFixture(t)
+			seedUnit(t, stub, estado, "GLN:"+drogueriaGLN)
+
+			units, err := contract.QueryUnitsByState(
+				testContext(stub, anmatMSP, RoleAuditor), string(estado))
+			requireNoError(t, err)
+
+			if len(units) != 1 {
+				t.Fatalf("%s devolvio %d unidades, se esperaba la sembrada", estado, len(units))
+			}
+			if units[0].Estado != estado {
+				t.Fatalf("la unidad devuelta esta en %s y se consulto %s", units[0].Estado, estado)
+			}
+			if units[0].NumeroSerie != validSerial {
+				t.Fatalf("numeroSerie = %s", units[0].NumeroSerie)
+			}
+		})
+	}
+}

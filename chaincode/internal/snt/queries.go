@@ -130,9 +130,12 @@ func readUnitHistory(
 // QueryUnitsByGTIN recupera todas las unidades registradas bajo un GTIN
 // mediante GetStateByPartialCompositeKey.
 //
-// Es la unica consulta por criterio del contrato, y opera por clave compuesta
-// parcial precisamente para que LevelDB alcance: ADR-007 (punto 2) descarto
-// CouchDB porque ninguna operacion del contrato requiere rich queries.
+// Es una de las dos consultas por criterio del contrato -- la otra es
+// QueryUnitsByState, que CC-9 (#112) agrega en esta misma version -- y opera
+// por clave compuesta parcial precisamente para que LevelDB alcance: ADR-007
+// (punto 2) descarto CouchDB porque ninguna operacion del contrato requiere
+// rich queries. Las dos comparten ese mecanismo, y es lo que permitio agregar
+// la segunda sin revisar la decision de state database.
 //
 // SIN paginacion, conforme la exclusion registrada en
 // docs/alcance-prototipo.md: con el dataset sintetico de 50.000 unidades un

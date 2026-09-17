@@ -326,18 +326,26 @@ var (
 	transitionIndex map[transitionKey]Transition
 	statePairIndex  map[statePair]struct{}
 	stateCatalog    map[State]struct{}
+	stateOrder      []State
 )
 
 func buildStateIndexes() {
 	transitionOnce.Do(func() {
 		transitionIndex = make(map[transitionKey]Transition)
 		statePairIndex = make(map[statePair]struct{})
-		stateCatalog = map[State]struct{}{
-			StateEnLaboratorio: {}, StateEnTransito: {}, StateEnCustodia: {},
-			StateEnCuarentena: {}, StateVencido: {}, StateRobado: {},
-			StateExtraviado: {}, StateDeteriorado: {}, StateRetiradoMercado: {},
-			StateProhibido: {}, StateDevuelto: {}, StateDispensado: {},
-			StateDispuestoFinal: {},
+		// El orden es el de la tabla "Estados" de ADR-001, y
+		// TestStateCatalogMatchesADR001 lo contrasta contra el Markdown de la
+		// propia ADR.
+		stateOrder = []State{
+			StateEnLaboratorio, StateEnTransito, StateEnCustodia,
+			StateEnCuarentena, StateVencido, StateRobado,
+			StateExtraviado, StateDeteriorado, StateRetiradoMercado,
+			StateProhibido, StateDevuelto, StateDispensado,
+			StateDispuestoFinal,
+		}
+		stateCatalog = make(map[State]struct{}, len(stateOrder))
+		for _, st := range stateOrder {
+			stateCatalog[st] = struct{}{}
 		}
 
 		for _, t := range transitions {
@@ -353,6 +361,22 @@ func buildStateIndexes() {
 func Transitions() []Transition {
 	out := make([]Transition, len(transitions))
 	copy(out, transitions)
+	return out
+}
+
+// States devuelve el catalogo completo de estados de ADR-001, en el orden en
+// que la ADR los declara. Devuelve una copia por la misma razon que
+// Transitions(): el catalogo es una tabla de una ADR aceptada y un consumidor no
+// debe poder alterarla.
+//
+// Existe para que un consumidor pueda RECORRER el catalogo en lugar de repetirlo
+// -- CC-9 (#112) lo necesita para demostrar que la consulta por estado acepta
+// los trece --, y para que agregar un estado a ADR-001 alcance a esos
+// consumidores sin que nadie se acuerde de actualizarlos.
+func States() []State {
+	buildStateIndexes()
+	out := make([]State, len(stateOrder))
+	copy(out, stateOrder)
 	return out
 }
 

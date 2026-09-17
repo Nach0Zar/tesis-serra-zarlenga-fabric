@@ -265,3 +265,50 @@ func TestIsKnownState(t *testing.T) {
 		t.Errorf("el estado inicial de ADR-001 es EN_LABORATORIO, no %s", InitialState)
 	}
 }
+
+// TestStateCatalogMatchesADR001 contrasta el catalogo de States() contra la
+// tabla "Estados" del Markdown de ADR-001, con el mismo criterio que
+// TestTransitionTableMatchesADR001 aplica a las transiciones.
+//
+// Sin este test, States() seria una lista en Go que se afirma igual a la de la
+// ADR: los consumidores que la recorren --CC-9 (#112) recorre el catalogo para
+// demostrar que la consulta por estado acepta todos-- estarian probando que
+// aceptan lo que el paquete declara, no lo que ADR-001 declara. Con el, la
+// diferencia deja de existir.
+func TestStateCatalogMatchesADR001(t *testing.T) {
+	raw, err := os.ReadFile("../docs/adr/001-maquina-estados-medicamento.md")
+	if err != nil {
+		t.Fatalf("no se pudo leer ADR-001: %v", err)
+	}
+
+	// La tabla de estados es la unica cuya primera celda es un estado y su
+	// segunda un tipo (Operable, Bloqueante o Terminal); la de transiciones
+	// empieza con un ID T\d\d y no matchea.
+	rowRE := regexp.MustCompile("(?m)^\\| `([A-Z_]+)` \\| (Operable|Operable condicionado|Bloqueante no terminal|Terminal) \\|")
+	matches := rowRE.FindAllStringSubmatch(string(raw), -1)
+
+	declared := make([]State, 0, len(matches))
+	for _, match := range matches {
+		declared = append(declared, State(match[1]))
+	}
+
+	catalog := States()
+	if len(catalog) != len(declared) {
+		t.Fatalf("ADR-001 declara %d estados y el paquete %d: %v vs %v",
+			len(declared), len(catalog), declared, catalog)
+	}
+	for i, want := range declared {
+		if catalog[i] != want {
+			t.Errorf("estado %d: ADR-001 declara %s y el paquete %s", i, want, catalog[i])
+		}
+		if !IsKnownState(want) {
+			t.Errorf("IsKnownState rechaza %s, que ADR-001 declara", want)
+		}
+	}
+
+	// States() devuelve una copia: alterarla no debe afectar al catalogo.
+	catalog[0] = "ALTERADO"
+	if States()[0] == "ALTERADO" {
+		t.Fatal("States() no debe exponer el catalogo interno")
+	}
+}
