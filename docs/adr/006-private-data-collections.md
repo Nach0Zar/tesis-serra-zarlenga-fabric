@@ -1,6 +1,6 @@
 # ADR-006: Mecanismo de colecciones privadas para la información comercial y el registro de operación
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-08-17
 - **Autores**: Serra, Zarlenga
 

@@ -1,6 +1,6 @@
 # ADR-010: Identidad de las organizaciones no custodiales (autoridad regulatoria y financiadores)
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-08-17
 - **Autores**: Serra, Zarlenga
 

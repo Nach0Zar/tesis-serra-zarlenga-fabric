@@ -1,6 +1,6 @@
 # ADR-008: Distribución y versionado de la matriz de transferencias en chaincode y baseline
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-08-17
 - **Autores**: Serra, Zarlenga
 
