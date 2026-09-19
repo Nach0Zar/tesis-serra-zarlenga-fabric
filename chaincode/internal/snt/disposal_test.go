@@ -468,13 +468,11 @@ func TestFinalDispositionRequiresMotivo(t *testing.T) {
 // autorizacion alguna, porque las lecturas publicas del canal no son
 // restringibles (ADR-005).
 //
-// Lo que este test NO demuestra, y el review de #118 señalo con razon, es el
-// criterio del issue en su forma global -- "la ANMAT puede auditar TODAS las
-// disposiciones finales" --: parte de una unidad conocida y no enumera el
-// conjunto. La enumeracion por estado la aporta QueryUnitsByState, que
-// implementa CC-9 (#112, PR #115) y que no esta en esta rama ni en su base. Por
-// eso EXT-8 usa `Refs #63` y no `Closes`, y el criterio global queda registrado
-// en la issue como dependiente de #112.
+// El alcance GLOBAL -- enumerar el conjunto -- lo cubre
+// TestDisposedUnitsAreEnumerableByRegulator, abajo. Los dos hacen falta: este
+// prueba que la traza de una unidad conocida es legible, y el otro que la
+// autoridad puede DESCUBRIR el conjunto sin conocer las unidades de antemano,
+// que es lo que el criterio de #63 pide.
 func TestDisposedUnitIsReadableByRegulator(t *testing.T) {
 	stub, contract := labInterventionFixture(t)
 	seedUnit(t, stub, domain.StateVencido, "GLN:"+drogueriaGLN)
@@ -494,5 +492,73 @@ func TestDisposedUnitIsReadableByRegulator(t *testing.T) {
 	requireNoError(t, err)
 	if len(history) == 0 {
 		t.Fatal("la autoridad debe poder leer el historial de la disposicion")
+	}
+}
+
+// TestDisposedUnitsAreEnumerableByRegulator cierra el criterio de #63 en su
+// forma global: "la ANMAT puede auditar TODAS las disposiciones finales".
+//
+// Hasta el merge de CC-9 (#112) esto no era demostrable -- no habia consulta por
+// estado -- y el criterio estaba registrado como pendiente. Con
+// QueryUnitsByState en develop si lo es, y el review de #118 tuvo razon en
+// pedirlo: el supuesto de que faltaba dejo de ser cierto al rebasar.
+//
+// Lo que el test verifica no es solo que la consulta responda: es que
+// FinalDisposition MANTENGA el indice UnitByState. La operacion no lo toca de
+// forma explicita -- escribe por putUnit, que es el unico camino de escritura y
+// el que sostiene el indice --, y justamente por eso conviene probarlo: si
+// alguna operacion futura escribiera por fuera de putUnit, el indice quedaria
+// desincronizado y la autoridad enumeraria un conjunto incompleto sin que nada
+// mas fallara.
+//
+// Se disponen DOS unidades y se deja una tercera en otro estado, de modo que el
+// test distingue "devuelve todo" de "devuelve lo que corresponde".
+func TestDisposedUnitsAreEnumerableByRegulator(t *testing.T) {
+	stub, contract := labInterventionFixture(t)
+	custodio := "GLN:" + drogueriaGLN
+
+	// La primera unidad es la del fixture: se dispone desde VENCIDO (T28).
+	seedUnit(t, stub, domain.StateVencido, custodio)
+	stub.txID = "tx-disposicion-1"
+	_, err := contract.FinalDisposition(
+		testContext(stub, drogueriaMSP, RoleOperator), disposalRequest())
+	requireNoError(t, err)
+
+	// La segunda, con otro numero de serie, desde DEVUELTO (T33).
+	const segundaSerie = "SN-0002-ABCD"
+	seedUnitWithSerial(t, stub, segundaSerie, domain.StateDevuelto, custodio)
+	stub.txID = "tx-disposicion-2"
+	_, err = contract.FinalDisposition(
+		testContext(stub, drogueriaMSP, RoleOperator),
+		UnitEventRequest{GTIN: validGTIN, NumeroSerie: segundaSerie, Motivo: disposalRequest().Motivo})
+	requireNoError(t, err)
+
+	// La tercera NO se dispone: queda EN_CUARENTENA para comprobar que la
+	// consulta discrimina por estado y no devuelve el universo.
+	const terceraSerie = "SN-0003-ABCD"
+	seedUnitWithSerial(t, stub, terceraSerie, domain.StateEnCuarentena, custodio)
+
+	dispuestas := queryState(t, stub, domain.StateDispuestoFinal)
+	if len(dispuestas) != 2 {
+		t.Fatalf("la autoridad enumero %d unidades dispuestas, se esperaban 2: %+v", len(dispuestas), dispuestas)
+	}
+	series := map[string]bool{}
+	for _, unidad := range dispuestas {
+		if unidad.Estado != domain.StateDispuestoFinal {
+			t.Fatalf("la consulta devolvio una unidad en %s", unidad.Estado)
+		}
+		series[unidad.NumeroSerie] = true
+	}
+	if !series[validSerial] || !series[segundaSerie] {
+		t.Fatalf("faltan unidades dispuestas en la enumeracion: %+v", series)
+	}
+	if series[terceraSerie] {
+		t.Fatal("la unidad EN_CUARENTENA no debe figurar entre las dispuestas")
+	}
+
+	// Y la que quedo fuera sigue enumerable en SU estado: la disposicion de las
+	// otras dos no rompio el resto del indice.
+	if cuarentena := queryState(t, stub, domain.StateEnCuarentena); len(cuarentena) != 1 {
+		t.Fatalf("EN_CUARENTENA enumero %d unidades, se esperaba 1", len(cuarentena))
 	}
 }

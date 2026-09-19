@@ -12,11 +12,25 @@ const opFinalDisposition = "FinalDisposition"
 // TERMINAL que estas seis transiciones alcanzan.
 //
 // Terminal significa que ADR-001 no declara ninguna fila con DISPUESTO_FINAL
-// como estado de origen. No hace falta una regla propia que bloquee las
-// operaciones posteriores: requireTransition las rechaza todas con
-// INVALID_STATE_TRANSITION, dispensacion y despacho incluidos. Es la misma
-// propiedad que el contrato ya usa para los estados bloqueantes, llevada al
-// extremo -- aca no queda ninguna salida.
+// como estado de origen, y por lo tanto que la unidad NO PUEDE SALIR de ese
+// estado. Esa es la garantia, y no un rechazo uniforme de toda escritura: cada
+// operacion valida lo suyo antes de llegar a la maquina de estados y devuelve
+// la primera condicion que falla.
+//
+//   - Las trece que llegan a la transicion -- transferencia, dispensacion, los
+//     eventos extraordinarios, Restock y esta misma --: INVALID_STATE_TRANSITION.
+//   - ReceiveTransfer y RejectTransfer: NOT_IN_TRANSIT, porque comprueban antes
+//     que la unidad este EN_TRANSITO.
+//   - RegisterUnit: UNIT_ALREADY_EXISTS. No intenta una transicion, intenta
+//     crear una clave que ya existe, y es lo que impide reciclar una unidad
+//     dispuesta registrandola de nuevo.
+//   - AuthorizeLabIntervention NO falla, y es un limite declarado del contrato:
+//     la autorizacion que emite es inconsumible, porque ejercerla exigiria una
+//     transicion que no existe.
+//
+// No hace falta una regla propia para nada de eso: la tabla de ADR-001 lo
+// produce sola, y TestDisposedUnitCannotLeaveItsState lo comprueba sobre las
+// diecisiete escrituras publicas.
 //
 // Es la operacion con mas estados de origen del contrato despues de
 // ProhibitProduct, y ADR-001 le asigna un actor distinto a casi cada fila:
@@ -72,14 +86,14 @@ const opFinalDisposition = "FinalDisposition"
 // implementacion no puede hacer. La fecha sale de GetTxTimestamp() y la escribe
 // el motor en UltimaActualizacion, nunca del reloj local.
 //
-// Auditoria de la autoridad, en dos alcances que conviene no confundir. POR
-// UNIDAD esta cubierta: las lecturas publicas del canal no son restringibles
-// (ADR-005), de modo que ANMAT audita cualquier disposicion con ReadUnit y
-// GetUnitHistory partiendo de su GTIN y numero de serie, y la transaccion emite
-// ademas su evento de unidad. GLOBAL -- enumerar todas las unidades en
-// DISPUESTO_FINAL -- exige QueryUnitsByState, que implementa CC-9 (#112) y que
-// NO esta disponible todavia: hasta que se integre, el criterio de #63 en su
-// forma global queda pendiente y asi esta registrado en la issue.
+// Auditoria de la autoridad, en sus dos alcances, ambos cubiertos. POR UNIDAD:
+// las lecturas publicas del canal no son restringibles (ADR-005), de modo que
+// ANMAT audita cualquier disposicion con ReadUnit y GetUnitHistory partiendo de
+// su GTIN y numero de serie, y la transaccion emite ademas su evento. GLOBAL:
+// QueryUnitsByState, que integro CC-9 (#112), enumera el conjunto de unidades
+// en DISPUESTO_FINAL, y esta operacion mantiene el indice UnitByState porque
+// escribe por putUnit como el resto -- TestDisposedUnitsAreEnumerableByRegulator
+// lo comprueba disponiendo varias unidades y consultando el estado.
 //
 // El custodio NO cambia: ADR-004 acopla custodia y estado y solo T04 la mueve.
 // El custodio registrado al momento de la disposicion queda en la traza como el
