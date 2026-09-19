@@ -1,6 +1,6 @@
 // Package snt implementa el chaincode `snt` del prototipo del PFI.
 //
-// Su superficie publica esta congelada en docs/api-contract.md (v2.7.1) y su
+// Su superficie publica esta congelada en docs/api-contract.md y su
 // logica debe respetar, sin excepciones:
 //
 //   - ADR-001: la maquina de estados del medicamento. El paquete compartido
@@ -24,13 +24,24 @@ package snt
 import (
 	"encoding/json"
 
+	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
+
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 )
 
 // ContractVersion es la version del contrato publico que implementa este
 // chaincode (docs/api-contract.md).
-const ContractVersion = "2.8.0"
+//
+// Es la UNICA copia del numero de version en el codigo, y
+// TestContractVersionMatchesFrozenContract la ata al encabezado del documento.
+// El resto de los comentarios y READMEs remiten al documento sin repetir el
+// numero: duplicarlo obligaba a tocar siete lugares en cada bump y en la
+// practica quedaban desalineados -- el review de esta PR y el de #118
+// reportaron el mismo desfase por separado, con valores distintos. Las
+// menciones HISTORICAS ("la version 2.4.0 afirmaba lo contrario") se conservan:
+// describen una version pasada y no pretenden nombrar la vigente.
+const ContractVersion = "2.9.0"
 
 // SNTContract es el contrato publico del chaincode `snt`.
 //
@@ -76,6 +87,22 @@ func putUnit(ctx contractapi.TransactionContextInterface, unit MedicationUnit) (
 	if err != nil {
 		return "", cerr.Internal(err, "no se pudo construir la clave de la unidad")
 	}
+
+	// El indice por estado se mantiene ACA y no en cada operacion, porque este
+	// es el unico camino de escritura de una unidad. Distribuirlo entre las
+	// operaciones dejaria que una nueva se olvidara de actualizarlo, y un indice
+	// desincronizado hace que la consulta regulatoria MIENTA: peor que no
+	// tenerla (CC-9, #112).
+	previous, err := currentUnitState(ctx, key)
+	if err != nil {
+		return "", err
+	}
+	if previous != "" && previous != unit.Estado {
+		if err := deleteUnitByStateIndex(ctx, previous, unit.GTIN, unit.NumeroSerie); err != nil {
+			return "", err
+		}
+	}
+
 	payload, err := json.Marshal(unit)
 	if err != nil {
 		return "", cerr.Internal(err, "no se pudo serializar la unidad")
@@ -83,7 +110,57 @@ func putUnit(ctx contractapi.TransactionContextInterface, unit MedicationUnit) (
 	if err := ctx.GetStub().PutState(key, payload); err != nil {
 		return "", cerr.Internal(err, "no se pudo escribir la unidad")
 	}
+	if err := writeUnitByStateIndex(ctx, unit); err != nil {
+		return "", err
+	}
 	return key, nil
+}
+
+// currentUnitState devuelve el estado CONFIRMADO de la unidad, o vacio si la
+// clave todavia no existe -- el caso del alta. Se lee antes de escribir para
+// saber que entrada de indice corresponde borrar.
+func currentUnitState(ctx contractapi.TransactionContextInterface, key string) (domain.State, error) {
+	raw, err := ctx.GetStub().GetState(key)
+	if err != nil {
+		return "", cerr.Internal(err, "no se pudo leer el estado previo de la unidad")
+	}
+	if raw == nil {
+		return "", nil
+	}
+	var stored MedicationUnit
+	if err := json.Unmarshal(raw, &stored); err != nil {
+		return "", cerr.Internal(err, "estado publico de la unidad corrupto")
+	}
+	return stored.Estado, nil
+}
+
+// writeUnitByStateIndex escribe la entrada del indice para el estado vigente.
+// El valor es un byte nulo: toda la informacion esta en la clave, y esa es la
+// convencion de Fabric para los indices de clave compuesta.
+func writeUnitByStateIndex(ctx contractapi.TransactionContextInterface, unit MedicationUnit) error {
+	indexKey, err := unitByStateKey(ctx.GetStub(), unit.Estado, unit.GTIN, unit.NumeroSerie)
+	if err != nil {
+		return cerr.Internal(err, "no se pudo construir la clave del indice por estado")
+	}
+	if err := ctx.GetStub().PutState(indexKey, []byte{0x00}); err != nil {
+		return cerr.Internal(err, "no se pudo escribir el indice por estado")
+	}
+	return nil
+}
+
+func deleteUnitByStateIndex(
+	ctx contractapi.TransactionContextInterface,
+	estado domain.State,
+	gtin, numeroSerie string,
+) error {
+	indexKey, err := unitByStateKey(ctx.GetStub(), estado, gtin, numeroSerie)
+	if err != nil {
+		return cerr.Internal(err, "no se pudo construir la clave del indice por estado")
+	}
+	if err := ctx.GetStub().DelState(indexKey); err != nil {
+		return cerr.Internal(err, "no se pudo borrar el indice por estado anterior")
+	}
+	return nil
 }
 
 // notImplemented es la respuesta de las operaciones que este chaincode declara

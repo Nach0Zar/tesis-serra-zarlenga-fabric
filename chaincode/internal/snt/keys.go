@@ -1,6 +1,7 @@
 package snt
 
 import (
+	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
 	"github.com/hyperledger/fabric-chaincode-go/v2/shim"
 )
 
@@ -32,6 +33,21 @@ const (
 	// objectTypeTransferOp + [gtin, numeroSerie, txIdDespacho] es el registro
 	// historico de una operacion de transferencia cerrada (ADR-006, punto 4).
 	objectTypeTransferOp = "TransferOp"
+
+	// objectTypeUnitByState + [estado, gtin, numeroSerie] es el INDICE
+	// SECUNDARIO que habilita la consulta por estado (CC-9, #112).
+	//
+	// Existe porque el estado no es parte de la clave de la unidad y LevelDB no
+	// admite rich queries sobre el contenido del valor. Lo que LevelDB si admite
+	// -- y es de lo que este indice se apoya -- son los rangos por clave
+	// compuesta parcial, el mismo mecanismo con el que QueryUnitsByGTIN consulta
+	// por GTIN. Por eso la consulta por estado NO obliga a revisar la decision de
+	// state database de ADR-007/NET-2.
+	//
+	// El valor de la entrada es irrelevante: toda la informacion esta en la
+	// clave. Se escribe un byte nulo, que es la convencion de Fabric para los
+	// indices de clave compuesta.
+	objectTypeUnitByState = "UnitByState"
 
 	// objectTypeReturnOp + [gtin, numeroSerie, txIdDevolucion] es el registro
 	// historico e inmutable de una devolucion T21-T24 (ADR-006, punto 4;
@@ -83,4 +99,9 @@ func unitParticipationKey(stub shim.ChaincodeStubInterface, gtin, numeroSerie, t
 func organizationParticipationKey(stub shim.ChaincodeStubInterface, mspID, txID string) (string, error) {
 	return stub.CreateCompositeKey(objectTypeParticipation,
 		[]string{participationTargetOrganization, mspID, txID})
+}
+
+// unitByStateKey construye la clave del indice secundario por estado.
+func unitByStateKey(stub shim.ChaincodeStubInterface, estado domain.State, gtin, numeroSerie string) (string, error) {
+	return stub.CreateCompositeKey(objectTypeUnitByState, []string{string(estado), gtin, numeroSerie})
 }

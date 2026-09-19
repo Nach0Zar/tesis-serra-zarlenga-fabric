@@ -1,6 +1,6 @@
 # Contrato de interfaz del chaincode `snt`
 
-- **Versión del contrato**: `2.8.0`
+- **Versión del contrato**: `2.9.0`
 - **Estado**: Congelado. Los cambios se rigen por la política de versionado (última sección): un cambio incompatible exige un PR etiquetado `breaking-change` y aprobación explícita de B (el integrante responsable de cliente y baseline, conforme la issue #11 / DES-5).
 - **Fecha**: 2026-08-13
 - **Autores**: Serra, Zarlenga
@@ -534,6 +534,20 @@ func (c *SNTContract) QueryUnitsByGTIN(ctx contractapi.TransactionContextInterfa
 - **Response**: lista de `MedicationUnitView` (posiblemente vacía).
 - **Errores**: `INVALID_REQUEST`.
 
+### `QueryUnitsByState`
+
+```go
+func (c *SNTContract) QueryUnitsByState(ctx contractapi.TransactionContextInterface, estado string) ([]MedicationUnitView, error)
+```
+
+Recupera todas las unidades que se encuentran en un estado de [ADR-001](adr/001-maquina-estados-medicamento.md). Es la operación con la que la autoridad de aplicación **enumera** —«qué unidades están robadas, extraviadas o deterioradas»—, que es una pregunta distinta de leer una unidad cuyo serial ya se conoce.
+
+- Usa `GetStateByPartialCompositeKey` sobre el **índice secundario** `UnitByState`+[`estado`,`gtin`,`numeroSerie`], que el chaincode mantiene en toda escritura de una unidad: escribe la entrada del estado nuevo y borra la del anterior en la misma transacción. El índice existe porque el estado no es parte de la clave de la unidad; el mecanismo de consulta es el mismo que usa `QueryUnitsByGTIN` y **no** requiere revisar la decisión de state database de [ADR-007](adr/007-network-topology.md) — el límite de LevelDB son las *rich queries* sobre el contenido del valor, no los rangos por clave compuesta parcial.
+- **Autorización**: ninguna, igual que `ReadUnit`, `GetUnitHistory` y `QueryUnitsByGTIN`. ADR-005 declara que la lectura del estado público no es restringible por chaincode, y restringirla sería una barrera **aparente**: quien conozca los GTIN del canal puede enumerar el universo con `QueryUnitsByGTIN` y filtrar por estado en el cliente. No muta estado.
+- **Request**: `estado`, uno de los trece valores del catálogo de ADR-001.
+- **Response**: lista de `MedicationUnitView` (posiblemente vacía).
+- **Errores**: `INVALID_REQUEST` (estado fuera del catálogo).
+
 ## Tipos de request compartidos
 
 ```json
@@ -599,7 +613,20 @@ func (c *SNTContract) QueryUnitsByGTIN(ctx contractapi.TransactionContextInterfa
 - Todo cambio a este documento requiere aprobación explícita de B antes del merge, según la story DES-5.
 - Este contrato implementa ADR-004 (transferencia en dos operaciones, destinatario declarado en PDC) y ADR-005 (financiador de solo lectura), ambas decisiones vigentes integradas en `develop`. Si alguna se revisara mediante un ADR posterior, las operaciones de transferencia o la nota del financiador deben revisarse aquí.
 - **Historial de cambios incompatibles**: `2.0.0` — el destino de `DispatchTransfer` pasa de argumento público a `transient` (clave `destinatario`), y `destinatarioPendiente` se elimina de `MedicationUnitView`, para alinear el contrato con la revisión de ADR-004 que clasifica el destinatario declarado como dato privado (PDC), no público.
-- **Historial de cambios compatibles**: `2.8.0` — alinea la columna de **actor habilitado** de `WithdrawFromMarket` con la revisión 2 de [ADR-001](adr/001-maquina-estados-medicamento.md), que resuelve DES-19: desde `EN_TRANSITO` el retiro queda reservado a ANMAT. La versión anterior habilitaba también al laboratorio titular sobre ese origen, y esa habilitación no era realizable: salir de `EN_TRANSITO` obliga a cerrar el registro de la operación en la colección privada del par (ADR-007, punto 6.c) y ADR-006 (punto 1) limita su membresía a `{emisor, receptor, regulador}`, de modo que un laboratorio ajeno al par no puede leerla ni escribirla; ampliarle la membresía le daría acceso al remito, la factura y la contraparte de transferencias de las que no es parte. Se acotan en consecuencia la nota de intervención de un laboratorio no custodio y la de eventos extraordinarios en tránsito. Ninguna firma, esquema ni `code` cambia; **sí** cambia quién puede invocar una operación en un estado de origen, y por eso es MINOR y no PATCH — mismo criterio que la `2.6.0`, que hizo esta misma alineación en tres filas. `2.7.1` — normaliza el resultado
+- **Historial de cambios compatibles**: `2.9.0` — incorpora la operación de
+  lectura `QueryUnitsByState` y el índice secundario `UnitByState` que la
+  sostiene. Cierra el criterio de auditoría regulatoria que EXT-3 (#29) no podía
+  satisfacer —enumerar las unidades en un estado— y que se derivó a CC-9 (#112):
+  la única consulta por clave parcial previa era `QueryUnitsByGTIN`, y el estado
+  no es parte de la clave de la unidad. **No** modifica la decisión de state
+  database de ADR-007/NET-2: el índice se recorre con
+  `GetStateByPartialCompositeKey`, que funciona sobre LevelDB. Agregado
+  compatible: ninguna firma existente cambia, ningún `code` del catálogo se
+  agrega ni altera su semántica; es **MINOR** por ser una operación nueva. Lo que
+  sí cambia para los clientes existentes es el **costo de escritura** de toda
+  operación que altere el estado de una unidad, que ahora mantiene además su
+  entrada de índice; el protocolo de medición debe tomar su línea base con esta
+  versión. `2.8.0` — alinea la columna de **actor habilitado** de `WithdrawFromMarket` con la revisión 2 de [ADR-001](adr/001-maquina-estados-medicamento.md), que resuelve DES-19: desde `EN_TRANSITO` el retiro queda reservado a ANMAT. La versión anterior habilitaba también al laboratorio titular sobre ese origen, y esa habilitación no era realizable: salir de `EN_TRANSITO` obliga a cerrar el registro de la operación en la colección privada del par (ADR-007, punto 6.c) y ADR-006 (punto 1) limita su membresía a `{emisor, receptor, regulador}`, de modo que un laboratorio ajeno al par no puede leerla ni escribirla; ampliarle la membresía le daría acceso al remito, la factura y la contraparte de transferencias de las que no es parte. Se acotan en consecuencia la nota de intervención de un laboratorio no custodio y la de eventos extraordinarios en tránsito. Ninguna firma, esquema ni `code` cambia; **sí** cambia quién puede invocar una operación en un estado de origen, y por eso es MINOR y no PATCH — mismo criterio que la `2.6.0`, que hizo esta misma alineación en tres filas. `2.7.1` — normaliza el resultado
   `newest-first` de `GetHistoryForKey` al orden cronológico requerido por las
   verificaciones de custodia, ahora explícito para `GetUnitHistory`. Corrige
   el falso `SECUENCIA_INVALIDA` observado por NET-6 sobre trazas legítimas.

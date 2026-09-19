@@ -3,7 +3,7 @@
 Cliente CLI para ejecutar operaciones de negocio e invocar o consultar el chaincode `snt` mediante
 [Fabric Gateway](https://github.com/hyperledger/fabric-gateway). Implementa el alcance
 de CLI-1 (#34) y CLI-2 (#35) contra el contrato público congelado en
-[`docs/api-contract.md`](../docs/api-contract.md) (v2.7.1).
+[`docs/api-contract.md`](../docs/api-contract.md), en la versión que declara su encabezado.
 
 Es una interfaz de línea de comandos; no incluye frontend.
 

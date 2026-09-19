@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
+
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 )
@@ -128,9 +130,12 @@ func readUnitHistory(
 // QueryUnitsByGTIN recupera todas las unidades registradas bajo un GTIN
 // mediante GetStateByPartialCompositeKey.
 //
-// Es la unica consulta por criterio del contrato, y opera por clave compuesta
-// parcial precisamente para que LevelDB alcance: ADR-007 (punto 2) descarto
-// CouchDB porque ninguna operacion del contrato requiere rich queries.
+// Es una de las dos consultas por criterio del contrato -- la otra es
+// QueryUnitsByState, que CC-9 (#112) agrega en esta misma version -- y opera
+// por clave compuesta parcial precisamente para que LevelDB alcance: ADR-007
+// (punto 2) descarto CouchDB porque ninguna operacion del contrato requiere
+// rich queries. Las dos comparten ese mecanismo, y es lo que permitio agregar
+// la segunda sin revisar la decision de state database.
 //
 // SIN paginacion, conforme la exclusion registrada en
 // docs/alcance-prototipo.md: con el dataset sintetico de 50.000 unidades un
@@ -165,6 +170,69 @@ func (c *SNTContract) QueryUnitsByGTIN(
 		var unit MedicationUnit
 		if err := json.Unmarshal(kv.GetValue(), &unit); err != nil {
 			return nil, cerr.Internal(err, "estado publico de la unidad corrupto")
+		}
+		units = append(units, MedicationUnitView(unit))
+	}
+	return units, nil
+}
+
+// QueryUnitsByState devuelve todas las unidades que se encuentran en un estado
+// de ADR-001, recorriendo el indice secundario UnitByState con un rango por
+// clave compuesta parcial (CC-9, #112).
+//
+// Existe porque la auditoria regulatoria necesita ENUMERAR: preguntar "que
+// unidades estan robadas, extraviadas o deterioradas" no es la misma operacion
+// que leer una unidad cuyo serial ya se conoce, y hasta ahora el contrato solo
+// permitia lo segundo. Sin ella, EXT-3 (#29) no podia satisfacer su criterio de
+// consulta por ANMAT.
+//
+// NO obliga a revisar la decision de state database de ADR-007/NET-2. El limite
+// de LevelDB son las rich queries sobre el CONTENIDO del valor; los rangos por
+// clave compuesta parcial funcionan, y son el mismo mecanismo con el que
+// QueryUnitsByGTIN ya consulta. Lo que hace falta es el indice, no otro motor.
+//
+// Autorizacion: ninguna, igual que ReadUnit, GetUnitHistory y QueryUnitsByGTIN.
+// ADR-005 declara que la lectura del estado publico no es restringible por
+// chaincode, y restringir esta consulta seria una barrera APARENTE: quien
+// conozca los GTIN del canal puede enumerar el universo con QueryUnitsByGTIN y
+// filtrar por estado del lado del cliente. Una restriccion que se evade con dos
+// llamadas no protege nada y solo simula una garantia.
+//
+// El indice lo mantiene putUnit, que es el unico camino de escritura de una
+// unidad: escribe la entrada del estado nuevo y borra la del anterior en la
+// misma transaccion.
+func (c *SNTContract) QueryUnitsByState(
+	ctx contractapi.TransactionContextInterface,
+	estado string,
+) ([]MedicationUnitView, error) {
+	if !domain.IsKnownState(domain.State(estado)) {
+		return nil, invalidRequest("estado %q fuera del catalogo de ADR-001", estado).
+			WithDetails(map[string]any{"estado": estado})
+	}
+
+	iterator, err := ctx.GetStub().GetStateByPartialCompositeKey(
+		objectTypeUnitByState, []string{estado})
+	if err != nil {
+		return nil, cerr.Internal(err, "no se pudo consultar el indice por estado")
+	}
+	defer func() { _ = iterator.Close() }()
+
+	units := []MedicationUnitView{}
+	for iterator.HasNext() {
+		kv, err := iterator.Next()
+		if err != nil {
+			return nil, cerr.Internal(err, "no se pudo leer una entrada del indice por estado")
+		}
+		// La informacion vive en la clave del indice; el valor es un byte nulo.
+		_, parts, err := ctx.GetStub().SplitCompositeKey(kv.GetKey())
+		if err != nil || len(parts) != 3 {
+			return nil, cerr.Internal(err, "entrada del indice por estado malformada")
+		}
+		unit, err := readUnit(ctx, parts[1], parts[2])
+		if err != nil {
+			// Una entrada de indice sin unidad es un estado inconsistente, no una
+			// condicion de negocio: putUnit las escribe en la misma transaccion.
+			return nil, err
 		}
 		units = append(units, MedicationUnitView(unit))
 	}
