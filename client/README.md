@@ -39,6 +39,7 @@ snt-client read-unit           --org <org> --gtin <gtin> --serial <serie>
 snt-client unit-history        --org <org> --gtin <gtin> --serial <serie>
 snt-client verify-unit         --org <org> --gtin <gtin> --serial <serie>
 snt-client query-units-by-gtin --org <org> --gtin <gtin>
+snt-client listen-anmat [--start-block <número>]
 ```
 
 Los comandos tipados cubren los tres procesos core:
@@ -100,6 +101,33 @@ make demo-core DEMO_ARGS="--serial DEMO-CORE-0002 --reject-serial DEMO-CORE-REJE
 
 Se pueden sobrescribir también `--gtin`, `--reject-serial`, `--lot`, `--expiry`, `--channel`,
 `--chaincode`, `--repo-root`, `--timeout` y `--retry-interval`.
+
+### Listener regulatorio de ANMAT
+
+`listen-anmat` se conecta exclusivamente con el perfil `anmat` y comprueba
+que su MSP sea `AnmatMSP`; el comando no admite `--org`. Después de
+establecer la suscripción de eventos del chaincode y la de bloques filtrados
+escribe `LISTENER_READY` en stderr. A partir de ese punto, stdout contiene
+JSON Lines para las alertas confirmadas `Quarantine`, `ReportExpired`,
+`ReportStolen` y `ReportLost`, y para toda transacción inválida incluida en
+un bloque de `snt-channel`.
+
+```bash
+make listen-anmat
+make listen-anmat LISTENER_ARGS="--start-block 0"
+```
+
+Sin `--start-block` observa desde el siguiente bloque confirmado. Con la
+opción realiza replay inclusivo y puede repetir registros; el `transactionId`
+permite identificarlos. No mantiene checkpoint persistente. `SIGINT` y
+`SIGTERM` cancelan el listener con salida exitosa; un payload malformado, un
+fallo de escritura o el cierre inesperado de cualquiera de los streams se
+informan como error operativo.
+
+La semántica completa, el formato de salida, la diferencia entre commit
+válido, transacción inválida y propuesta rechazada, y la demo farmacia →
+`ReportStolen` están en
+[`docs/anmat-event-listener.md`](../docs/anmat-event-listener.md).
 
 ### Acceso genérico
 

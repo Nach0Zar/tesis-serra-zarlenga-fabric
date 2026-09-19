@@ -68,6 +68,7 @@ type dependencies struct {
 	resolveProfile     func(string, string, string, string) (config.Profile, error)
 	resolveCanonicalID func(string, string) (string, error)
 	connect            func(config.Profile, string, string, time.Duration) (transactionClient, error)
+	connectEvents      func(config.Profile, string, string, time.Duration) (eventClient, error)
 	wait               func(context.Context, time.Duration) error
 }
 
@@ -85,13 +86,33 @@ func productionDependencies() dependencies {
 		) (transactionClient, error) {
 			return fabric.Connect(profile, channelName, chaincodeName, timeout)
 		},
+		connectEvents: func(
+			profile config.Profile,
+			channelName string,
+			chaincodeName string,
+			timeout time.Duration,
+		) (eventClient, error) {
+			return fabric.Connect(profile, channelName, chaincodeName, timeout)
+		},
 		wait: waitForRetry,
 	}
 }
 
 // Run ejecuta el cliente CLI y devuelve un código apto para os.Exit.
 func Run(arguments []string, stdout, stderr io.Writer, stdin io.Reader) int {
-	return run(arguments, stdout, stderr, stdin, productionDependencies())
+	return RunContext(context.Background(), arguments, stdout, stderr, stdin)
+}
+
+// RunContext ejecuta el cliente CLI y permite cancelar comandos de larga
+// duración, como el listener regulatorio.
+func RunContext(
+	ctx context.Context,
+	arguments []string,
+	stdout io.Writer,
+	stderr io.Writer,
+	stdin io.Reader,
+) int {
+	return runContext(ctx, arguments, stdout, stderr, stdin, productionDependencies())
 }
 
 func run(
@@ -101,6 +122,20 @@ func run(
 	stdin io.Reader,
 	deps dependencies,
 ) int {
+	return runContext(context.Background(), arguments, stdout, stderr, stdin, deps)
+}
+
+func runContext(
+	ctx context.Context,
+	arguments []string,
+	stdout io.Writer,
+	stderr io.Writer,
+	stdin io.Reader,
+	deps dependencies,
+) int {
+	if len(arguments) > 0 && arguments[0] == "listen-anmat" {
+		return runANMATListener(ctx, arguments[1:], stdout, stderr, deps)
+	}
 	if len(arguments) > 0 && arguments[0] == "demo-core" {
 		return runDemoCore(arguments[1:], stdout, stderr, deps)
 	}
@@ -152,7 +187,7 @@ func run(
 		return exitRuntime
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), opts.timeout)
+	ctx, cancel := context.WithTimeout(ctx, opts.timeout)
 	defer cancel()
 
 	var payload []byte
@@ -257,6 +292,7 @@ func printUsage(writer io.Writer) {
 	_, _ = fmt.Fprintln(writer, "  snt-client unit-history        --org <org> --gtin <gtin> --serial <serie>")
 	_, _ = fmt.Fprintln(writer, "  snt-client verify-unit         --org <org> --gtin <gtin> --serial <serie>")
 	_, _ = fmt.Fprintln(writer, "  snt-client query-units-by-gtin --org <org> --gtin <gtin>")
+	_, _ = fmt.Fprintln(writer, "  snt-client listen-anmat [--start-block <number>]")
 	_, _ = fmt.Fprintln(writer, "  snt-client demo-core [--repo-root <ruta>]")
 	_, _ = fmt.Fprintln(writer)
 	_, _ = fmt.Fprintln(writer, "Low-level access:")
