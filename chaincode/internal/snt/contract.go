@@ -41,7 +41,7 @@ import (
 // reportaron el mismo desfase por separado, con valores distintos. Las
 // menciones HISTORICAS ("la version 2.4.0 afirmaba lo contrario") se conservan:
 // describen una version pasada y no pretenden nombrar la vigente.
-const ContractVersion = "2.9.0"
+const ContractVersion = "2.9.1"
 
 // SNTContract es el contrato publico del chaincode `snt`.
 //

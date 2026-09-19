@@ -138,85 +138,156 @@ func requireExtraordinaryEventRole(invoker Invoker) error {
 }
 
 // resolveExtraordinaryEventActor decide con que actor logico de ADR-001 se
-// presenta el invocador, en el orden en que las alternativas son excluyentes.
+// presenta el invocador. Los caracteres NO son excluyentes -- el laboratorio
+// titular que ademas custodia la unidad reune dos --, de modo que la eleccion la
+// hace la tabla: se toma el primer caracter que la fila de ADR-001 del estado de
+// origen observado habilita.
 //
-// El destinatario declarado solo se considera cuando la unidad esta en
-// EN_TRANSITO y el evento es uno de los dos que ADR-001 le habilita. NO se
-// extiende a T14-T16 (robo, extravio, deterioro), que ADR-001 reserva al
-// custodio o a ANMAT aunque la unidad este en transito: son hechos sobre los
-// que el destinatario declarado no tiene conocimiento propio mientras la unidad
-// no este en su poder.
+// De ahi sale, sin regla propia, que el destinatario declarado pueda poner en
+// cuarentena (T09) e informar vencimiento (T13) durante el transito pero no
+// informar robo, extravio ni deterioro (T14-T16): esas tres filas no lo listan.
+// ADR-001 lo decide asi porque son hechos sobre los que el destinatario
+// declarado no tiene conocimiento propio mientras la unidad no este en su poder.
 //
-// Un invocador que no es ninguno de los tres recibe UNAUTHORIZED_CUSTODIAN, y no
-// un rechazo de transicion: el problema no es que ADR-001 no declare la
-// transicion, es que quien la pide no tiene caracter para pedirla.
+// Los dos rechazos posibles no son intercambiables:
+//
+//   - UNAUTHORIZED_CUSTODIAN cuando el invocador no reune NINGUN caracter sobre
+//     la unidad. El problema no es que ADR-001 no declare la transicion, es que
+//     quien la pide no tiene caracter para pedirla.
+//   - INVALID_STATE_TRANSITION cuando reune alguno pero la fila del estado
+//     observado no lo habilita. Ahi el problema no es quien pide, es donde: el
+//     mismo invocador podria ejecutar la operacion desde otro estado de origen.
+//     Lo emite requireTransition, nombrando al caracter rechazado.
 func resolveExtraordinaryEventActor(
 	ctx contractapi.TransactionContextInterface,
 	unit MedicationUnit,
 	invoker Invoker,
 	event domain.Event,
 ) (domain.Actor, error) {
+	transition, declared := domain.LookupTransition(unit.Estado, event)
+
+	characters, err := invokerCharacters(ctx, unit, invoker, event)
+	if err != nil {
+		return "", err
+	}
+	if len(characters) == 0 {
+		return "", cerr.New(cerr.UnauthorizedCustodian,
+			"el invocador no es el custodio actual, el destinatario declarado, "+
+				"el laboratorio titular ni la organizacion regulatoria").
+			WithDetails(map[string]any{"custodioActual": unit.CustodioActual, "estado": string(unit.Estado)})
+	}
+
+	if declared {
+		for _, actor := range characters {
+			if transition.AllowsActor(actor) {
+				return actor, nil
+			}
+		}
+	}
+
+	// El invocador tiene caracter, pero ADR-001 no lo habilita en este estado de
+	// origen. Se devuelve el primero para que requireTransition emita el rechazo
+	// de transicion nombrandolo: el problema no es quien pide, es donde.
+	return characters[0], nil
+}
+
+// invokerCharacters enumera los caracteres de ADR-001 que el invocador reune
+// sobre ESTA unidad, en orden de especificidad. Un mismo invocador puede reunir
+// varios a la vez -- el laboratorio titular que ademas custodia la unidad es el
+// caso normal de T17 --, y cual de ellos aplica no lo decide el codigo: lo
+// decide la columna "actor habilitado" de la fila de ADR-001 que corresponde al
+// estado de origen observado.
+//
+// Derivar la habilitacion de la tabla, y no de una lista de eventos escrita a
+// mano, es una correccion que EXT-5 forzo. Con una lista por EVENTO,
+// REINGRESAR_STOCK habria resuelto a LABORATORY tambien en T25 y T26, que
+// ADR-001 reserva al custodio -- el mismo defecto que EXT-6 tuvo que arreglar
+// en sentido inverso para T17. La tabla ya expresa la regla por transicion, que
+// es la granularidad en la que ADR-001 la decide; la lista era una copia de esa
+// informacion condenada a divergir.
+//
+// La tabla se consulta en DOS granularidades distintas, y las dos hacen falta:
+//
+//   - por EVENTO (eventAdmitsActor), para decidir si el invocador reune un
+//     caracter. Sostiene la distincion entre los dos codigos de rechazo: quien
+//     no reune ninguno no tiene relacion con la unidad y recibe
+//     UNAUTHORIZED_CUSTODIAN.
+//   - por TRANSICION (transition.AllowsActor, en el llamador), para decidir si
+//     el caracter reunido procede en el estado de origen observado. Quien reune
+//     alguno pero no el que la fila pide recibe INVALID_STATE_TRANSITION.
+//
+// La lectura de la PDC para resolver al destinatario declarado se hace solo
+// cuando el evento lo habilita en alguna fila y la unidad esta EN_TRANSITO: es
+// un acceso a datos privados y no corresponde ejecutarlo para averiguar algo que
+// la tabla ya niega.
+func invokerCharacters(
+	ctx contractapi.TransactionContextInterface,
+	unit MedicationUnit,
+	invoker Invoker,
+	event domain.Event,
+) ([]domain.Actor, error) {
+	// La organizacion regulatoria no acumula caracteres: no custodia unidades
+	// (ADR-010, punto 1) ni es titular de producto alguno.
 	if invoker.Org.AgentType == domain.AgentRegulator {
-		return domain.ActorANMAT, nil
-	}
-	// El LABORATORIO titular se resuelve ANTES del caso generico de custodio, y
-	// el orden es una correccion, no una preferencia. ADR-001 habilita el retiro
-	// unicamente a ANMAT y a LABORATORY: si el laboratorio tambien es el
-	// custodio -- el caso normal de T17, con la unidad todavia EN_LABORATORIO --
-	// devolver ActorCurrentCustodian lo hacia rechazar por requireTransition, y
-	// con eso el retiro VOLUNTARIO, que es el caso de uso principal de la
-	// operacion, quedaba inalcanzable.
-	//
-	// Esta resolucion es por EVENTO y no por transicion, de modo que un
-	// laboratorio queda resuelto como LABORATORY tambien cuando la unidad esta
-	// EN_TRANSITO; el rechazo lo produce entonces requireTransition, porque
-	// ADR-001 revision 2 reserva ese origen a ANMAT (DES-19). Esa division es
-	// deliberada: quien puede pedir la operacion lo decide el caracter del
-	// invocador, y en que estados procede lo decide la tabla de ADR-001, que es
-	// la unica fuente de esa regla.
-	//
-	// La lista de eventos es explicita por la misma razon que la del
-	// destinatario declarado: la habilitacion es una decision de ADR-001 por
-	// transicion. Para cualquier otro evento un laboratorio cae al caso de
-	// custodio, como corresponde.
-	if invoker.Org.AgentType == domain.AgentLaboratory && eventAllowsTitularLaboratory(event) {
-		return domain.ActorLaboratory, nil
+		return []domain.Actor{domain.ActorANMAT}, nil
 	}
 
+	var characters []domain.Actor
+
+	// El caracter de LABORATORIO se reune solo si ADR-001 lo habilita para este
+	// EVENTO en alguna de sus filas. La condicion parece redundante con la
+	// comprobacion por transicion que hace el llamador, y no lo es: sin ella,
+	// CUALQUIER organizacion LABORATORY reuniria el caracter en CUALQUIER
+	// evento, y un laboratorio sin relacion con la unidad pasaria de
+	// UNAUTHORIZED_CUSTODIAN a INVALID_STATE_TRANSITION.
+	//
+	// Los dos codigos no son intercambiables y el catalogo del contrato los
+	// define distinto: INVALID_STATE_TRANSITION dice que el estado no admite la
+	// transicion, UNAUTHORIZED_CUSTODIAN que el invocador no tiene relacion con
+	// la unidad. Un laboratorio ajeno que intente poner en cuarentena una unidad
+	// de una drogueria es el segundo caso: la transicion existe y procede, lo
+	// que no procede es que la pida el.
+	//
+	// Ser el custodio, en cambio, SI es una relacion con la unidad, y por eso
+	// ese caracter no se filtra por evento: un custodio al que ADR-001 no
+	// habilita recibe el rechazo de transicion, que es lo que corresponde -- el
+	// caso de T17-T19, donde el retiro del mercado no es del custodio.
+	if invoker.Org.AgentType == domain.AgentLaboratory && eventAdmitsActor(event, domain.ActorLaboratory) {
+		characters = append(characters, domain.ActorLaboratory)
+	}
 	if unit.CustodioActual == invoker.CanonicalID() {
-		return domain.ActorCurrentCustodian, nil
+		// ADR-009 punto 3 resuelve RECOVERY_OR_DISPOSAL_AGENT como el custodio
+		// actual registrado con rol operator: es el mismo invocador bajo otro
+		// nombre, y por eso los dos caracteres salen de la misma condicion. El
+		// rol lo exige requireExtraordinaryEventRole aguas arriba.
+		characters = append(characters, domain.ActorCurrentCustodian, domain.ActorRecoveryOrDisposalAgent)
 	}
-
-	if unit.Estado == domain.StateEnTransito && eventAllowsDeclaredRecipient(event) {
+	if unit.Estado == domain.StateEnTransito && eventAdmitsActor(event, domain.ActorDestinationAgent) {
 		op, _, found, err := findActiveTransferOperation(ctx, unit, invoker)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if found && op.DestinatarioPendiente == invoker.CanonicalID() {
-			return domain.ActorDestinationAgent, nil
+			characters = append(characters, domain.ActorDestinationAgent)
 		}
 	}
-
-	return "", cerr.New(cerr.UnauthorizedCustodian,
-		"el invocador no es el custodio actual, el destinatario declarado ni la organizacion regulatoria").
-		WithDetails(map[string]any{"custodioActual": unit.CustodioActual, "estado": string(unit.Estado)})
+	return characters, nil
 }
 
-// eventAllowsDeclaredRecipient enumera los dos eventos que ADR-001 habilita al
-// destinatario declarado durante el transito: T09 y T13. Es una lista explicita
-// y no una propiedad derivada, porque la habilitacion es una decision de ADR-001
-// por transicion y no una regla general sobre los eventos extraordinarios.
-// eventAllowsTitularLaboratory enumera los eventos que ADR-001 abre al
-// LABORATORIO titular aunque no sea el custodio actual. Es una lista explicita y
-// no una propiedad derivada, por la misma razon que la del destinatario
-// declarado: la habilitacion es una decision de ADR-001 por transicion.
+// eventAdmitsActor informa si ALGUNA fila de ADR-001 para este evento habilita
+// al actor. Es la pregunta "¿tiene sentido que este invocador se presente asi
+// para este evento?", distinta de "¿lo habilita el estado de origen observado?",
+// que responde transition.AllowsActor.
 //
-// REINGRESAR_STOCK (T27) y DISPONER_FINAL (T31) tambien lo habilitan, y se
-// agregan cuando EXT-5 (#31) y EXT-8 (#63) implementen esas operaciones.
-func eventAllowsTitularLaboratory(event domain.Event) bool {
-	return event == domain.EventRetirarMercado
-}
-
-func eventAllowsDeclaredRecipient(event domain.Event) bool {
-	return event == domain.EventPonerEnCuarentena || event == domain.EventInformarVencimiento
+// Sale de la tabla y no de una lista escrita a mano: agregar una fila a ADR-001
+// que habilite a un actor en un evento nuevo alcanza a esta funcion sin que
+// nadie se acuerde de actualizarla, que es la propiedad que EXT-5 buscaba al
+// retirar las dos listas por evento.
+func eventAdmitsActor(event domain.Event, actor domain.Actor) bool {
+	for _, transition := range domain.Transitions() {
+		if transition.Event == event && transition.AllowsActor(actor) {
+			return true
+		}
+	}
+	return false
 }

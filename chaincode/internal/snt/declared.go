@@ -19,14 +19,7 @@ import "github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 //	Dispense ............................... CC-4 (#17)
 //	ReadUnit/GetUnitHistory/
 //	  QueryUnitsByGTIN ..................... CC-5 (#18)
-//	Restock ................................ EXT-5 (#31)
 //	FinalDisposition ....................... EXT-8 (#63)
-
-// Restock cubre T25, T26 y T27. Estado resultante: EN_CUSTODIA, con
-// custodioActual sin cambios (ADR-009, punto 5).
-func (c *SNTContract) Restock(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {
-	return nil, notImplemented("Restock", "EXT-5 (#31)")
-}
 
 // FinalDisposition cubre T28-T33. Estado resultante: DISPUESTO_FINAL (terminal).
 func (c *SNTContract) FinalDisposition(_ contractapi.TransactionContextInterface, _ UnitEventRequest) (*MedicationUnitView, error) {

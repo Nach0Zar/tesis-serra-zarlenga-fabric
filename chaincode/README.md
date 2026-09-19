@@ -106,12 +106,16 @@ Tres tests distintos custodian el congelamiento del contrato, y hacen falta los 
 | `ReportExpired` | Implementada | EXT-2 (#28) |
 | `ReportStolen`, `ReportLost`, `ReportDamaged` | Implementadas | EXT-3 (#29) |
 | `ReturnProduct` | Implementada | EXT-4 (#30) |
-| `Restock` | Declarada | EXT-5 (#31) |
+| `Restock` | Implementada | EXT-5 (#31) |
 | `WithdrawFromMarket`, `ProhibitProduct` | Implementadas | EXT-6 (#32) |
 | `FinalDisposition` | Declarada | EXT-8 (#63) |
 | `VerifyTrace` | Implementada | CC-8 (#62) |
 
-Las operaciones que siguen **declaradas** —`Restock` y `FinalDisposition`— devuelven `INTERNAL_ERROR` con el detalle `{"operacion": …, "issue": …}`. El catálogo del contrato no tiene un código para «operación declarada sin implementar», y agregarlo sería un cambio MINOR del contrato que una issue de implementación no puede hacer.
+La operación que sigue **declarada** —`FinalDisposition`— devuelve `INTERNAL_ERROR` con el detalle `{"operacion": …, "issue": …}`. El catálogo del contrato no tiene un código para «operación declarada sin implementar», y agregarlo sería un cambio MINOR del contrato que una issue de implementación no puede hacer.
+
+**Cómo se resuelve el actor lógico de un evento extraordinario** (EXT-5): los caracteres de ADR-001 **no son excluyentes** —el laboratorio titular que además custodia la unidad reúne dos—, de modo que cuál aplica no lo decide el código sino la columna «actor habilitado» de la fila que corresponde al estado de origen observado: se toma el primer carácter que esa fila habilita. De ahí sale, sin regla propia, que el destinatario declarado pueda poner en cuarentena (T09) e informar vencimiento (T13) durante el tránsito pero no informar robo, extravío ni deterioro (T14–T16). `RECOVERY_OR_DISPOSAL_AGENT` se resuelve como el custodio actual registrado ([ADR-009](../docs/adr/009-return-and-recovery-semantics.md) punto 3), que es lo que hace alcanzable T25. Los dos rechazos no son intercambiables: `UNAUTHORIZED_CUSTODIAN` cuando el invocador no reúne **ningún** carácter, `INVALID_STATE_TRANSITION` cuando reúne alguno que esa fila no habilita — ahí el problema no es quién pide, es desde dónde.
+
+Antes de EXT-5 esa habilitación vivía en dos listas de eventos escritas a mano. La granularidad estaba mal: `REINGRESAR_STOCK` habría resuelto a `LABORATORY` también en T25 y T26, que ADR-001 reserva al custodio — el mismo defecto que EXT-6 tuvo que corregir en sentido inverso para T17. La tabla ya expresa la regla por transición, que es donde ADR-001 la decide.
 
 **Alcance de `WithdrawFromMarket` en tránsito** (DES-19, #116): el retiro desde `EN_TRANSITO` está reservado a la organización regulatoria. El laboratorio titular conserva T17, T18 y el retiro desde `EN_CUARENTENA` o `DEVUELTO`, pero no el origen `EN_TRANSITO`: salir de ese estado obliga a cerrar el registro de la operación en la colección privada del par ([ADR-007](../docs/adr/007-network-topology.md) punto 6.c) y [ADR-006](../docs/adr/006-private-data-collections.md) punto 1 limita su membresía a `{emisor, receptor, regulador}`, de modo que un laboratorio ajeno al par no puede cerrarla. [ADR-001](../docs/adr/001-maquina-estados-medicamento.md) habilitaba ambos actores sobre ese origen; su revisión 2 parte la fila `T19` en dos y resuelve la contradicción a favor de la membresía de las colecciones, que es la propiedad de confidencialidad que el trabajo demuestra. El rechazo del laboratorio en tránsito es `INVALID_STATE_TRANSITION`: proviene de la tabla de ADR-001, no de la autorización de intervención.
 
