@@ -1,0 +1,62 @@
+name: Baseline CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+    paths:
+      - "baseline/**"
+      - "client/cmd/datasetgen/**"
+      - "domain/**"
+      - ".github/workflows/baseline-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baseline-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, migrate, package and seed baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_PROJECT_NAME: snt_baseline_ci
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: baseline/go.mod
+          cache: true
+          cache-dependency-path: |
+            baseline/go.sum
+            client/go.sum
+
+      - name: Verify toolchain
+        run: |
+          go version
+          shellcheck --version
+          docker version
+          docker compose version
+
+      - name: Test baseline
+        run: make -C baseline test
+
+      - name: Clean baseline containers and volumes
+        if: always()
+        env:
+          SNT_BASELINE_DB_PASSWORD: cleanup-only
+          SNT_BASELINE_API_KEYS: '[]'
+        run: docker compose -f baseline/compose.yaml --profile seed down --volumes --remove-orphans

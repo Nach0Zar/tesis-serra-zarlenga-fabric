@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_DB: ${SNT_BASELINE_DB_NAME:-snt_baseline}
+      POSTGRES_USER: ${SNT_BASELINE_DB_USER:-snt_baseline}
+      POSTGRES_PASSWORD: ${SNT_BASELINE_DB_PASSWORD:?SNT_BASELINE_DB_PASSWORD must be set}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    ports:
+      - "127.0.0.1:${SNT_BASELINE_DB_PORT:-5432}:5432"
+    volumes:
+      - baseline-postgres-data:/var/lib/postgresql/data
+      - ./migrations:/migrations:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    shm_size: 128mb
+
+  api:
+    image: ${SNT_BASELINE_IMAGE:-snt-baseline:local}
+    build:
+      context: ..
+      dockerfile: baseline/Dockerfile
+    environment:
+      SNT_BASELINE_DATABASE_URL: postgres://${SNT_BASELINE_DB_USER:-snt_baseline}:${SNT_BASELINE_DB_PASSWORD:?SNT_BASELINE_DB_PASSWORD must be set}@postgres:5432/${SNT_BASELINE_DB_NAME:-snt_baseline}?sslmode=disable
+      SNT_BASELINE_API_KEYS: ${SNT_BASELINE_API_KEYS:?SNT_BASELINE_API_KEYS must be set}
+      SNT_BASELINE_LISTEN_ADDR: :8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${SNT_BASELINE_API_PORT:-8080}:8080"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null 'http://127.0.0.1:8080/v1/units?gtin=07791234567898'
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    read_only: true
+    tmpfs:
+      - /tmp
+    init: true
+
+  seed:
+    profiles: ["seed"]
+    image: ${SNT_BASELINE_IMAGE:-snt-baseline:local}
+    entrypoint: ["/usr/local/bin/snt-seed"]
+    environment:
+      SNT_BASELINE_DATABASE_URL: postgres://${SNT_BASELINE_DB_USER:-snt_baseline}:${SNT_BASELINE_DB_PASSWORD:?SNT_BASELINE_DB_PASSWORD must be set}@postgres:5432/${SNT_BASELINE_DB_NAME:-snt_baseline}?sslmode=disable
+      SNT_BASELINE_DATASET_DIR: /dataset
+    volumes:
+      - ${SNT_BASELINE_DATASET_DIR:-../build/dataset}:/dataset:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+
+volumes:
+  baseline-postgres-data:
