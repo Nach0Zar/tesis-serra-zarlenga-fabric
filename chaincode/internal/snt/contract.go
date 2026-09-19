@@ -41,7 +41,7 @@ import (
 // reportaron el mismo desfase por separado, con valores distintos. Las
 // menciones HISTORICAS ("la version 2.4.0 afirmaba lo contrario") se conservan:
 // describen una version pasada y no pretenden nombrar la vigente.
-const ContractVersion = "2.9.1"
+const ContractVersion = "2.9.2"
 
 // SNTContract es el contrato publico del chaincode `snt`.
 //
@@ -161,18 +161,4 @@ func deleteUnitByStateIndex(
 		return cerr.Internal(err, "no se pudo borrar el indice por estado anterior")
 	}
 	return nil
-}
-
-// notImplemented es la respuesta de las operaciones que este chaincode declara
-// -- porque el contrato las congela y CC-1 (#14) exige tenerlas declaradas --
-// pero cuya logica pertenece a otra issue.
-//
-// Se usa INTERNAL_ERROR porque el catalogo del contrato no tiene un codigo para
-// "operacion declarada sin implementar", y agregarlo seria un cambio MINOR del
-// contrato que una issue de implementacion no puede hacer. El detalle nombra la
-// issue duena de la operacion.
-func notImplemented(operation, owner string) error {
-	return cerr.New(cerr.InternalError,
-		"la operacion %s esta declarada por el contrato pero su implementacion pertenece a %s", operation, owner).
-		WithDetails(map[string]any{"operacion": operation, "issue": owner})
 }
