@@ -12,10 +12,20 @@ import (
 // CC-1 lo usan como precondicion; el alta real (T01) es de CC-2 (#15).
 func seedUnit(t *testing.T, stub *mockStub, estado domain.State, custodio string) {
 	t.Helper()
+	seedUnitWithSerial(t, stub, validSerial, estado, custodio)
+}
+
+// seedUnitWithSerial siembra una unidad con un numero de serie propio, para los
+// casos que necesitan mas de una unidad en el mismo stub -- la enumeracion por
+// estado, por ejemplo, no se puede comprobar con una sola.
+func seedUnitWithSerial(
+	t *testing.T, stub *mockStub, numeroSerie string, estado domain.State, custodio string,
+) {
+	t.Helper()
 	ctx := testContext(stub, anmatMSP, RoleRegulatoryAdmin)
 	_, err := putUnit(ctx, MedicationUnit{
 		GTIN:                validGTIN,
-		NumeroSerie:         validSerial,
+		NumeroSerie:         numeroSerie,
 		Lote:                "L2026-014",
 		FechaVencimiento:    "2027-12-31",
 		CustodioActual:      custodio,

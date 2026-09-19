@@ -102,33 +102,46 @@ func TestChaincodeBuildsWithContractAPI(t *testing.T) {
 	}
 }
 
-// TestDeclaredOperationsReportTheirOwner verifica que las operaciones que este
-// scaffold declara sin implementar devuelvan un error tipificado que nombre a
-// su issue duena, en lugar de fallar de forma opaca.
-func TestDeclaredOperationsReportTheirOwner(t *testing.T) {
-	stub := newMockStub()
-	ctx := testContext(stub, labMSP, RoleOperator)
-	contract := new(SNTContract)
+// TestNoOperationRemainsAStub fija la invariante que reemplaza a la de CC-1
+// (#14): ninguna operacion del contrato devuelve ya el error de stub.
+//
+// Hasta EXT-8 (#63) el test simetrico comprobaba que las operaciones declaradas
+// SIN implementar nombraran a su issue duena. Con la ultima implementada, ese
+// test se queda sin sujeto, y borrarlo sin reemplazo dejaria sin cubrir la
+// direccion que ahora importa: que nadie reintroduzca un stub en silencio.
+//
+// Recorre contractOperations -- la misma lista que contrasta las firmas contra
+// el contrato congelado -- e invoca cada operacion con argumentos cero sobre un
+// registro vacio. NO se espera que ninguna tenga exito: la mayoria falla con
+// ORG_NOT_REGISTERED o INVALID_REQUEST, y eso esta bien. Lo unico que se
+// rechaza es la firma del stub: INTERNAL_ERROR con `details.issue`.
+func TestNoOperationRemainsAStub(t *testing.T) {
+	contractType := reflect.TypeOf(&SNTContract{})
 
-	pending := map[string]func() error{
-		"FinalDisposition": func() error {
-			_, err := contract.FinalDisposition(ctx, UnitEventRequest{})
-			return err
-		},
-	}
-
-	for name, invoke := range pending {
+	for _, name := range contractOperations {
 		t.Run(name, func(t *testing.T) {
-			err := invoke()
+			method, found := contractType.MethodByName(name)
+			if !found {
+				t.Fatalf("el chaincode no declara %s", name)
+			}
+
+			stub := newMockStub()
+			args := []reflect.Value{
+				reflect.ValueOf(new(SNTContract)),
+				reflect.ValueOf(testContext(stub, labMSP, RoleOperator)),
+			}
+			for i := len(args); i < method.Type.NumIn(); i++ {
+				args = append(args, reflect.Zero(method.Type.In(i)))
+			}
+
+			results := method.Func.Call(args)
+			err, _ := results[len(results)-1].Interface().(error)
+			if err == nil {
+				return
+			}
 			parsed, ok := cerr.Parse(err)
-			if !ok {
-				t.Fatalf("%s no devolvio un error con el formato del contrato: %v", name, err)
-			}
-			if parsed.Code != cerr.InternalError {
-				t.Fatalf("%s devolvio %s", name, parsed.Code)
-			}
-			if parsed.Details["issue"] == nil {
-				t.Fatalf("%s no nombra a la issue duena de su implementacion", name)
+			if ok && parsed.Code == cerr.InternalError && parsed.Details["issue"] != nil {
+				t.Fatalf("%s sigue siendo un stub de %v", name, parsed.Details["issue"])
 			}
 		})
 	}
