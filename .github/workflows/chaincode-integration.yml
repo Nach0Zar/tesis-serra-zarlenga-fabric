@@ -90,8 +90,8 @@ jobs:
           python3 -m unittest discover -s network/tests -v
           ./network/tests/test-pdc-evidence-retry.sh
           bash network/tests/test-endorsement-evidence.sh
-          bash -n network/network.sh test/integration/pdc-evidence.sh test/integration/endorsement-evidence.sh network/tests/test-pdc-evidence-retry.sh network/tests/test-endorsement-evidence.sh
-          shellcheck network/network.sh test/integration/pdc-evidence.sh test/integration/endorsement-evidence.sh network/tests/test-pdc-evidence-retry.sh network/tests/test-endorsement-evidence.sh
+          bash -n network/network.sh test/integration/pdc-evidence.sh test/integration/endorsement-evidence.sh test/integration/functional-e2e.sh network/tests/test-pdc-evidence-retry.sh network/tests/test-endorsement-evidence.sh
+          shellcheck network/network.sh test/integration/pdc-evidence.sh test/integration/endorsement-evidence.sh test/integration/functional-e2e.sh network/tests/test-pdc-evidence-retry.sh network/tests/test-endorsement-evidence.sh
 
       - name: Generate cryptographic material
         shell: bash
@@ -129,6 +129,8 @@ jobs:
           python3 network/scripts/verify-net6-evidence.py run \
             --directory "${NET6_RUN_DIR}" --manifest "${NET6_RUN_DIR}/artifacts.json" \
             --channel "${SNT_CHANNEL_NAME}"
+
+          ./test/integration/functional-e2e.sh
 
       - name: Verify restart and idempotence
         shell: bash
