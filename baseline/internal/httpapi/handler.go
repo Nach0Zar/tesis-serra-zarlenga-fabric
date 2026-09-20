@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/baseline/internal/core"
+	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
 )
 
 const maxBodyBytes = 64 << 10
@@ -23,15 +24,33 @@ type Service interface {
 	Authenticate(string) (core.Credential, error)
 	RegisterUnit(context.Context, core.Credential, core.RegisterUnitRequest) (core.MedicationUnit, error)
 	QueryUnitsByGTIN(context.Context, string) ([]core.MedicationUnit, error)
+	QueryUnitsByState(context.Context, domain.State) ([]core.MedicationUnit, error)
 	ReadUnit(context.Context, string, string) (core.MedicationUnit, error)
 	GetUnitHistory(context.Context, string, string) ([]core.HistoryEntry, error)
 	Dispatch(context.Context, core.Credential, string, string, core.DispatchRequest) (core.MedicationUnit, error)
 	Receive(context.Context, core.Credential, string, string, *core.CommercialData) (core.MedicationUnit, error)
 	Reject(context.Context, core.Credential, string, string, core.RejectRequest) (core.MedicationUnit, error)
 	Dispense(context.Context, core.Credential, string, string) (core.MedicationUnit, error)
+	Quarantine(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error)
+	ReleaseQuarantine(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error)
+	ReportExpired(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error)
+	ReportStolen(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error)
+	ReportLost(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error)
+	ReportDamaged(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error)
+	ReturnProduct(context.Context, core.Credential, string, string, core.ReturnProductRequest) (core.MedicationUnit, error)
+	Restock(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error)
+	WithdrawFromMarket(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error)
+	ProhibitProduct(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error)
+	FinalDisposition(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error)
+	AuthorizeLabIntervention(context.Context, core.Credential, string, string, core.AuthorizeLabInterventionRequest) (core.LabInterventionView, error)
+	RevokeLabIntervention(context.Context, core.Credential, string, string, core.RevokeLabInterventionRequest) (core.LabInterventionView, error)
+	VerifyUnit(context.Context, core.Credential, string, string) (core.UnitVerdict, error)
+	VerifyTrace(context.Context, core.Credential, string, string) (core.TraceVerdict, error)
 	RegisterOrganization(context.Context, core.Credential, core.RegisterOrganizationRequest) (core.Organization, error)
 	SetOrganizationActive(context.Context, core.Credential, string, bool) (core.Organization, error)
 }
+
+type unitEventFunc func(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error)
 
 func New(store Service, logger *slog.Logger) http.Handler {
 	if logger == nil {
@@ -47,6 +66,21 @@ func New(store Service, logger *slog.Logger) http.Handler {
 	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/receive", handler.receive)
 	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/reject", handler.reject)
 	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/dispense", handler.dispense)
+	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/quarantine", handler.unitEvent(store.Quarantine))
+	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/release-quarantine", handler.unitEvent(store.ReleaseQuarantine))
+	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/report-expired", handler.unitEvent(store.ReportExpired))
+	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/report-stolen", handler.unitEvent(store.ReportStolen))
+	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/report-lost", handler.unitEvent(store.ReportLost))
+	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/report-damaged", handler.unitEvent(store.ReportDamaged))
+	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/return", handler.returnProduct)
+	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/restock", handler.unitEvent(store.Restock))
+	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/withdraw-from-market", handler.unitEvent(store.WithdrawFromMarket))
+	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/prohibit-product", handler.unitEvent(store.ProhibitProduct))
+	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/final-disposition", handler.unitEvent(store.FinalDisposition))
+	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/authorize-lab-intervention", handler.authorizeLabIntervention)
+	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/revoke-lab-intervention", handler.revokeLabIntervention)
+	mux.HandleFunc("GET /v1/units/{gtin}/{numeroSerie}/verify-unit", handler.verifyUnit)
+	mux.HandleFunc("GET /v1/units/{gtin}/{numeroSerie}/verify-trace", handler.verifyTrace)
 	mux.HandleFunc("POST /v1/organizations", handler.registerOrganization)
 	mux.HandleFunc("PATCH /v1/organizations/{mspId}", handler.setOrganizationActive)
 	return mux
@@ -154,7 +188,20 @@ func (h *Handler) registerUnit(response http.ResponseWriter, request *http.Reque
 }
 
 func (h *Handler) queryUnits(response http.ResponseWriter, request *http.Request) {
-	units, err := h.store.QueryUnitsByGTIN(request.Context(), request.URL.Query().Get("gtin"))
+	gtin := request.URL.Query().Get("gtin")
+	state := request.URL.Query().Get("estado")
+	if (gtin == "") == (state == "") {
+		h.writeError(response, core.NewError(core.InvalidRequest,
+			"la consulta debe incluir exactamente uno de los parametros gtin o estado"))
+		return
+	}
+	var units []core.MedicationUnit
+	var err error
+	if gtin != "" {
+		units, err = h.store.QueryUnitsByGTIN(request.Context(), gtin)
+	} else {
+		units, err = h.store.QueryUnitsByState(request.Context(), domain.State(state))
+	}
 	if err != nil {
 		h.writeError(response, err)
 		return
@@ -253,6 +300,118 @@ func (h *Handler) dispense(response http.ResponseWriter, request *http.Request) 
 		return
 	}
 	writeJSON(response, http.StatusOK, unit)
+}
+
+func (h *Handler) unitEvent(operation unitEventFunc) http.HandlerFunc {
+	return func(response http.ResponseWriter, request *http.Request) {
+		credential, err := h.credential(request)
+		if err != nil {
+			h.writeError(response, err)
+			return
+		}
+		var input core.UnitEventRequest
+		if err := decodeJSON(response, request, &input); err != nil {
+			h.writeError(response, err)
+			return
+		}
+		unit, err := operation(request.Context(), credential,
+			request.PathValue("gtin"), request.PathValue("numeroSerie"), input)
+		if err != nil {
+			h.writeError(response, err)
+			return
+		}
+		writeJSON(response, http.StatusOK, unit)
+	}
+}
+
+func (h *Handler) returnProduct(response http.ResponseWriter, request *http.Request) {
+	credential, err := h.credential(request)
+	if err != nil {
+		h.writeError(response, err)
+		return
+	}
+	var input core.ReturnProductRequest
+	if err := decodeJSON(response, request, &input); err != nil {
+		h.writeError(response, err)
+		return
+	}
+	unit, err := h.store.ReturnProduct(request.Context(), credential,
+		request.PathValue("gtin"), request.PathValue("numeroSerie"), input)
+	if err != nil {
+		h.writeError(response, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, unit)
+}
+
+func (h *Handler) authorizeLabIntervention(response http.ResponseWriter, request *http.Request) {
+	credential, err := h.credential(request)
+	if err != nil {
+		h.writeError(response, err)
+		return
+	}
+	var input core.AuthorizeLabInterventionRequest
+	if err := decodeJSON(response, request, &input); err != nil {
+		h.writeError(response, err)
+		return
+	}
+	view, err := h.store.AuthorizeLabIntervention(request.Context(), credential,
+		request.PathValue("gtin"), request.PathValue("numeroSerie"), input)
+	if err != nil {
+		h.writeError(response, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, view)
+}
+
+func (h *Handler) revokeLabIntervention(response http.ResponseWriter, request *http.Request) {
+	credential, err := h.credential(request)
+	if err != nil {
+		h.writeError(response, err)
+		return
+	}
+	var input core.RevokeLabInterventionRequest
+	if err := decodeJSON(response, request, &input); err != nil {
+		h.writeError(response, err)
+		return
+	}
+	view, err := h.store.RevokeLabIntervention(request.Context(), credential,
+		request.PathValue("gtin"), request.PathValue("numeroSerie"), input)
+	if err != nil {
+		h.writeError(response, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, view)
+}
+
+func (h *Handler) verifyUnit(response http.ResponseWriter, request *http.Request) {
+	credential, err := h.credential(request)
+	if err != nil {
+		h.writeError(response, err)
+		return
+	}
+	verdict, err := h.store.VerifyUnit(request.Context(), credential,
+		request.PathValue("gtin"), request.PathValue("numeroSerie"))
+	if err != nil {
+		h.writeError(response, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, verdict)
+}
+
+func (h *Handler) verifyTrace(response http.ResponseWriter, request *http.Request) {
+	credential, err := h.credential(request)
+	if err != nil {
+		h.writeError(response, err)
+		return
+	}
+	verdict, err := h.store.VerifyTrace(request.Context(), credential,
+		request.PathValue("gtin"), request.PathValue("numeroSerie"))
+	if err != nil {
+		h.writeError(response, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, verdict)
 }
 
 func (h *Handler) registerOrganization(response http.ResponseWriter, request *http.Request) {

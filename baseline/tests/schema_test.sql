@@ -190,6 +190,16 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM pg_indexes
          WHERE schemaname = 'public'
+           AND tablename = 'medication_units'
+           AND indexname = 'medication_units_state_gtin_serial_idx'
+           AND indexdef LIKE '%(estado, gtin, numero_serie)%'
+    ) THEN
+        RAISE EXCEPTION 'missing medication_units state query index';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_indexes
+         WHERE schemaname = 'public'
            AND tablename = 'transfer_operations'
            AND indexname = 'transfer_operations_one_active_per_unit_idx'
            AND indexdef LIKE '%WHERE (estado = %ACTIVA%'

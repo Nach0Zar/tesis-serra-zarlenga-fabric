@@ -64,6 +64,76 @@ type RejectRequest struct {
 	Motivo string `json:"motivo"`
 }
 
+type UnitEventRequest struct {
+	Motivo string `json:"motivo"`
+}
+
+type ReturnProductRequest struct {
+	Motivo   string `json:"motivo"`
+	Receptor string `json:"receptor,omitempty"`
+}
+
+type LabInterventionOperation string
+
+const (
+	LabOpWithdrawFromMarket LabInterventionOperation = "WITHDRAW_FROM_MARKET"
+	LabOpRestock            LabInterventionOperation = "RESTOCK"
+	LabOpFinalDisposition   LabInterventionOperation = "FINAL_DISPOSITION"
+)
+
+type LabInterventionState string
+
+const (
+	LabInterventionActive   LabInterventionState = "ACTIVA"
+	LabInterventionConsumed LabInterventionState = "CONSUMIDA"
+	LabInterventionRevoked  LabInterventionState = "REVOCADA"
+)
+
+type AuthorizeLabInterventionRequest struct {
+	Laboratorio string                   `json:"laboratorio"`
+	Operacion   LabInterventionOperation `json:"operacion"`
+	Motivo      string                   `json:"motivo"`
+	ExpiraEn    string                   `json:"expiraEn"`
+}
+
+type RevokeLabInterventionRequest struct {
+	Motivo string `json:"motivo"`
+}
+
+type LabInterventionView struct {
+	GTIN             string                   `json:"gtin"`
+	NumeroSerie      string                   `json:"numeroSerie"`
+	Laboratorio      string                   `json:"laboratorio"`
+	Operacion        LabInterventionOperation `json:"operacion"`
+	Motivo           string                   `json:"motivo"`
+	ExpiraEn         string                   `json:"expiraEn"`
+	Estado           LabInterventionState     `json:"estado"`
+	EmitidaPor       string                   `json:"emitidaPor"`
+	EmitidaEn        string                   `json:"emitidaEn"`
+	ConsumidaEn      string                   `json:"consumidaEn,omitempty"`
+	RevocadaEn       string                   `json:"revocadaEn,omitempty"`
+	MotivoRevocacion string                   `json:"motivoRevocacion,omitempty"`
+}
+
+type TraceCheck struct {
+	Check     string `json:"check"`
+	Resultado string `json:"resultado"`
+	Detalle   string `json:"detalle"`
+}
+
+type UnitVerdict struct {
+	Autentica      bool         `json:"autentica"`
+	Motivo         string       `json:"motivo"`
+	Estado         domain.State `json:"estado"`
+	Verificaciones []TraceCheck `json:"verificaciones"`
+}
+
+type TraceVerdict struct {
+	Legitima       bool         `json:"legitima"`
+	Motivo         string       `json:"motivo"`
+	Verificaciones []TraceCheck `json:"verificaciones"`
+}
+
 type RegisterOrganizationRequest struct {
 	MSPID     string           `json:"mspId"`
 	ID        string           `json:"id"`
