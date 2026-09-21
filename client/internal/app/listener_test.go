@@ -211,14 +211,14 @@ func TestWriteBusinessEventEmitsFourANMATAlerts(t *testing.T) {
 		"ReportStolen",
 		"ReportLost",
 	} {
-		written, err := writeBusinessEvent(&output, fabric.ChaincodeEvent{
+		err := writeBusinessEvent(&output, fabric.ChaincodeEvent{
 			BlockNumber:   uint64(index + 10),
 			TransactionID: "tx-" + eventName,
 			EventName:     eventName,
 			Payload:       []byte(`{"gtin":"07791234567898","numeroSerie":"SN-1"}`),
 		})
-		if err != nil || !written {
-			t.Fatalf("writeBusinessEvent(%s) = written %t, err %v", eventName, written, err)
+		if err != nil {
+			t.Fatalf("writeBusinessEvent(%s) error = %v", eventName, err)
 		}
 	}
 
@@ -241,30 +241,45 @@ func TestWriteBusinessEventEmitsFourANMATAlerts(t *testing.T) {
 }
 
 func TestWriteBusinessEventIgnoresOtherConfirmedEvents(t *testing.T) {
-	var output bytes.Buffer
-	written, err := writeBusinessEvent(&output, fabric.ChaincodeEvent{
-		EventName: "RegisterUnit",
-		Payload:   []byte(`{"gtin":"07791234567898"}`),
-	})
-	if err != nil || written || output.Len() != 0 {
-		t.Fatalf(
-			"writeBusinessEvent() = written %t, err %v, output %q",
-			written,
-			err,
-			output.String(),
-		)
+	for _, eventName := range []string{
+		"RegisterUnit",
+		"DispatchTransfer",
+		"ReceiveTransfer",
+		"RejectTransfer",
+		"Dispense",
+		"ReleaseQuarantine",
+		"ReportDamaged",
+		"WithdrawFromMarket",
+		"ProhibitProduct",
+		"ReturnProduct",
+		"Restock",
+		"FinalDisposition",
+	} {
+		var output bytes.Buffer
+		err := writeBusinessEvent(&output, fabric.ChaincodeEvent{
+			EventName: eventName,
+			Payload:   []byte(`{"gtin":"07791234567898"}`),
+		})
+		if err != nil || output.Len() != 0 {
+			t.Fatalf(
+				"writeBusinessEvent(%s) = err %v, output %q",
+				eventName,
+				err,
+				output.String(),
+			)
+		}
 	}
 }
 
 func TestWriteBusinessEventRejectsMalformedPayload(t *testing.T) {
 	for _, payload := range [][]byte{[]byte("{"), []byte("null"), []byte("[]")} {
-		written, err := writeBusinessEvent(io.Discard, fabric.ChaincodeEvent{
+		err := writeBusinessEvent(io.Discard, fabric.ChaincodeEvent{
 			TransactionID: "tx-malformed",
 			EventName:     "ReportStolen",
 			Payload:       payload,
 		})
-		if err == nil || written {
-			t.Fatalf("payload %q = written %t, err %v", payload, written, err)
+		if err == nil {
+			t.Fatalf("payload %q error = nil", payload)
 		}
 	}
 }
@@ -296,7 +311,7 @@ func TestListenerReportsInvalidTransaction(t *testing.T) {
 }
 
 func TestListenerTreatsOutputFailureAsOperationalError(t *testing.T) {
-	_, err := writeBusinessEvent(failingWriter{}, fabric.ChaincodeEvent{
+	err := writeBusinessEvent(failingWriter{}, fabric.ChaincodeEvent{
 		TransactionID: "tx-output",
 		EventName:     "ReportLost",
 		Payload:       []byte(`{"gtin":"07791234567898"}`),

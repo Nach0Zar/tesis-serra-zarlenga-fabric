@@ -240,7 +240,7 @@ func listenANMAT(
 				}
 				return errors.New("chaincode event stream closed unexpectedly")
 			}
-			if _, err := writeBusinessEvent(stdout, event); err != nil {
+			if err := writeBusinessEvent(stdout, event); err != nil {
 				return err
 			}
 		case transaction, ok := <-invalidTransactions:
@@ -257,9 +257,9 @@ func listenANMAT(
 	}
 }
 
-func writeBusinessEvent(writer io.Writer, event fabric.ChaincodeEvent) (bool, error) {
+func writeBusinessEvent(writer io.Writer, event fabric.ChaincodeEvent) error {
 	if !isANMATAlert(event.EventName) {
-		return false, nil
+		return nil
 	}
 
 	var unit map[string]json.RawMessage
@@ -267,7 +267,7 @@ func writeBusinessEvent(writer io.Writer, event fabric.ChaincodeEvent) (bool, er
 		if err == nil {
 			err = errors.New("payload is not a JSON object")
 		}
-		return false, fmt.Errorf(
+		return fmt.Errorf(
 			"decode %s payload for transaction %s: %w",
 			event.EventName,
 			event.TransactionID,
@@ -281,9 +281,9 @@ func writeBusinessEvent(writer io.Writer, event fabric.ChaincodeEvent) (bool, er
 		EventName:     event.EventName,
 		Unit:          append(json.RawMessage(nil), event.Payload...),
 	}); err != nil {
-		return false, fmt.Errorf("write valid business event: %w", err)
+		return fmt.Errorf("write valid business event: %w", err)
 	}
-	return true, nil
+	return nil
 }
 
 func writeInvalidTransaction(

@@ -64,6 +64,14 @@ Una de las cuatro alertas de negocio confirmadas:
 Los únicos nombres que producen una alerta son `Quarantine`,
 `ReportExpired`, `ReportStolen` y `ReportLost`. Los demás eventos válidos
 del catálogo DES-5 se consumen pero se omiten de la salida regulatoria.
+`ReportDamaged` también se emite y se conserva en el ledger, pero no genera
+una alerta de esta CLI porque #64 limita expresamente el conjunto a esas
+cuatro operaciones. Esta delimitación del prototipo no implica que el
+deterioro carezca de relevancia regulatoria: el art. 8.e de la
+[Disposición ANMAT 3683/2011](https://www.argentina.gob.ar/normativa/nacional/disposici%C3%B3n-3683-2011-182665/texto)
+incluye el código deteriorado/destruido entre los movimientos que deben
+comunicarse. Ampliar el conjunto de alertas requiere un criterio de alcance
+explícito.
 
 Una transacción ordenada e incluida en un bloque, pero invalidada por los
 peers:
