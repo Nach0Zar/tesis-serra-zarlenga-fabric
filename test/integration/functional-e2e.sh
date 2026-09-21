@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+export SNT_EVIDENCE_DIR="${REPOSITORY_ROOT}/build/evidence/ext-7"
 # shellcheck source=network/network.sh
 source "${REPOSITORY_ROOT}/network/network.sh"
 
