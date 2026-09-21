@@ -120,16 +120,18 @@ func TestHTTPToPostgreSQLCoreFlow(t *testing.T) {
 
 func requestGETJSON(t *testing.T, url, key string, target any) {
 	t.Helper()
+	// #nosec G704 -- los callers usan exclusivamente el servidor httptest local.
 	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	request.Header.Set("X-Org-Key", key)
+	// #nosec G704 -- request conserva la URL del servidor httptest local.
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		payload, _ := io.ReadAll(response.Body)
 		t.Fatalf("%s returned %d: %s", url, response.StatusCode, payload)

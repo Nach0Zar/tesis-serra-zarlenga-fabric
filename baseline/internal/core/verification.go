@@ -40,6 +40,7 @@ type custodyChainResult struct {
 	Detail  string
 }
 
+// VerifyUnit comprueba autenticidad sobre un snapshot de solo lectura.
 func (s *Store) VerifyUnit(
 	ctx context.Context,
 	credential Credential,
@@ -113,6 +114,7 @@ func (s *Store) VerifyUnit(
 	return verdict, nil
 }
 
+// VerifyTrace comprueba legitimidad sobre un snapshot de solo lectura.
 func (s *Store) VerifyTrace(
 	ctx context.Context,
 	credential Credential,

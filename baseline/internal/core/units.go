@@ -191,6 +191,7 @@ func (s *Store) QueryUnitsByGTIN(ctx context.Context, gtin string) ([]Medication
 	return units, nil
 }
 
+// QueryUnitsByState devuelve unidades en estado conocido y orden deterministico.
 func (s *Store) QueryUnitsByState(ctx context.Context, state domain.State) ([]MedicationUnit, error) {
 	if !domain.IsKnownState(state) {
 		return nil, NewError(InvalidRequest, "el estado %q no pertenece al catalogo de ADR-001", state).

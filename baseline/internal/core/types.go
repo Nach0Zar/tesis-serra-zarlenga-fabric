@@ -64,31 +64,38 @@ type RejectRequest struct {
 	Motivo string `json:"motivo"`
 }
 
+// UnitEventRequest documenta la causa de un evento extraordinario.
 type UnitEventRequest struct {
 	Motivo string `json:"motivo"`
 }
 
+// ReturnProductRequest agrega el receptor opcional de una devolucion.
 type ReturnProductRequest struct {
 	Motivo   string `json:"motivo"`
 	Receptor string `json:"receptor,omitempty"`
 }
 
+// LabInterventionOperation identifica la operacion autorizada al laboratorio.
 type LabInterventionOperation string
 
+// Operaciones admitidas para la intervencion de laboratorio.
 const (
 	LabOpWithdrawFromMarket LabInterventionOperation = "WITHDRAW_FROM_MARKET"
 	LabOpRestock            LabInterventionOperation = "RESTOCK"
 	LabOpFinalDisposition   LabInterventionOperation = "FINAL_DISPOSITION"
 )
 
+// LabInterventionState es el estado persistido de una autorizacion.
 type LabInterventionState string
 
+// Estados persistidos de la intervencion de laboratorio.
 const (
 	LabInterventionActive   LabInterventionState = "ACTIVA"
 	LabInterventionConsumed LabInterventionState = "CONSUMIDA"
 	LabInterventionRevoked  LabInterventionState = "REVOCADA"
 )
 
+// AuthorizeLabInterventionRequest solicita una autorizacion regulatoria.
 type AuthorizeLabInterventionRequest struct {
 	Laboratorio string                   `json:"laboratorio"`
 	Operacion   LabInterventionOperation `json:"operacion"`
@@ -96,10 +103,12 @@ type AuthorizeLabInterventionRequest struct {
 	ExpiraEn    string                   `json:"expiraEn"`
 }
 
+// RevokeLabInterventionRequest documenta la causa de una revocacion.
 type RevokeLabInterventionRequest struct {
 	Motivo string `json:"motivo"`
 }
 
+// LabInterventionView refleja la autorizacion vigente de una unidad.
 type LabInterventionView struct {
 	GTIN             string                   `json:"gtin"`
 	NumeroSerie      string                   `json:"numeroSerie"`
@@ -115,12 +124,14 @@ type LabInterventionView struct {
 	MotivoRevocacion string                   `json:"motivoRevocacion,omitempty"`
 }
 
+// TraceCheck es una comprobacion ordenada de un veredicto.
 type TraceCheck struct {
 	Check     string `json:"check"`
 	Resultado string `json:"resultado"`
 	Detalle   string `json:"detalle"`
 }
 
+// UnitVerdict es el veredicto de autenticidad de una unidad.
 type UnitVerdict struct {
 	Autentica      bool         `json:"autentica"`
 	Motivo         string       `json:"motivo"`
@@ -128,6 +139,7 @@ type UnitVerdict struct {
 	Verificaciones []TraceCheck `json:"verificaciones"`
 }
 
+// TraceVerdict es el veredicto de legitimidad de una traza.
 type TraceVerdict struct {
 	Legitima       bool         `json:"legitima"`
 	Motivo         string       `json:"motivo"`

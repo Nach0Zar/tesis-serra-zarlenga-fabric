@@ -33,42 +33,52 @@ type eventPrecondition func(
 	time.Time,
 ) error
 
+// Quarantine registra la puesta en cuarentena de una unidad.
 func (s *Store) Quarantine(ctx context.Context, credential Credential, gtin, serial string, req UnitEventRequest) (MedicationUnit, error) {
 	return s.applyExtraordinaryEvent(ctx, credential, gtin, serial, req, domain.EventPonerEnCuarentena, opQuarantine, false, nil)
 }
 
+// ReleaseQuarantine registra la liberacion de la cuarentena.
 func (s *Store) ReleaseQuarantine(ctx context.Context, credential Credential, gtin, serial string, req UnitEventRequest) (MedicationUnit, error) {
 	return s.applyExtraordinaryEvent(ctx, credential, gtin, serial, req, domain.EventLiberarCuarentena, opReleaseQuarantine, false, nil)
 }
 
+// ReportExpired registra el vencimiento de una unidad.
 func (s *Store) ReportExpired(ctx context.Context, credential Credential, gtin, serial string, req UnitEventRequest) (MedicationUnit, error) {
 	return s.applyExtraordinaryEvent(ctx, credential, gtin, serial, req, domain.EventInformarVencimiento, opReportExpired, false, requireExpiredByDateInTransit)
 }
 
+// ReportStolen registra el robo de una unidad.
 func (s *Store) ReportStolen(ctx context.Context, credential Credential, gtin, serial string, req UnitEventRequest) (MedicationUnit, error) {
 	return s.applyExtraordinaryEvent(ctx, credential, gtin, serial, req, domain.EventInformarRobo, opReportStolen, false, nil)
 }
 
+// ReportLost registra el extravio de una unidad.
 func (s *Store) ReportLost(ctx context.Context, credential Credential, gtin, serial string, req UnitEventRequest) (MedicationUnit, error) {
 	return s.applyExtraordinaryEvent(ctx, credential, gtin, serial, req, domain.EventInformarExtravio, opReportLost, false, nil)
 }
 
+// ReportDamaged registra el deterioro de una unidad.
 func (s *Store) ReportDamaged(ctx context.Context, credential Credential, gtin, serial string, req UnitEventRequest) (MedicationUnit, error) {
 	return s.applyExtraordinaryEvent(ctx, credential, gtin, serial, req, domain.EventInformarDeterioro, opReportDamaged, false, nil)
 }
 
+// Restock reingresa una unidad a stock cuando la transicion lo permite.
 func (s *Store) Restock(ctx context.Context, credential Credential, gtin, serial string, req UnitEventRequest) (MedicationUnit, error) {
 	return s.applyExtraordinaryEvent(ctx, credential, gtin, serial, req, domain.EventReingresarStock, opRestock, false, restockPrecondition)
 }
 
+// WithdrawFromMarket registra el retiro de una unidad del mercado.
 func (s *Store) WithdrawFromMarket(ctx context.Context, credential Credential, gtin, serial string, req UnitEventRequest) (MedicationUnit, error) {
 	return s.applyExtraordinaryEvent(ctx, credential, gtin, serial, req, domain.EventRetirarMercado, opWithdrawFromMarket, false, consumeWithdrawIntervention)
 }
 
+// ProhibitProduct registra la prohibicion regulatoria de una unidad.
 func (s *Store) ProhibitProduct(ctx context.Context, credential Credential, gtin, serial string, req UnitEventRequest) (MedicationUnit, error) {
 	return s.applyExtraordinaryEvent(ctx, credential, gtin, serial, req, domain.EventProhibirProducto, opProhibitProduct, true, nil)
 }
 
+// FinalDisposition registra la disposicion final de una unidad.
 func (s *Store) FinalDisposition(ctx context.Context, credential Credential, gtin, serial string, req UnitEventRequest) (MedicationUnit, error) {
 	return s.applyExtraordinaryEvent(ctx, credential, gtin, serial, req, domain.EventDisponerFinal, opFinalDisposition, false, consumeFinalDispositionIntervention)
 }
@@ -164,24 +174,17 @@ func resolveExtraordinaryEventActor(
 	invoker Invoker,
 	event domain.Event,
 ) (domain.Actor, error) {
-	transition, declared := domain.LookupTransition(unit.Estado, event)
 	characters, err := invokerCharacters(ctx, tx, unit, invoker, event)
 	if err != nil {
 		return "", err
 	}
-	if len(characters) == 0 {
+	actor, related := domain.SelectEventActor(unit.Estado, event, characters)
+	if !related {
 		return "", NewError(UnauthorizedCustodian,
 			"el invocador no es el custodio actual, el destinatario declarado, el laboratorio titular ni la organizacion regulatoria").
 			WithDetails(map[string]any{"custodioActual": unit.CustodioActual, "estado": string(unit.Estado)})
 	}
-	if declared {
-		for _, actor := range characters {
-			if transition.AllowsActor(actor) {
-				return actor, nil
-			}
-		}
-	}
-	return characters[0], nil
+	return actor, nil
 }
 
 func invokerCharacters(
@@ -191,35 +194,20 @@ func invokerCharacters(
 	invoker Invoker,
 	event domain.Event,
 ) ([]domain.Actor, error) {
-	if invoker.Org.AgentType == domain.AgentRegulator {
-		return []domain.Actor{domain.ActorANMAT}, nil
+	facts := domain.EventActorFacts{Regulator: invoker.Org.AgentType == domain.AgentRegulator}
+	if facts.Regulator {
+		return domain.EventActorCharacters(unit.Estado, event, facts), nil
 	}
-	characters := []domain.Actor{}
-	if invoker.Org.AgentType == domain.AgentLaboratory && eventAdmitsActor(event, domain.ActorLaboratory) {
-		characters = append(characters, domain.ActorLaboratory)
-	}
-	if unit.CustodioActual == invoker.CanonicalID() {
-		characters = append(characters, domain.ActorCurrentCustodian, domain.ActorRecoveryOrDisposalAgent)
-	}
-	if unit.Estado == domain.StateEnTransito && eventAdmitsActor(event, domain.ActorDestinationAgent) {
+	facts.Laboratory = invoker.Org.AgentType == domain.AgentLaboratory
+	facts.CurrentCustodian = unit.CustodioActual == invoker.CanonicalID()
+	if unit.Estado == domain.StateEnTransito && domain.EventAdmitsActor(event, domain.ActorDestinationAgent) {
 		operation, found, err := readActiveTransfer(ctx, tx, unit.GTIN, unit.NumeroSerie)
 		if err != nil {
 			return nil, err
 		}
-		if found && operation.DestinatarioPendiente == invoker.CanonicalID() {
-			characters = append(characters, domain.ActorDestinationAgent)
-		}
+		facts.DeclaredDestination = found && operation.DestinatarioPendiente == invoker.CanonicalID()
 	}
-	return characters, nil
-}
-
-func eventAdmitsActor(event domain.Event, actor domain.Actor) bool {
-	for _, transition := range domain.Transitions() {
-		if transition.Event == event && transition.AllowsActor(actor) {
-			return true
-		}
-	}
-	return false
+	return domain.EventActorCharacters(unit.Estado, event, facts), nil
 }
 
 func closeActiveTransferForExtraordinaryEvent(
@@ -331,6 +319,7 @@ func unitExpiredByDateAt(unit MedicationUnit, now time.Time) (bool, error) {
 	return today.After(expiry), nil
 }
 
+// ReturnProduct registra una devolucion sin transferir custodia.
 func (s *Store) ReturnProduct(
 	ctx context.Context,
 	credential Credential,

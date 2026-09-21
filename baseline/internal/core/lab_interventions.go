@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// AuthorizeLabIntervention emite o reemplaza la autorizacion vigente.
 func (s *Store) AuthorizeLabIntervention(
 	ctx context.Context,
 	credential Credential,
@@ -92,6 +93,7 @@ func (s *Store) AuthorizeLabIntervention(
 	return view, nil
 }
 
+// RevokeLabIntervention revoca la autorizacion vigente de una unidad.
 func (s *Store) RevokeLabIntervention(
 	ctx context.Context,
 	credential Credential,
