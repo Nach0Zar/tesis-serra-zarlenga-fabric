@@ -24,14 +24,7 @@ func emptySeedStore(t *testing.T) (*Store, *pgxpool.Pool) {
 	}
 	t.Cleanup(pool.Close)
 	cleanup := func() {
-		if _, err := pool.Exec(ctx, `
-			DELETE FROM public.lab_interventions;
-			DELETE FROM public.transfer_operations;
-			DELETE FROM public.unit_events;
-			DELETE FROM public.medication_units;
-			DELETE FROM public.organizations;`); err != nil {
-			t.Fatal(err)
-		}
+		cleanupIntegrationTables(t, pool)
 	}
 	cleanup()
 	t.Cleanup(cleanup)

@@ -2,8 +2,9 @@
 
 Este directorio contiene la API REST en Go y el esquema PostgreSQL de la línea
 base centralizada definida por [ADR-012](../docs/adr/012-baseline-design.md).
-La implementación cubre el subconjunto de procesos core de M2 y el empaquetado
-reproducible de BASE-4 (#40). La API y el seed consumen el paquete compartido
+La implementación cubre los procesos core y extendidos, las verificaciones de
+BASE-3 (#39) y el empaquetado reproducible de BASE-4 (#40). La API y el seed
+consumen literalmente el paquete compartido
 [`domain`](../domain/README.md) para la máquina de estados y la matriz de
 transferencias.
 
@@ -97,9 +98,10 @@ curl 'http://127.0.0.1:8080/v1/units?gtin=07791234567898'
 ```
 
 La configuración admite exactamente una key por par `mspId`+rol y conserva
-en memoria solamente su SHA-256. Las escrituras requieren `X-Org-Key`; las
-lecturas no requieren credencial. Una key ausente o desconocida devuelve
-`UNAUTHORIZED_ROLE`, asimetría documentada de la identidad emulada.
+en memoria solamente su SHA-256. Las escrituras y las verificaciones requieren
+`X-Org-Key`; `ReadUnit`, `GetUnitHistory`, `QueryUnitsByGTIN` y
+`QueryUnitsByState` permanecen sin credencial. Una key ausente o desconocida
+devuelve `UNAUTHORIZED_ROLE`, asimetría documentada de la identidad emulada.
 
 ## Endpoints core
 
@@ -113,6 +115,22 @@ lecturas no requieren credencial. Una key ausente o desconocida devuelve
 | `GET` | `/v1/units/{gtin}/{numeroSerie}` | `ReadUnit` |
 | `GET` | `/v1/units/{gtin}/{numeroSerie}/history` | `GetUnitHistory` |
 | `GET` | `/v1/units?gtin={gtin}` | `QueryUnitsByGTIN` |
+| `GET` | `/v1/units?estado={estado}` | `QueryUnitsByState` |
+| `POST` | `/v1/units/{gtin}/{numeroSerie}/quarantine` | `Quarantine` |
+| `POST` | `/v1/units/{gtin}/{numeroSerie}/release-quarantine` | `ReleaseQuarantine` |
+| `POST` | `/v1/units/{gtin}/{numeroSerie}/report-expired` | `ReportExpired` |
+| `POST` | `/v1/units/{gtin}/{numeroSerie}/report-stolen` | `ReportStolen` |
+| `POST` | `/v1/units/{gtin}/{numeroSerie}/report-lost` | `ReportLost` |
+| `POST` | `/v1/units/{gtin}/{numeroSerie}/report-damaged` | `ReportDamaged` |
+| `POST` | `/v1/units/{gtin}/{numeroSerie}/return` | `ReturnProduct` |
+| `POST` | `/v1/units/{gtin}/{numeroSerie}/restock` | `Restock` |
+| `POST` | `/v1/units/{gtin}/{numeroSerie}/withdraw-from-market` | `WithdrawFromMarket` |
+| `POST` | `/v1/units/{gtin}/{numeroSerie}/prohibit-product` | `ProhibitProduct` |
+| `POST` | `/v1/units/{gtin}/{numeroSerie}/final-disposition` | `FinalDisposition` |
+| `POST` | `/v1/units/{gtin}/{numeroSerie}/authorize-lab-intervention` | `AuthorizeLabIntervention` |
+| `POST` | `/v1/units/{gtin}/{numeroSerie}/revoke-lab-intervention` | `RevokeLabIntervention` |
+| `GET` | `/v1/units/{gtin}/{numeroSerie}/verify-unit` | `VerifyUnit` |
+| `GET` | `/v1/units/{gtin}/{numeroSerie}/verify-trace` | `VerifyTrace` |
 | `POST` | `/v1/organizations` | `RegisterOrganization` |
 | `PATCH` | `/v1/organizations/{mspId}` | `SetOrganizationActive` |
 
@@ -120,6 +138,24 @@ El body de `dispatch` reúne el destino y los datos documentales que en Fabric
 viajan por `transient`: `destino`, `numeroRemito`, `numeroFactura` y `cantidad`.
 El body de `receive` es opcional; si se envía, debe contener los tres campos
 documentales completos. `dispense` no recibe datos del paciente.
+
+Los eventos extendidos comunes reciben `{"motivo":"..."}`. `return` admite
+además `receptor`, opcional y en forma canónica `GLN:<id>` o `CUFE:<id>`; la
+devolución no cambia el custodio. La autorización recibe `laboratorio`,
+`operacion` (`WITHDRAW_FROM_MARKET`, `RESTOCK` o `FINAL_DISPOSITION`), `motivo`
+y `expiraEn` RFC3339. La revocación recibe sólo `motivo`. GTIN y número de serie
+no se repiten en esos requests porque pertenecen al path.
+
+`VerifyUnit` acepta cualquier identidad registrada y activa. `VerifyTrace`
+acepta `FINANCIER/financier-auditor` y
+`REGULATOR/auditor|regulatory-admin`. La ausencia de la unidad es un veredicto
+`NO_ENCONTRADA` con HTTP 200, no `UNIT_NOT_FOUND`. `GET /v1/units` exige
+exactamente uno de `gtin` o `estado`; la consulta por estado devuelve una lista
+vacía cuando no hay coincidencias y ordena por GTIN y número de serie.
+
+Todas las mutaciones extendidas responden HTTP 200 con el estado actualizado de
+la unidad o la vista de autorización. Las autorizaciones `ACTIVA`, `CONSUMIDA` y
+`REVOCADA`, su reemplazo y su consumo se serializan con el lock de la unidad.
 
 Los errores conservan `{code,message,details}`. El mapeo HTTP exhaustivo es:
 
@@ -148,6 +184,10 @@ fila de la unidad hasta confirmar la escritura y asigna el siguiente ordinal en
 esa misma transacción. El historial tiene así un orden total por unidad que no
 depende del timestamp ni de su resolución bajo concurrencia. La migración
 también alinea la recepción documental opcional con el contrato del chaincode.
+
+La migración reversible `000003` agrega el índice
+`medication_units_state_gtin_serial_idx (estado, gtin, numero_serie)` consumido
+por `QueryUnitsByState`.
 
 Conforme ADR-012 §5, `unit_events` es append-only por convención de aplicación:
 la API sólo inserta eventos, pero un administrador de PostgreSQL puede
@@ -178,11 +218,26 @@ make -C baseline test
   actual mediante `make -C baseline generate-dataset`.
 - Para inspeccionar fallos de arranque: `docker compose -f baseline/compose.yaml logs api postgres`.
 
-## Fuera de alcance de BASE-4
+## Asimetrías y fuera de alcance
 
-- operaciones extraordinarias y verificaciones de BASE-3 (#39);
+La baseline emula las decisiones funcionales del contrato, no las garantías de
+la plataforma Fabric:
+
+- la identidad se resuelve mediante API keys estáticas y no mediante MSP/PKI;
+- el reloj es UTC del servidor; no existe timestamp de propuesta Fabric;
+- PostgreSQL no implementa endoso, SBE, canales, PDC ni markers regulatorios;
+- el receptor opcional de una devolución queda visible en `return_operations`,
+  mientras Fabric lo guarda en datos privados;
+- `ENDORSEMENT_POLICY_FAILURE` no tiene equivalente aplicativo;
+- `UNICIDAD` queda garantizada estructuralmente por la PK y las FK: la baseline
+  no puede recrear una clave eliminada como sí puede observar el historial de
+  Fabric.
+
+Permanecen fuera de alcance:
+
 - ejecución de workloads, benchmarks y análisis de disponibilidad de EVAL-2 a
   EVAL-5;
+- retiro por lote (#114), listeners (#64) y E2E/políticas de red (#33, #97);
 - carga del snapshot de Fabric, emulación de MSP/PKI, políticas de endoso,
   canales o Private Data Collections;
-- cambios al contrato REST, al modelo relacional o a los ADRs.
+- cambios adicionales al contrato REST, al modelo relacional o a los ADRs.

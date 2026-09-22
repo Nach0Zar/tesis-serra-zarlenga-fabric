@@ -34,7 +34,7 @@ compose config --quiet
 compose up -d --wait postgres
 
 "${BASELINE_DIR}/scripts/migrate.sh" up
-test "$("${BASELINE_DIR}/scripts/migrate.sh" version)" = "2"
+test "$("${BASELINE_DIR}/scripts/migrate.sh" version)" = "3"
 
 database_address="$(compose port postgres 5432)"
 database_port="${database_address##*:}"
@@ -42,6 +42,11 @@ export SNT_BASELINE_TEST_DSN="postgres://${SNT_BASELINE_DB_USER}:${SNT_BASELINE_
 (cd "${BASELINE_DIR}" && go test -p 1 ./...)
 
 psql_in_container --file - < "${SCRIPT_DIR}/schema_test.sql"
+
+"${BASELINE_DIR}/scripts/migrate.sh" down
+test "$("${BASELINE_DIR}/scripts/migrate.sh" version)" = "2"
+test "$(psql_in_container --tuples-only --no-align --command \
+    "SELECT count(*) FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'medication_units_state_gtin_serial_idx';")" = "0"
 
 "${BASELINE_DIR}/scripts/migrate.sh" down
 test "$("${BASELINE_DIR}/scripts/migrate.sh" version)" = "1"
@@ -52,7 +57,7 @@ test "$(psql_in_container --tuples-only --no-align --command \
     "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';")" = "0"
 
 "${BASELINE_DIR}/scripts/migrate.sh" up
-test "$("${BASELINE_DIR}/scripts/migrate.sh" version)" = "2"
+test "$("${BASELINE_DIR}/scripts/migrate.sh" version)" = "3"
 psql_in_container --file - < "${SCRIPT_DIR}/schema_test.sql"
 
 echo "baseline schema integration test passed"

@@ -164,31 +164,19 @@ func resolveExtraordinaryEventActor(
 	invoker Invoker,
 	event domain.Event,
 ) (domain.Actor, error) {
-	transition, declared := domain.LookupTransition(unit.Estado, event)
-
 	characters, err := invokerCharacters(ctx, unit, invoker, event)
 	if err != nil {
 		return "", err
 	}
-	if len(characters) == 0 {
+	actor, related := domain.SelectEventActor(unit.Estado, event, characters)
+	if !related {
 		return "", cerr.New(cerr.UnauthorizedCustodian,
 			"el invocador no es el custodio actual, el destinatario declarado, "+
 				"el laboratorio titular ni la organizacion regulatoria").
 			WithDetails(map[string]any{"custodioActual": unit.CustodioActual, "estado": string(unit.Estado)})
 	}
 
-	if declared {
-		for _, actor := range characters {
-			if transition.AllowsActor(actor) {
-				return actor, nil
-			}
-		}
-	}
-
-	// El invocador tiene caracter, pero ADR-001 no lo habilita en este estado de
-	// origen. Se devuelve el primero para que requireTransition emita el rechazo
-	// de transicion nombrandolo: el problema no es quien pide, es donde.
-	return characters[0], nil
+	return actor, nil
 }
 
 // invokerCharacters enumera los caracteres de ADR-001 que el invocador reune
@@ -208,11 +196,11 @@ func resolveExtraordinaryEventActor(
 //
 // La tabla se consulta en DOS granularidades distintas, y las dos hacen falta:
 //
-//   - por EVENTO (eventAdmitsActor), para decidir si el invocador reune un
+//   - por EVENTO (domain.EventAdmitsActor), para decidir si el invocador reune un
 //     caracter. Sostiene la distincion entre los dos codigos de rechazo: quien
 //     no reune ninguno no tiene relacion con la unidad y recibe
 //     UNAUTHORIZED_CUSTODIAN.
-//   - por TRANSICION (transition.AllowsActor, en el llamador), para decidir si
+//   - por TRANSICION (domain.SelectEventActor), para decidir si
 //     el caracter reunido procede en el estado de origen observado. Quien reune
 //     alguno pero no el que la fila pide recibe INVALID_STATE_TRANSITION.
 //
@@ -228,11 +216,12 @@ func invokerCharacters(
 ) ([]domain.Actor, error) {
 	// La organizacion regulatoria no acumula caracteres: no custodia unidades
 	// (ADR-010, punto 1) ni es titular de producto alguno.
-	if invoker.Org.AgentType == domain.AgentRegulator {
-		return []domain.Actor{domain.ActorANMAT}, nil
+	facts := domain.EventActorFacts{Regulator: invoker.Org.AgentType == domain.AgentRegulator}
+	if facts.Regulator {
+		return domain.EventActorCharacters(unit.Estado, event, facts), nil
 	}
-
-	var characters []domain.Actor
+	facts.Laboratory = invoker.Org.AgentType == domain.AgentLaboratory
+	facts.CurrentCustodian = unit.CustodioActual == invoker.CanonicalID()
 
 	// El caracter de LABORATORIO se reune solo si ADR-001 lo habilita para este
 	// EVENTO en alguna de sus filas. La condicion parece redundante con la
@@ -252,42 +241,12 @@ func invokerCharacters(
 	// ese caracter no se filtra por evento: un custodio al que ADR-001 no
 	// habilita recibe el rechazo de transicion, que es lo que corresponde -- el
 	// caso de T17-T19, donde el retiro del mercado no es del custodio.
-	if invoker.Org.AgentType == domain.AgentLaboratory && eventAdmitsActor(event, domain.ActorLaboratory) {
-		characters = append(characters, domain.ActorLaboratory)
-	}
-	if unit.CustodioActual == invoker.CanonicalID() {
-		// ADR-009 punto 3 resuelve RECOVERY_OR_DISPOSAL_AGENT como el custodio
-		// actual registrado con rol operator: es el mismo invocador bajo otro
-		// nombre, y por eso los dos caracteres salen de la misma condicion. El
-		// rol lo exige requireExtraordinaryEventRole aguas arriba.
-		characters = append(characters, domain.ActorCurrentCustodian, domain.ActorRecoveryOrDisposalAgent)
-	}
-	if unit.Estado == domain.StateEnTransito && eventAdmitsActor(event, domain.ActorDestinationAgent) {
+	if unit.Estado == domain.StateEnTransito && domain.EventAdmitsActor(event, domain.ActorDestinationAgent) {
 		op, _, found, err := findActiveTransferOperation(ctx, unit, invoker)
 		if err != nil {
 			return nil, err
 		}
-		if found && op.DestinatarioPendiente == invoker.CanonicalID() {
-			characters = append(characters, domain.ActorDestinationAgent)
-		}
+		facts.DeclaredDestination = found && op.DestinatarioPendiente == invoker.CanonicalID()
 	}
-	return characters, nil
-}
-
-// eventAdmitsActor informa si ALGUNA fila de ADR-001 para este evento habilita
-// al actor. Es la pregunta "¿tiene sentido que este invocador se presente asi
-// para este evento?", distinta de "¿lo habilita el estado de origen observado?",
-// que responde transition.AllowsActor.
-//
-// Sale de la tabla y no de una lista escrita a mano: agregar una fila a ADR-001
-// que habilite a un actor en un evento nuevo alcanza a esta funcion sin que
-// nadie se acuerde de actualizarla, que es la propiedad que EXT-5 buscaba al
-// retirar las dos listas por evento.
-func eventAdmitsActor(event domain.Event, actor domain.Actor) bool {
-	for _, transition := range domain.Transitions() {
-		if transition.Event == event && transition.AllowsActor(actor) {
-			return true
-		}
-	}
-	return false
+	return domain.EventActorCharacters(unit.Estado, event, facts), nil
 }

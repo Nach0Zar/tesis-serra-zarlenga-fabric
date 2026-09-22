@@ -27,15 +27,7 @@ func integrationStore(t *testing.T) (*Store, map[string]Credential, *pgxpool.Poo
 	}
 	t.Cleanup(pool.Close)
 	cleanup := func() {
-		_, err := pool.Exec(context.Background(), `
-			DELETE FROM public.lab_interventions;
-			DELETE FROM public.transfer_operations;
-			DELETE FROM public.unit_events;
-			DELETE FROM public.medication_units;
-			DELETE FROM public.organizations;`)
-		if err != nil {
-			t.Fatal(err)
-		}
+		cleanupIntegrationTables(t, pool)
 	}
 	cleanup()
 	t.Cleanup(cleanup)
@@ -43,20 +35,27 @@ func integrationStore(t *testing.T) (*Store, map[string]Credential, *pgxpool.Poo
 		INSERT INTO public.organizations (msp_id,id,id_type,agent_type,active) VALUES
 		('AnmatMSP','ANMAT','REG','REGULATOR',true),
 		('LabMSP','7791234500017','GLN','LABORATORY',true),
+		('Lab2MSP','7791234500086','GLN','LABORATORY',true),
 		('DistribuidorMSP','7791234500031','GLN','DISTRIBUTOR',true),
+		('DrogueriaMSP','7791234500093','GLN','DRUGSTORE',true),
 		('FarmaciaMSP','7791234500048','GLN','PHARMACY',true),
 		('CentroMedicoMSP','7791234500055','GLN','HEALTHCARE_FACILITY',true),
+		('FinanciadorMSP','PAMI','REG','FINANCIER',true),
 		('InactiveMSP','7791234500062','GLN','DRUGSTORE',false)`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	credentials, err := ParseCredentials(`[
 		{"key":"reg-key","mspId":"AnmatMSP","role":"regulatory-admin"},
+		{"key":"reg-audit-key","mspId":"AnmatMSP","role":"auditor"},
 		{"key":"lab-key","mspId":"LabMSP","role":"operator"},
 		{"key":"lab-audit-key","mspId":"LabMSP","role":"auditor"},
+		{"key":"lab2-key","mspId":"Lab2MSP","role":"operator"},
 		{"key":"distributor-key","mspId":"DistribuidorMSP","role":"operator"},
+		{"key":"drugstore-key","mspId":"DrogueriaMSP","role":"operator"},
 		{"key":"pharmacy-key","mspId":"FarmaciaMSP","role":"operator"},
 		{"key":"health-key","mspId":"CentroMedicoMSP","role":"operator"},
+		{"key":"financier-key","mspId":"FinanciadorMSP","role":"financier-auditor"},
 		{"key":"inactive-key","mspId":"InactiveMSP","role":"operator"},
 		{"key":"ghost-key","mspId":"GhostMSP","role":"operator"}
 	]`)
@@ -68,13 +67,40 @@ func integrationStore(t *testing.T) (*Store, map[string]Credential, *pgxpool.Poo
 	var sequence atomic.Int64
 	store.newID = func() (string, error) { return fmt.Sprintf("tx-%06d", sequence.Add(1)), nil }
 	resolved := map[string]Credential{}
-	for _, key := range []string{"reg-key", "lab-key", "lab-audit-key", "distributor-key", "pharmacy-key", "health-key", "inactive-key", "ghost-key"} {
+	for _, key := range []string{
+		"reg-key", "reg-audit-key", "lab-key", "lab-audit-key", "lab2-key", "distributor-key",
+		"drugstore-key", "pharmacy-key", "health-key", "financier-key", "inactive-key", "ghost-key",
+	} {
 		resolved[key], err = store.Authenticate(key)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 	return store, resolved, pool
+}
+
+func cleanupIntegrationTables(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `
+		ALTER TABLE public.return_operations DISABLE TRIGGER USER;
+		DELETE FROM public.return_operations;
+		ALTER TABLE public.return_operations ENABLE TRIGGER USER;
+		DELETE FROM public.lab_interventions;
+		DELETE FROM public.transfer_operations;
+		DELETE FROM public.unit_events;
+		DELETE FROM public.medication_units;
+		DELETE FROM public.organizations;`); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func requireCode(t *testing.T, err error, expected Code) {

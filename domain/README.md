@@ -7,6 +7,7 @@ Módulo Go `github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain`: contiene la
 | `authorized-transfers.json` | Matriz regulatoria de transferencias (embebida por `go:embed`). | Este archivo |
 | `transfers.go` | `DecideTransfer(origen, destino)`: el algoritmo de decisión documentado más abajo. | `authorized-transfers.json` |
 | `states.go` | Máquina de estados 1.0.0: catálogo de estados, eventos, actores y las 33 transiciones de ADR-001, en 34 filas: la revisión 2 parte `T19` por estado de origen, porque el actor habilitado difiere entre `EN_TRANSITO` y los estados de reposo. | [ADR-001](../docs/adr/001-maquina-estados-medicamento.md) |
+| `event_actors.go` | Resolución pura de los caracteres y del actor de eventos extraordinarios a partir de los hechos provistos por cada SUT; no consulta ledger ni PostgreSQL. | [ADR-001](../docs/adr/001-maquina-estados-medicamento.md), [ADR-009](../docs/adr/009-return-and-recovery-semantics.md) |
 | `manifest/` | Manifiesto fundacional embebido que `Init` consume en el bootstrap. | `network/organizations-manifest.json` |
 | `dataset/` | Contrato, schemas y generador determinístico del bundle común a Fabric y baseline. | CLI-3 (#36) y [ADR-012](../docs/adr/012-baseline-design.md) sección 1. |
 

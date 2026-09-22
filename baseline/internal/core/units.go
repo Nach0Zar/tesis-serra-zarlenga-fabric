@@ -191,6 +191,33 @@ func (s *Store) QueryUnitsByGTIN(ctx context.Context, gtin string) ([]Medication
 	return units, nil
 }
 
+// QueryUnitsByState devuelve unidades en estado conocido y orden deterministico.
+func (s *Store) QueryUnitsByState(ctx context.Context, state domain.State) ([]MedicationUnit, error) {
+	if !domain.IsKnownState(state) {
+		return nil, NewError(InvalidRequest, "el estado %q no pertenece al catalogo de ADR-001", state).
+			WithDetails(map[string]any{"estado": string(state)})
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT gtin, numero_serie, lote, fecha_vencimiento, custodio_actual, estado, ultima_actualizacion
+		FROM public.medication_units WHERE estado=$1 ORDER BY gtin, numero_serie`, state)
+	if err != nil {
+		return nil, internal(err, "no se pudo consultar las unidades por estado")
+	}
+	defer rows.Close()
+	units := []MedicationUnit{}
+	for rows.Next() {
+		unit, err := scanUnit(rows)
+		if err != nil {
+			return nil, internal(err, "no se pudo leer una unidad del resultado")
+		}
+		units = append(units, unit)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, internal(err, "fallo el recorrido de unidades")
+	}
+	return units, nil
+}
+
 func (s *Store) GetUnitHistory(ctx context.Context, gtin, serial string) ([]HistoryEntry, error) {
 	if err := validateUnitRef(gtin, serial); err != nil {
 		return nil, err
