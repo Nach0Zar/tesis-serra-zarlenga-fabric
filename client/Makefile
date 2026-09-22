@@ -1,8 +1,9 @@
 UNITS ?= 50000
 OUTPUT_DIR ?= ../build/dataset
 DEMO_ARGS ?=
+LISTENER_ARGS ?=
 
-.PHONY: build test test-race vet demo-core generate-dataset
+.PHONY: build test test-race vet demo-core listen-anmat generate-dataset
 
 build:
 	go build ./...
@@ -18,6 +19,9 @@ vet:
 
 demo-core:
 	go run ./cmd/snt-client demo-core $(DEMO_ARGS)
+
+listen-anmat:
+	go run ./cmd/snt-client listen-anmat $(LISTENER_ARGS)
 
 generate-dataset:
 	go run ./cmd/datasetgen --units $(UNITS) --output-dir $(OUTPUT_DIR)

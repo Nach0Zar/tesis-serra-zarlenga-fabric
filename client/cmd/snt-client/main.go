@@ -2,11 +2,16 @@
 package main
 
 import (
+	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/client/internal/app"
 )
 
 func main() {
-	os.Exit(app.Run(os.Args[1:], os.Stdout, os.Stderr, os.Stdin))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	os.Exit(app.RunContext(ctx, os.Args[1:], os.Stdout, os.Stderr, os.Stdin))
 }

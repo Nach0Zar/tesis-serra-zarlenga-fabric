@@ -175,6 +175,40 @@ aborta si detecta stubs de CC: la evidencia final solo puede obtenerse después
 de integrar las CC Core, ejecutar `git pull origin develop`, regenerar el
 paquete y comenzar desde un ledger limpio.
 
+### Prueba funcional end-to-end de EXT-7
+
+Con la red propia levantada, el canal creado y `snt` desplegado como en la
+secuencia anterior, el recorrido funcional completo se ejecuta con un único
+comando desde la raíz:
+
+```bash
+./test/integration/functional-e2e.sh
+```
+
+El harness usa dos seriales únicos y verifica sobre el ledger real:
+
+1. registro en laboratorio, transferencia a droguería, transferencia a
+   farmacia y dispensación;
+2. rechazo de la transferencia comercial prohibida `PHARMACY → DRUGSTORE`,
+   con `TRANSFER_NOT_AUTHORIZED` y sin cambios de estado, custodia ni historial;
+3. cuarentena informada por la farmacia custodia, con estado final
+   `EN_CUARENTENA` y custodia conservada.
+
+El proceso termina con código `0` solo si todas las transacciones y aserciones
+se cumplen. Cualquier rechazo inesperado, código contractual distinto o cambio
+de estado produce un código de salida no cero. Para repetirlo sobre un ledger
+persistente se puede indicar un token alfanumérico nuevo de hasta 14 caracteres:
+
+```bash
+SNT_EXT7_RUN_TOKEN=revision1 ./test/integration/functional-e2e.sh
+```
+
+El script no arranca, redespliega ni detiene la red. `network.sh down` conserva
+los volúmenes del ledger; no es necesario descartarlos porque cada ejecución
+usa seriales distintos. La prueba no consume el listener de NET-8 ni demuestra
+las políticas extraordinarias de NET-9: esas responsabilidades permanecen en
+sus respectivas issues.
+
 ## Colecciones privadas y evidencia
 
 `collections_config.json` se genera exclusivamente desde el manifiesto y
