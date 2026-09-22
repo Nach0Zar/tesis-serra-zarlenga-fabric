@@ -20,7 +20,9 @@ import (
 type Client struct {
 	connection *grpc.ClientConn
 	gateway    *client.Gateway
+	network    *client.Network
 	contract   *client.Contract
+	chaincode  string
 }
 
 // Connect abre una conexión gRPC con TLS y crea el Gateway firmado por User1.
@@ -61,7 +63,9 @@ func Connect(profile config.Profile, channelName, chaincodeName string, timeout 
 	return &Client{
 		connection: connection,
 		gateway:    gateway,
+		network:    network,
 		contract:   contract,
+		chaincode:  chaincodeName,
 	}, nil
 }
 

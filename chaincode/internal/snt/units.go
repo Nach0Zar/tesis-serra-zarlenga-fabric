@@ -134,11 +134,10 @@ func validateRegisterUnitRequest(req RegisterUnitRequest) error {
 // unidad. El nombre del evento es el de la operacion del contrato y el payload
 // es la vista publica resultante.
 //
-// El contrato DES-5 no define eventos -- fija la superficie invocable, no el
-// canal de notificacion --, de modo que este esquema es una convencion de
-// implementacion que NET-8 (#64, listener de ANMAT) debera consumir o revisar.
-// El payload no agrega nada al canal: es exactamente el estado publico que la
-// transaccion acaba de escribir.
+// El catalogo de eventos de DES-5 fija esta convencion: una operacion que
+// modifica una unidad emite exactamente un evento con el nombre de la
+// operacion. El payload no agrega nada al canal: es exactamente el estado
+// publico que la transaccion acaba de escribir.
 func emitUnitEvent(ctx contractapi.TransactionContextInterface, operation string, unit MedicationUnit) error {
 	payload, err := json.Marshal(unit)
 	if err != nil {
