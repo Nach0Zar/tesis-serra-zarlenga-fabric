@@ -507,7 +507,12 @@ func (c *SNTContract) GetUnitHistory(ctx contractapi.TransactionContextInterface
 ]
 ```
 
-- **Errores**: `UNIT_NOT_FOUND`, `INVALID_REQUEST`.
+- **Integridad del historial**: una entrada marcada como borrado devuelve
+  `value: null`. Una entrada no borrada debe contener el snapshot completo;
+  si su valor está vacío o no puede deserializarse, la consulta falla con
+  `INTERNAL_ERROR` en lugar de devolver una traza parcial o degradada.
+- **Errores**: `UNIT_NOT_FOUND`, `INVALID_REQUEST`, `INTERNAL_ERROR` ante una
+  entrada histórica no borrada vacía o corrupta.
 
 ### `GetLabInterventionHistory`
 
@@ -529,10 +534,14 @@ confirmadas, en orden cronológico de la más antigua a la más reciente.
   emisión, consumo y revocación conservan snapshots distintos. El vencimiento
   es una condición derivada, no una escritura: una autorización expirada
   permanece persistida como `ACTIVA` y no produce una entrada sintética.
+- **Integridad del historial**: igual que `GetUnitHistory`, una entrada marcada
+  como borrado devuelve `value: null`; una entrada no borrada vacía o corrupta
+  falla con `INTERNAL_ERROR`, sin devolver una lista degradada.
 - **Errores**: `INVALID_REQUEST` para GTIN/serie inválidos,
   `UNIT_NOT_FOUND` si no existe la unidad y
   `LAB_INTERVENTION_NOT_FOUND` si existe pero no hay historial de
-  intervención.
+  intervención; `INTERNAL_ERROR` ante una entrada histórica no borrada vacía
+  o corrupta.
 
 ### `VerifyTrace`
 

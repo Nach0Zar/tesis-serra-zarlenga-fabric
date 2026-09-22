@@ -142,7 +142,7 @@ No hay divergencia. El trabajo escrito define la baseline como "interfaz de serv
 ## Contexto utilizado
 
 - Issue GitHub #87: DES-18 · ADR-012: Diseño de la baseline centralizada y paridad funcional, consultada el 2026-08-17.
-- Issue GitHub #123: CC-10 · Consulta del historial de LabIntervention y paridad baseline, ampliada tras revisar M4 y el capítulo 4 de la tesis el 2026-09-22.
+- Issue GitHub #123: CC-10 · Consulta del historial de LabIntervention y paridad baseline, ampliada tras revisar M4 y el capítulo 4 de la tesis el 2026-09-22. El responsable del proyecto autorizó expresamente en esa revisión de trabajo modificar ADR-012 e incluir la migración, el historial y la consulta REST equivalentes en la baseline; esta línea deja esa autorización registrada en el propio ADR.
 - Pull request GitHub #107: review de BASE-4 sobre el ownership neutral del contrato del dataset, incorporada en la revisión 2 el 2026-09-12.
 - Issue GitHub #37: BASE-1 · Esquema relacional, consultada el 2026-08-17.
 - Issue GitHub #38: BASE-2 · API REST con los procesos core, consultada el 2026-08-17.

@@ -172,7 +172,10 @@ func readUnitHistory(
 		if ts := modification.GetTimestamp(); ts != nil {
 			entry.Timestamp = ts.AsTime().UTC().Format(time.RFC3339)
 		}
-		if !modification.GetIsDelete() && len(modification.GetValue()) > 0 {
+		if !modification.GetIsDelete() {
+			if len(modification.GetValue()) == 0 {
+				return nil, cerr.New(cerr.InternalError, "entrada del historial de unidad sin valor")
+			}
 			var unit MedicationUnit
 			if err := json.Unmarshal(modification.GetValue(), &unit); err != nil {
 				return nil, cerr.Internal(err, "entrada del historial corrupta")

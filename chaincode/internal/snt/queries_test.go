@@ -234,6 +234,17 @@ func TestGetUnitHistoryRejections(t *testing.T) {
 	requireCode(t, err, cerr.InvalidRequest)
 }
 
+func TestGetUnitHistoryRejectsNonDeleteEntryWithoutValue(t *testing.T) {
+	stub, contract := transferFixture(t)
+	key, err := medicationUnitKey(stub, validGTIN, validSerial)
+	requireNoError(t, err)
+	stub.appendHistory(key, nil, false)
+
+	_, err = contract.GetUnitHistory(
+		testContext(stub, anmatMSP, RoleAuditor), validGTIN, validSerial)
+	requireCode(t, err, cerr.InternalError)
+}
+
 // --- QueryUnitsByGTIN -------------------------------------------------------
 
 func TestQueryUnitsByGTIN(t *testing.T) {
