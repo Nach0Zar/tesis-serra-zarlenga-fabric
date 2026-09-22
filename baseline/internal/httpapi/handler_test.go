@@ -32,6 +32,10 @@ func (f *fakeService) GetUnitHistory(context.Context, string, string) ([]core.Hi
 	f.called = "history"
 	return []core.HistoryEntry{}, nil
 }
+func (f *fakeService) GetLabInterventionHistory(context.Context, string, string) ([]core.LabInterventionHistoryEntry, error) {
+	f.called = "lab-history"
+	return []core.LabInterventionHistoryEntry{}, nil
+}
 func (f *fakeService) Dispatch(context.Context, core.Credential, string, string, core.DispatchRequest) (core.MedicationUnit, error) {
 	f.called = "dispatch"
 	return core.MedicationUnit{}, nil
@@ -70,6 +74,7 @@ func TestEveryCoreEndpointIsWired(t *testing.T) {
 		{http.MethodGet, "/v1/units?gtin=07791234567898", ``, "query", http.StatusOK},
 		{http.MethodGet, "/v1/units/07791234567898/SERIE", ``, "read", http.StatusOK},
 		{http.MethodGet, "/v1/units/07791234567898/SERIE/history", ``, "history", http.StatusOK},
+		{http.MethodGet, "/v1/units/07791234567898/SERIE/lab-intervention-history", ``, "lab-history", http.StatusOK},
 		{http.MethodPost, "/v1/units/07791234567898/SERIE/dispatch", `{}`, "dispatch", http.StatusOK},
 		{http.MethodPost, "/v1/units/07791234567898/SERIE/receive", ``, "receive", http.StatusOK},
 		{http.MethodPost, "/v1/units/07791234567898/SERIE/receive", `{"numeroRemito":"R","numeroFactura":"F","cantidad":1}`, "receive-with-commercial", http.StatusOK},
@@ -122,13 +127,18 @@ func (f *unauthenticatedReadService) Authenticate(string) (core.Credential, erro
 }
 
 func TestReadEndpointsDoNotRequireAPIKey(t *testing.T) {
-	service := &unauthenticatedReadService{}
-	request := httptest.NewRequest(http.MethodGet, "/v1/units/07791234567898/SERIE", nil)
-	response := httptest.NewRecorder()
-	New(service, nil).ServeHTTP(response, request)
-	if response.Code != http.StatusOK {
-		body, _ := io.ReadAll(response.Body)
-		t.Fatalf("unexpected response %d: %s", response.Code, body)
+	for _, path := range []string{
+		"/v1/units/07791234567898/SERIE",
+		"/v1/units/07791234567898/SERIE/lab-intervention-history",
+	} {
+		service := &unauthenticatedReadService{}
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		response := httptest.NewRecorder()
+		New(service, nil).ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			body, _ := io.ReadAll(response.Body)
+			t.Fatalf("unexpected response %d: %s", response.Code, body)
+		}
 	}
 }
 

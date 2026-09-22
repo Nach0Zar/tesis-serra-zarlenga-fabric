@@ -102,6 +102,7 @@ Tres tests distintos custodian el congelamiento del contrato, y hacen falta los 
 | `DispatchTransfer`, `ReceiveTransfer`, `RejectTransfer` | Implementadas | CC-3 (#16) |
 | `Dispense` | Implementada | CC-4 (#17) |
 | `ReadUnit`, `GetUnitHistory`, `QueryUnitsByGTIN` | Implementadas | CC-5 (#18) |
+| `GetLabInterventionHistory` | Implementada | CC-10 (#123) |
 | `Quarantine`, `ReleaseQuarantine` | Implementadas | EXT-1 (#27) |
 | `ReportExpired` | Implementada | EXT-2 (#28) |
 | `ReportStolen`, `ReportLost`, `ReportDamaged` | Implementadas | EXT-3 (#29) |

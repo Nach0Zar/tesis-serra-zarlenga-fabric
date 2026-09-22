@@ -41,11 +41,11 @@ import (
 // reportaron el mismo desfase por separado, con valores distintos. Las
 // menciones HISTORICAS ("la version 2.4.0 afirmaba lo contrario") se conservan:
 // describen una version pasada y no pretenden nombrar la vigente.
-const ContractVersion = "2.10.0"
+const ContractVersion = "2.11.0"
 
 // SNTContract es el contrato publico del chaincode `snt`.
 //
-// El nombre lo congela docs/api-contract.md, que declara la firma de las 25
+// El nombre lo congela docs/api-contract.md, que declara la firma de las 28
 // operaciones como metodos de `*SNTContract`. Por eso no se acepta la
 // sugerencia de revive de renombrarlo a `Contract` para evitar el stutter
 // `snt.SNTContract`: cambiarlo seria un cambio del contrato congelado, que

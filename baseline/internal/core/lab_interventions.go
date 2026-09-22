@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -87,6 +88,13 @@ func (s *Store) AuthorizeLabIntervention(
 	if err != nil {
 		return LabInterventionView{}, internal(err, "no se pudo escribir la autorizacion de intervencion")
 	}
+	txID, err := s.newID()
+	if err != nil {
+		return LabInterventionView{}, internal(err, "no se pudo generar el identificador de transaccion")
+	}
+	if err := appendLabInterventionEvent(ctx, tx, view, now, txID); err != nil {
+		return LabInterventionView{}, err
+	}
 	if err := commit(ctx, tx); err != nil {
 		return LabInterventionView{}, err
 	}
@@ -142,6 +150,13 @@ func (s *Store) RevokeLabIntervention(
 		gtin, serial, view.Estado, view.RevocadaEn, view.MotivoRevocacion)
 	if err != nil {
 		return LabInterventionView{}, internal(err, "no se pudo revocar la autorizacion de intervencion")
+	}
+	txID, err := s.newID()
+	if err != nil {
+		return LabInterventionView{}, internal(err, "no se pudo generar el identificador de transaccion")
+	}
+	if err := appendLabInterventionEvent(ctx, tx, view, now, txID); err != nil {
+		return LabInterventionView{}, err
 	}
 	if err := commit(ctx, tx); err != nil {
 		return LabInterventionView{}, err
@@ -200,12 +215,13 @@ func readLabIntervention(
 	return view, true, nil
 }
 
-func consumeLabIntervention(
+func (s *Store) consumeLabIntervention(
 	ctx context.Context,
 	tx pgx.Tx,
 	unit MedicationUnit,
 	invoker Invoker,
 	now time.Time,
+	txID string,
 	expected LabInterventionOperation,
 ) error {
 	if invoker.Org.AgentType != domain.AgentLaboratory || unit.CustodioActual == invoker.CanonicalID() {
@@ -242,7 +258,86 @@ func consumeLabIntervention(
 	if err != nil {
 		return internal(err, "no se pudo consumir la autorizacion de intervencion")
 	}
+	view.Estado = LabInterventionConsumed
+	view.ConsumidaEn = consumedAt
+	return appendLabInterventionEvent(ctx, tx, view, now, txID)
+}
+
+// appendLabInterventionEvent se ejecuta bajo el lock de medication_units y en
+// la misma transaccion que modifica la autorizacion vigente. El ordinal no
+// depende de la resolucion del timestamp.
+func appendLabInterventionEvent(
+	ctx context.Context,
+	tx pgx.Tx,
+	view LabInterventionView,
+	now time.Time,
+	txID string,
+) error {
+	var sequence int64
+	if err := tx.QueryRow(ctx, `
+		SELECT COALESCE(MAX(event_sequence), 0) + 1
+		FROM public.lab_intervention_events
+		WHERE gtin=$1 AND numero_serie=$2`, view.GTIN, view.NumeroSerie).Scan(&sequence); err != nil {
+		return internal(err, "no se pudo asignar el orden del historial de intervencion")
+	}
+	snapshot, err := json.Marshal(view)
+	if err != nil {
+		return internal(err, "no se pudo serializar la autorizacion de intervencion")
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO public.lab_intervention_events
+		(gtin, numero_serie, event_sequence, tx_id, event_timestamp, snapshot)
+		VALUES ($1,$2,$3,$4,$5,$6)`,
+		view.GTIN, view.NumeroSerie, sequence, txID, now.UTC(), snapshot)
+	if err != nil {
+		return internal(err, "no se pudo agregar el historial de intervencion")
+	}
 	return nil
+}
+
+// GetLabInterventionHistory devuelve los snapshots confirmados, sin crear un
+// evento por vencimiento. La tabla vigente sigue siendo la fuente de reglas.
+func (s *Store) GetLabInterventionHistory(
+	ctx context.Context,
+	gtin, serial string,
+) ([]LabInterventionHistoryEntry, error) {
+	if _, err := s.ReadUnit(ctx, gtin, serial); err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT tx_id, event_timestamp, snapshot
+		FROM public.lab_intervention_events
+		WHERE gtin=$1 AND numero_serie=$2
+		ORDER BY event_sequence`, gtin, serial)
+	if err != nil {
+		return nil, internal(err, "no se pudo leer el historial de intervencion")
+	}
+	defer rows.Close()
+	entries := []LabInterventionHistoryEntry{}
+	for rows.Next() {
+		var entry LabInterventionHistoryEntry
+		var timestamp time.Time
+		var snapshot []byte
+		if err := rows.Scan(&entry.TxID, &timestamp, &snapshot); err != nil {
+			return nil, internal(err, "no se pudo leer una entrada del historial de intervencion")
+		}
+		var view LabInterventionView
+		if err := json.Unmarshal(snapshot, &view); err != nil {
+			return nil, internal(err, "snapshot de intervencion corrupto")
+		}
+		entry.Timestamp = formatTimestamp(timestamp)
+		entry.Value = &view
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, internal(err, "no se pudo completar el historial de intervencion")
+	}
+	if len(entries) == 0 {
+		return nil, NewError(LabInterventionNotFound,
+			"no existe historial de intervencion para la unidad %s/%s", gtin, serial).
+			WithDetails(map[string]any{"gtin": gtin, "numeroSerie": serial})
+	}
+	return entries, nil
 }
 
 func labInterventionRequired(unit MedicationUnit, detail string) error {

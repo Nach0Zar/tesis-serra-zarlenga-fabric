@@ -40,6 +40,14 @@ type HistoryEntry struct {
 	Value     *MedicationUnit `json:"value"`
 }
 
+// LabInterventionHistoryEntry conserva un snapshot confirmado de la autorizacion.
+type LabInterventionHistoryEntry struct {
+	TxID      string               `json:"txId"`
+	Timestamp string               `json:"timestamp"`
+	IsDelete  bool                 `json:"isDelete"`
+	Value     *LabInterventionView `json:"value"`
+}
+
 type RegisterUnitRequest struct {
 	GTIN             string `json:"gtin"`
 	NumeroSerie      string `json:"numeroSerie"`

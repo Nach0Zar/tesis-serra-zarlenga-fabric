@@ -45,6 +45,7 @@ var contractOperations = []string{
 	// Lectura
 	"ReadUnit",
 	"GetUnitHistory",
+	"GetLabInterventionHistory",
 	"QueryUnitsByGTIN",
 	"QueryUnitsByState",
 	"VerifyUnit",

@@ -36,6 +36,7 @@ func TestHTTPToPostgreSQLCoreFlow(t *testing.T) {
 			ALTER TABLE public.return_operations DISABLE TRIGGER USER;
 			DELETE FROM public.return_operations;
 			ALTER TABLE public.return_operations ENABLE TRIGGER USER;
+			DELETE FROM public.lab_intervention_events;
 			DELETE FROM public.lab_interventions;
 			DELETE FROM public.transfer_operations;
 			DELETE FROM public.unit_events;
@@ -52,6 +53,7 @@ func TestHTTPToPostgreSQLCoreFlow(t *testing.T) {
 	defer cleanup()
 	_, err = pool.Exec(ctx, `
 		INSERT INTO public.organizations (msp_id,id,id_type,agent_type,active) VALUES
+		('AnmatMSP','ANMAT','REG','REGULATOR',true),
 		('LabMSP','7791234500017','GLN','LABORATORY',true),
 		('FarmaciaMSP','7791234500048','GLN','PHARMACY',true),
 		('FinanciadorMSP','PAMI','REG','FINANCIER',true)`)
@@ -59,6 +61,7 @@ func TestHTTPToPostgreSQLCoreFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	credentials, err := core.ParseCredentials(`[
+		{"key":"reg-key","mspId":"AnmatMSP","role":"regulatory-admin"},
 		{"key":"lab-key","mspId":"LabMSP","role":"operator"},
 		{"key":"pharmacy-key","mspId":"FarmaciaMSP","role":"operator"},
 		{"key":"financier-key","mspId":"FinanciadorMSP","role":"financier-auditor"}
@@ -73,6 +76,18 @@ func TestHTTPToPostgreSQLCoreFlow(t *testing.T) {
 		"gtin":"07791234567898","numeroSerie":"SERIE-HTTP",
 		"lote":"LOTE-HTTP","fechaVencimiento":"2028-12-31"
 	}`, http.StatusCreated)
+	requestJSON(t, server.URL+"/v1/units/07791234567898/SERIE-HTTP/authorize-lab-intervention", "reg-key", `{
+		"laboratorio":"GLN:7791234500017","operacion":"RESTOCK",
+		"motivo":"autorizacion de prueba","expiraEn":"2099-01-01T00:00:00Z"
+	}`, http.StatusOK)
+	var interventionHistory []core.LabInterventionHistoryEntry
+	requestGETJSON(t, server.URL+"/v1/units/07791234567898/SERIE-HTTP/lab-intervention-history",
+		"", &interventionHistory)
+	if len(interventionHistory) != 1 || interventionHistory[0].Value == nil ||
+		interventionHistory[0].Value.Estado != core.LabInterventionActive ||
+		interventionHistory[0].IsDelete {
+		t.Fatalf("unexpected intervention history: %#v", interventionHistory)
+	}
 	requestJSON(t, server.URL+"/v1/units/07791234567898/SERIE-HTTP/dispatch", "lab-key", `{
 		"destino":"FarmaciaMSP","numeroRemito":"R-HTTP",
 		"numeroFactura":"F-HTTP","cantidad":1
