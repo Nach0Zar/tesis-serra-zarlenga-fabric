@@ -179,19 +179,27 @@ type LabInterventionView struct {
 // punto, que es lo que la comprobacion 5 de ADR-011 necesita para recorrer los
 // cambios de custodio.
 type UnitHistoryEntry struct {
-	TxID      string          `json:"txId"`
-	Timestamp string          `json:"timestamp"`
-	IsDelete  bool            `json:"isDelete"`
-	Value     *MedicationUnit `json:"value"`
+	TxID      string `json:"txId"`
+	Timestamp string `json:"timestamp"`
+	IsDelete  bool   `json:"isDelete"`
+	// `value` es NULO en una entrada de borrado, y el contrato lo promete asi.
+	// `metadata:",optional"` es lo que lo vuelve cierto en el schema que genera
+	// Contract API: sin eso el campo queda en `required` y una respuesta que el
+	// propio contrato documenta seria rechazada al serializarse. Es la misma
+	// correccion que la version 2.11.1 aplico a LabInterventionView, extendida
+	// a los dos tipos de historial.
+	Value *MedicationUnit `json:"value" metadata:",optional"`
 }
 
 // LabInterventionHistoryEntry conserva el snapshot completo de cada
 // modificacion confirmada de la clave unica LabIntervention.
 type LabInterventionHistoryEntry struct {
-	TxID      string               `json:"txId"`
-	Timestamp string               `json:"timestamp"`
-	IsDelete  bool                 `json:"isDelete"`
-	Value     *LabInterventionView `json:"value"`
+	TxID      string `json:"txId"`
+	Timestamp string `json:"timestamp"`
+	IsDelete  bool   `json:"isDelete"`
+	// Nulo en una entrada de borrado, por el mismo motivo que en
+	// UnitHistoryEntry.
+	Value *LabInterventionView `json:"value" metadata:",optional"`
 }
 
 // ReturnOperation es el registro historico de una devolucion, persistido en la

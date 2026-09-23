@@ -104,6 +104,46 @@ func TestChaincodeBuildsWithContractAPI(t *testing.T) {
 	}
 }
 
+// TestHistoryValueIsOptionalInMetadata extiende a los dos tipos de historial la
+// misma correccion que la version 2.11.1 aplico a LabInterventionView.
+//
+// El contrato promete, para GetUnitHistory y GetLabInterventionHistory, que en
+// una entrada de BORRADO el campo `value` es `null`. Contract API deriva el
+// `required` del schema de la struct y no de `json:",omitempty"` -- que aca ni
+// siquiera esta, porque el campo se serializa siempre --, de modo que sin
+// `metadata:",optional"` el schema declara obligatorio un campo que el propio
+// contrato documenta como nulo. La respuesta prometida seria rechazada al
+// serializarse.
+//
+// Hoy la condicion es inalcanzable: el chaincode no borra la clave de la unidad
+// ni la de intervencion. El test fija la propiedad igual, porque lo que esta
+// mal no es el comportamiento sino la CONTRADICCION entre el contrato y el
+// schema que el peer expone, y esa existe aunque nadie la ejerza.
+func TestHistoryValueIsOptionalInMetadata(t *testing.T) {
+	for _, entry := range []any{UnitHistoryEntry{}, LabInterventionHistoryEntry{}} {
+		entryType := reflect.TypeOf(entry)
+		t.Run(entryType.Name(), func(t *testing.T) {
+			components := new(metadata.ComponentMetadata)
+			if _, err := metadata.GetSchema(entryType, components); err != nil {
+				t.Fatalf("no se pudo generar el schema: %v", err)
+			}
+			schema, found := components.Schemas[entryType.Name()]
+			if !found {
+				t.Fatalf("metadata no contiene %s", entryType.Name())
+			}
+			for _, field := range schema.Required {
+				if field == "value" {
+					t.Fatalf("value no puede ser required en %s: el contrato lo declara null en un borrado",
+						entryType.Name())
+				}
+			}
+			if _, found := schema.Properties["value"]; !found {
+				t.Fatalf("metadata no contiene la propiedad value de %s", entryType.Name())
+			}
+		})
+	}
+}
+
 // TestLabInterventionConditionalFieldsAreOptionalInMetadata protege la
 // diferencia entre `json:,omitempty` y `metadata:,optional`: Contract API no
 // infiere la segunda a partir de la primera. Si estos campos aparecen en
