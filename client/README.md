@@ -39,6 +39,8 @@ snt-client read-unit           --org <org> --gtin <gtin> --serial <serie>
 snt-client unit-history        --org <org> --gtin <gtin> --serial <serie>
 snt-client verify-unit         --org <org> --gtin <gtin> --serial <serie>
 snt-client query-units-by-gtin --org <org> --gtin <gtin>
+snt-client withdraw-batch      --org <org> --gtin <gtin> --lot <lote> --reason <motivo>
+snt-client prohibit-batch      --org <org> --gtin <gtin> --lot <lote> --reason <motivo>
 snt-client listen-anmat [--start-block <número>]
 ```
 
@@ -101,6 +103,50 @@ make demo-core DEMO_ARGS="--serial DEMO-CORE-0002 --reject-serial DEMO-CORE-REJE
 
 Se pueden sobrescribir también `--gtin`, `--reject-serial`, `--lot`, `--expiry`, `--channel`,
 `--chaincode`, `--repo-root`, `--timeout` y `--retry-interval`.
+
+### Retiro y prohibición por lote
+
+`withdraw-batch` y `prohibit-batch` aplican un retiro del mercado o una prohibición
+sobre todas las unidades de un lote, emitiendo **una transacción por unidad**.
+
+```bash
+snt-client withdraw-batch --org anmat \
+  --gtin 07791234567898 --lot L-2026-01 \
+  --reason "retiro dispuesto por desvío de calidad, disposición ANMAT 1234/2026"
+```
+
+**Por qué una transacción por unidad y no una por lote.** No es una simplificación:
+[ADR-007](../docs/adr/007-network-topology.md) punto 6.a fija la política de reposo de
+la clave de una unidad en la organización de su **custodio actual, sin rama
+alternativa**. Un lote está repartido entre varios custodios, así que una transacción
+única sobre el lote exigiría el endoso **simultáneo** de todas sus organizaciones
+custodias — insatisfacible en la práctica, y con una ventana de fallo que crece con el
+tamaño del lote. Que el endoso basado en estado imponga granularidad por unidad es un
+**resultado** del trabajo, documentado en [`docs/alcance-prototipo.md`](../docs/alcance-prototipo.md).
+
+**Cómo resuelve los seriales.** Con `QueryUnitsByGTIN`, que ya está en la superficie
+congelada del contrato, filtrando por lote del lado del cliente. No agrega un índice al
+chaincode ni depende del dataset sintético, de modo que funciona contra cualquier
+ledger. Hereda el límite ya declarado de esa consulta: no pagina.
+
+**Salida y código de salida.** Emite un reporte JSON con el recuento y el detalle por
+unidad:
+
+```json
+{"operacion":"WithdrawFromMarket","gtin":"07791234567898","lote":"L-2026-01",
+ "unidadesAlcanzadas":3,"confirmadas":2,"yaAplicadas":1,"rechazadas":0,
+ "unidades":[{"numeroSerie":"SN-1","resultado":"CONFIRMADA","estado":"RETIRADO_MERCADO"}]}
+```
+
+Una sola unidad rechazada hace terminar el comando con código distinto de cero: un
+retiro **parcial** no puede reportarse como éxito global. Cada rechazo conserva su
+`code` contractual.
+
+**Idempotencia.** Reintentar el lote no vuelve a invocar las unidades que ya están en
+el estado destino: se omiten con resultado `YA_APLICADA`. La decisión se toma por el
+**estado observado** y no atrapando `INVALID_STATE_TRANSITION`, porque ese mismo código
+lo produce también una unidad que *no* puede retirarse —una `DISPENSADO`, que ADR-001
+no declara como origen de T17–T19— y esa es un rechazo legítimo que debe verse.
 
 ### Listener regulatorio de ANMAT
 
