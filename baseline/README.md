@@ -79,7 +79,7 @@ unidad queda en `EN_LABORATORIO`, con el laboratorio como custodio y un único
 evento de secuencia 1. Las recetas de transferencia, rechazo y dispensa quedan
 sin ejecutar para EVAL-3.
 
-La carga es atómica y exige que las seis tablas de dominio estén vacías. Una
+La carga es atómica y exige que las siete tablas de dominio estén vacías. Una
 segunda ejecución falla sin modificar filas. Para usar otro directorio:
 
 ```bash
@@ -99,8 +99,9 @@ curl 'http://127.0.0.1:8080/v1/units?gtin=07791234567898'
 
 La configuración admite exactamente una key por par `mspId`+rol y conserva
 en memoria solamente su SHA-256. Las escrituras y las verificaciones requieren
-`X-Org-Key`; `ReadUnit`, `GetUnitHistory`, `QueryUnitsByGTIN` y
-`QueryUnitsByState` permanecen sin credencial. Una key ausente o desconocida
+`X-Org-Key`; `ReadUnit`, `GetUnitHistory`,
+`GetLabInterventionHistory`, `QueryUnitsByGTIN` y `QueryUnitsByState`
+permanecen sin credencial. Una key ausente o desconocida
 devuelve `UNAUTHORIZED_ROLE`, asimetría documentada de la identidad emulada.
 
 ## Endpoints core
@@ -114,6 +115,7 @@ devuelve `UNAUTHORIZED_ROLE`, asimetría documentada de la identidad emulada.
 | `POST` | `/v1/units/{gtin}/{numeroSerie}/dispense` | `Dispense` |
 | `GET` | `/v1/units/{gtin}/{numeroSerie}` | `ReadUnit` |
 | `GET` | `/v1/units/{gtin}/{numeroSerie}/history` | `GetUnitHistory` |
+| `GET` | `/v1/units/{gtin}/{numeroSerie}/lab-intervention-history` | `GetLabInterventionHistory` |
 | `GET` | `/v1/units?gtin={gtin}` | `QueryUnitsByGTIN` |
 | `GET` | `/v1/units?estado={estado}` | `QueryUnitsByState` |
 | `POST` | `/v1/units/{gtin}/{numeroSerie}/quarantine` | `Quarantine` |
@@ -167,7 +169,7 @@ Los errores conservan `{code,message,details}`. El mapeo HTTP exhaustivo es:
 
 ## Esquema
 
-La migración inicial crea exactamente seis tablas de dominio en `public`:
+Las migraciones crean siete tablas de dominio en `public`. Las seis iniciales son:
 
 - `organizations`: espejo del registro organización-establecimiento;
 - `medication_units`: estado público vigente de cada unidad;
@@ -175,6 +177,17 @@ La migración inicial crea exactamente seis tablas de dominio en `public`:
 - `lab_interventions`: autorización vigente de intervención de laboratorio;
 - `transfer_operations`: ciclo activo/cerrado de cada transferencia;
 - `return_operations`: historial inmutable de devoluciones T21-T24.
+
+La migración reversible `000004` agrega `lab_intervention_events`: snapshots
+completos de autorizaciones emitidas, reemplazadas, consumidas o revocadas.
+Cada asiento se inserta en la transacción que modifica la autorización vigente
+y conserva un orden total por unidad. La consulta pública devuelve esos
+asientos de más antiguo a más reciente, con `txId`, `timestamp`,
+`isDelete=false` y `value`. El vencimiento no genera asiento ni cambia
+automáticamente el estado persistido `ACTIVA`. Una unidad sin historial devuelve
+`LAB_INTERVENTION_NOT_FOUND`; una unidad ausente, `UNIT_NOT_FOUND`.
+La migración no inventa intervenciones anteriores: sobre datos preexistentes,
+el historial comienza con la primera mutación posterior a `000004`.
 
 El runner mantiene su tabla técnica `schema_migrations` en el esquema separado
 `baseline_meta`. No forma parte del modelo de dominio.
@@ -189,9 +202,9 @@ La migración reversible `000003` agrega el índice
 `medication_units_state_gtin_serial_idx (estado, gtin, numero_serie)` consumido
 por `QueryUnitsByState`.
 
-Conforme ADR-012 §5, `unit_events` es append-only por convención de aplicación:
-la API sólo inserta eventos, pero un administrador de PostgreSQL puede
-alterarlos con SQL directo. `return_operations`, cuyo histórico sí fue definido
+Conforme ADR-012 §5, `unit_events` y `lab_intervention_events` son append-only
+por convención de aplicación: la API sólo inserta eventos, pero un administrador
+de PostgreSQL puede alterarlos con SQL directo. `return_operations`, cuyo histórico sí fue definido
 como inmutable por ADR-012 §2, rechaza `UPDATE`, `DELETE` y `TRUNCATE` mediante
 triggers.
 

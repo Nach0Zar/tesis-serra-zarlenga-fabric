@@ -91,6 +91,7 @@ func cleanupIntegrationTables(t *testing.T, pool *pgxpool.Pool) {
 		ALTER TABLE public.return_operations DISABLE TRIGGER USER;
 		DELETE FROM public.return_operations;
 		ALTER TABLE public.return_operations ENABLE TRIGGER USER;
+		DELETE FROM public.lab_intervention_events;
 		DELETE FROM public.lab_interventions;
 		DELETE FROM public.transfer_operations;
 		DELETE FROM public.unit_events;

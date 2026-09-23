@@ -75,7 +75,8 @@ BEGIN
     END IF;
     IF (SELECT count(*) FROM public.transfer_operations) <> 0
        OR (SELECT count(*) FROM public.return_operations) <> 0
-       OR (SELECT count(*) FROM public.lab_interventions) <> 0 THEN
+       OR (SELECT count(*) FROM public.lab_interventions) <> 0
+       OR (SELECT count(*) FROM public.lab_intervention_events) <> 0 THEN
         RAISE EXCEPTION 'workload operations were executed during seed';
     END IF;
 END

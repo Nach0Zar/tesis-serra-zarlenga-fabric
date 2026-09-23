@@ -1,7 +1,8 @@
 # ADR-012: Diseño de la línea base centralizada y checklist de paridad funcional
 
-- **Estado**: Aceptado (revisión 2)
+- **Estado**: Aceptado (revisión 3)
 - **Fecha**: 2026-08-17
+- **Revisión 3**: 2026-09-22
 - **Autores**: Serra, Zarlenga
 
 ---
@@ -51,18 +52,30 @@ El mismo criterio gobierna el dataset experimental. El contrato del bundle —ti
 
 ### 2. Esquema relacional mínimo
 
-Seis tablas, cuyo DDL concreto, índices y migraciones define BASE-1 (#37):
+Siete tablas. BASE-1 (#37) definió las seis iniciales; CC-10 (#123) agrega el
+historial de intervenciones sin alterar la fila vigente:
 
 | Tabla | Contenido | Análogo Fabric |
 |---|---|---|
 | `organizations` | Espejo del registro organización-establecimiento de ADR-003 **extendido por ADR-010**: identificador canónico (`GLN:`, `CUFE:` **o `REG:`**), `idType` (`GLN`/`CUFE`/`REG`), `agentType` — los seis custodiales de DES-3 más `REGULATOR` y `FINANCIER` — y `active`. Sin `REG:` no hay dónde espejar al regulador ni a los financiadores, y la baseline no podría resolver el invocador de una operación regulatoria ni de una verificación de traza. | Registro organización-establecimiento del ledger (ADR-003 + ADR-010). |
 | `medication_units` | Espejo del struct público de `modelo-datos.md`: `gtin`, `numeroSerie`, `lote`, `fechaVencimiento`, `custodioActual`, `estado`, `ultimaActualizacion`. Clave primaria compuesta (GTIN + número de serie). | Estado público del canal (world state). |
 | `unit_events` | Historial **append-only por convención de aplicación**: cada operación de escritura inserta un evento con timestamp, operación, invocador y el **snapshot público completo resultante** de la unidad (los siete campos de `MedicationUnit`), no solo el estado. La API nunca actualiza ni borra una fila; un administrador conserva la capacidad de hacerlo conforme la sección 5. Guardar el snapshot completo —y en particular `custodioActual`— es un requisito de implementabilidad, no una comodidad: `GetHistoryForKey` devuelve en Fabric el **valor entero** de la clave en cada punto, y la comprobación 5 de ADR-011 recorre «cada cambio de `CustodioActual` observado en el historial». Con solo el estado resultante, ni la consulta de historial ni la verificación de traza del financiador son replicables, y el checklist de paridad de la sección 4 sería inexigible. | Análogo funcional del transaction log de Fabric y de `GetHistoryForKey`. |
-| `lab_interventions` | Autorización vigente de intervención de laboratorio, una fila por unidad: laboratorio designado, operación, motivo, expiración, estado (`ACTIVA`/`CONSUMIDA`/`REVOCADA`), emisor y timestamps de emisión, consumo o revocación. Una nueva autorización reemplaza la fila anterior, igual que la clave pública única del chaincode; la baseline no expone un historial separado de estas autorizaciones. | Clave pública `LabIntervention`+[`gtin`,`numeroSerie`] y valor `LabInterventionView` (ADR-007, puntos 6.e y 6.f). |
+| `lab_interventions` | Autorización vigente de intervención de laboratorio, una fila por unidad: laboratorio designado, operación, motivo, expiración, estado (`ACTIVA`/`CONSUMIDA`/`REVOCADA`), emisor y timestamps de emisión, consumo o revocación. Una nueva autorización reemplaza la fila anterior, igual que la clave pública única del chaincode. Sigue siendo la fuente para las decisiones de negocio. | Clave pública `LabIntervention`+[`gtin`,`numeroSerie`] y valor `LabInterventionView` (ADR-007, puntos 6.e y 6.f). |
+| `lab_intervention_events` | Historial de snapshots completos de la autorización, con identificador, timestamp y orden total por unidad. La API inserta una fila, en la misma transacción que modifica `lab_interventions`, al emitir, reemplazar, consumir o revocar. No se crea una entrada por mero vencimiento. Es append-only por convención de aplicación, como `unit_events`; un administrador puede modificarlo. | `GetHistoryForKey` de la clave `LabIntervention` (ADR-007, punto 6.f). |
 | `transfer_operations` | Registro de operación de transferencia: destinatario declarado, remito/factura, `ruleId` y `schemaVersion` de la matriz (ADR-008), estado activo/cerrado. | Registro de operación en la PDC del par (ADR-006, punto 4: `TransferOpActive`/`TransferOp`), con la **diferencia declarada** de que acá no existe confidencialidad real entre "organizaciones": todas las filas conviven en la misma base administrada por un único operador. |
 | `return_operations` | Registro de devolución de las transiciones T21–T24: receptor declarado, motivo/documentación y timestamp. Histórico inmutable, sin ciclo activo/cerrado — una devolución no espera confirmación de nadie (ADR-009, punto 1). | Registro `ReturnOp`+[`gtin`,`numeroSerie`,`txIdDevolucion`] en la PDC del par (ADR-006, punto 4). Tabla separada por la misma razón por la que ADR-006 le da clave propia: una devolución no nace de un despacho y no tiene operación de transferencia a la cual adosarse. |
 
 La API de consulta de historial lee `unit_events` — el equivalente conceptual de `GetHistoryForKey` — de modo que la operación "consulta de historial" del protocolo (§2) recupere en ambos SUT una traza de la misma forma y semántica.
+
+La consulta de historial de intervenciones lee `lab_intervention_events` y
+devuelve las modificaciones confirmadas en orden cronológico, con la misma
+forma conceptual que el contrato de chaincode. No integra las rondas
+cuantitativas de M4: el capítulo 4, §4.3 de la tesis y el protocolo §2 miden
+la consulta de historial de la **unidad**. Su paridad evita que el análisis
+cualitativo de auditabilidad (§4.4.2) atribuya a la arquitectura una diferencia
+que resultaría de omitir la función en la baseline. Una migración no puede
+reconstruir autorizaciones reemplazadas antes de existir este registro; no se
+fabrican eventos retroactivos y ese límite debe declararse en los datos previos.
 
 ### 3. Identidad emulada
 
@@ -72,7 +85,7 @@ Cada organización del dataset recibe una **credencial estática** (API key) que
 
 ### 4. Checklist de paridad funcional
 
-Este checklist es **normativo**: BASE-1/BASE-2/BASE-3 deben satisfacerlo y la evaluación no puede ejecutarse contra una baseline que incumpla algún ítem.
+Este checklist es **normativo**: BASE-1/BASE-2/BASE-3 y la ampliación CC-10 deben satisfacerlo antes de evaluar la paridad pertinente.
 
 - [ ] **Misma máquina de estados** (ADR-001): vía el paquete Go compartido; toda transición no declarada se rechaza con la misma semántica.
 - [ ] **Misma matriz de transferencias con los mismos `ruleId`** (ADR-008): vía el paquete Go compartido; misma decisión, misma regla, misma razón de rechazo.
@@ -81,7 +94,8 @@ Este checklist es **normativo**: BASE-1/BASE-2/BASE-3 deben satisfacerlo y la ev
 - [ ] **Misma exclusión de datos personales**: la dispensación no persiste datos del paciente en ninguna tabla (Ley 25.326; ADR-005; CC-4).
 - [ ] **Misma verificación del financiador**: la baseline expone la verificación de traza con el mismo veredicto estructurado que define ADR-011. Requiere que `unit_events` conserve el snapshot público completo (sección 2): sin `custodioActual` por evento, la comprobación 5 no es computable.
 - [ ] **Misma autorización previa de intervención de laboratorio** (ADR-007, puntos 6.e y 6.f; contrato vigente): la baseline replica `AuthorizeLabIntervention` y `RevokeLabIntervention` con el mismo `estado` (`ACTIVA`/`CONSUMIDA`/`REVOCADA`) y la misma regla de ejercicio — un laboratorio no custodio que intenta un retiro, recupero o disposición final sin una autorización `ACTIVA` y vigente recibe `LAB_INTERVENTION_REQUIRED` en **ambos** SUT. Sin esto, las rondas de rechazo esperado del protocolo (§6.5) medirían universos distintos. Lo que la baseline **no** replica es el endoso multiorganizacional que esa autorización habilita (ver sección 5): acá la valida un único proceso.
-- [ ] **Mismos endpoints conceptuales** que las operaciones del contrato: registro de unidades, despacho, recepción, rechazo, dispensación, eventos extraordinarios, devolución (con su registro privado), autorización y revocación de intervención de laboratorio, administración del registro organización-establecimiento, consulta puntual, **consulta por GTIN** (`QueryUnitsByGTIN`) y consulta de historial, y verificación de traza (los nombres REST concretos los define BASE-2). La inicialización (`Init`) no tiene análogo: en la baseline el seed del registro es una migración, no una transacción bajo política de endoso.
+- [ ] **Mismo historial funcional de intervención de laboratorio** (CC-10, #123): consulta por GTIN y serie de los snapshots confirmados de emisión, reemplazo, consumo y revocación, con identificador, timestamp, indicador de borrado y valor completo en orden cronológico. La baseline nunca borra funcionalmente una autorización, por lo que sus entradas tienen `isDelete=false`. El vencimiento es derivado y no agrega un asiento. Esta consulta no es una operación medida en M4.
+- [ ] **Mismos endpoints conceptuales** que las operaciones del contrato: registro de unidades, despacho, recepción, rechazo, dispensación, eventos extraordinarios, devolución (con su registro privado), autorización y revocación de intervención de laboratorio, administración del registro organización-establecimiento, consulta puntual, **consulta por GTIN** (`QueryUnitsByGTIN`), historiales de unidad e intervención, y verificación de traza (los nombres REST concretos los definen BASE-2 y CC-10). La inicialización (`Init`) no tiene análogo: en la baseline el seed del registro es una migración, no una transacción bajo política de endoso.
 
 ### 5. Qué NO replica, deliberadamente
 
@@ -89,14 +103,14 @@ Lo que sigue queda fuera de la baseline porque es exactamente lo que la comparac
 
 - **Endoso multiorganizacional**: en la baseline valida un único proceso; no hay coendoso emisor+receptor ni coendoso regulatorio, ni **marcadores de participación** (ADR-007, punto 6) — no hay colecciones implícitas cuya política pertenezca a una organización, ni un plano de plataforma que pueda rechazar una operación por falta de endosos. Lo que en Fabric rechaza la plataforma con `ENDORSEMENT_POLICY_FAILURE`, en la baseline no tiene equivalente: es exactamente la asimetría que la evidencia de NET-6 explota y que el capítulo de resultados debe presentar como propiedad comparada, no como funcionalidad faltante.
 - **Colecciones privadas con confidencialidad real**: `transfer_operations` reproduce la *función* del registro de operación de ADR-006, pero cualquier consulta con privilegios sobre la base ve todas las operaciones de todas las "organizaciones".
-- **Inmutabilidad criptográfica del log**: el carácter append-only de `unit_events` es una **convención de aplicación** — la API nunca ejecuta `UPDATE`/`DELETE` sobre esa tabla — que un administrador de la base puede violar con una sentencia SQL, sin dejar evidencia criptográfica. Esa asimetría es exactamente el argumento cualitativo de integridad del trabajo: en Fabric la alteración retroactiva exige comprometer la cadena de hashes replicada en múltiples organizaciones; en la baseline exige un `UPDATE`.
+- **Inmutabilidad criptográfica del log**: el carácter append-only de `unit_events` y `lab_intervention_events` es una **convención de aplicación** — la API nunca ejecuta `UPDATE`/`DELETE` sobre esas tablas — que un administrador de la base puede violar con una sentencia SQL, sin dejar evidencia criptográfica. Esa asimetría es exactamente el argumento cualitativo de integridad del trabajo: en Fabric la alteración retroactiva exige comprometer la cadena de hashes replicada en múltiples organizaciones; en la baseline exige un `UPDATE`.
 - **Tolerancia a fallas distribuida**: la baseline es un punto único de falla **por diseño**; los escenarios DB-1/API-1 del protocolo (§8.2) existen para medir precisamente esa propiedad.
 
 ### 6. Declaración de alcance comparativo
 
 La baseline representa el **modelo arquitectónico centralizado** — una API de servicios sobre base relacional con las mismas reglas de negocio — como **análogo funcional**. No representa, ni pretende representar, al SNT real operado por ANMAT: no se conoce ni se replica su implementación, su infraestructura ni su carga real. Todas las conclusiones cuantitativas y cualitativas del trabajo se formulan contra ese análogo, no contra el sistema productivo. Esta declaración es obligatoria en esta ADR y debe incorporarse como ítem del capítulo de limitaciones de la tesis.
 
-Queda fuera del alcance de esta ADR: el DDL, los índices y las migraciones concretas (BASE-1, #37); los paths, verbos y el mapeo HTTP definitivo por `code` (BASE-2, #38); la paridad de eventos extraordinarios y del veredicto del financiador (BASE-3, #39); y el empaquetado Compose y la mecánica transaccional del seed (BASE-4, #40). La revisión 2 decide únicamente la ubicación neutral del contrato y generador del dataset en `domain/dataset`; no decide el ownership de otros contratos transversales, como el catálogo de errores.
+Quedan fuera del alcance de esta ADR los detalles de DDL, índices y migraciones concretas (BASE-1, #37, y CC-10, #123); los paths, verbos y el mapeo HTTP definitivo por `code` (BASE-2, #38, y CC-10); la paridad de eventos extraordinarios y del veredicto del financiador (BASE-3, #39); y el empaquetado Compose y la mecánica transaccional del seed (BASE-4, #40). La revisión 2 decidió únicamente la ubicación neutral del contrato y generador del dataset en `domain/dataset`; no decide el ownership de otros contratos transversales, como el catálogo de errores.
 
 ## Justificación
 
@@ -111,12 +125,13 @@ Queda fuera del alcance de esta ADR: el DDL, los índices y las migraciones conc
 - **BASE-1 (#37)**: desbloqueada; materializa el esquema de la sección 2 como DDL con migraciones versionadas e índices equivalentes a las consultas del chaincode — incluido un índice por `gtin` sobre `medication_units` para `QueryUnitsByGTIN`, análogo de la consulta por clave compuesta parcial.
 - **BASE-2 (#38)**: desbloqueada; define endpoints REST, el mapeo HTTP definitivo por `code` y consume el paquete compartido para validaciones. El "header de rol" que esbozaba queda reemplazado por la resolución key→(organización, rol) de la sección 3.
 - **BASE-3 (#39)**: desbloqueada; implementa la paridad de eventos extraordinarios y el veredicto de verificación de ADR-011 sobre esta base.
+- **CC-10 (#123)**: incorpora la consulta histórica de `LabIntervention` en ambos SUT y su tabla relacional adicional. BASE-3 ya estaba cerrada cuando se incorporó esta decisión; no se reabre ni se atribuye a su implementación un historial que no tenía.
 - **BASE-4 (#40)**: desbloqueada; empaqueta API + PostgreSQL en Compose y carga el seed del dataset compartido (§4 del protocolo).
 - **EVAL-3 (#43) y EVAL-5 (#45)**: desbloqueadas; las mediciones y la prueba de disponibilidad de la baseline ya tienen un SUT definido contra el cual escribirse.
 - **CLI-3 (#36)**: `client/cmd/datasetgen` delega en `domain/dataset`, que contiene el contrato, los schemas y el generador compartido para producir cadenas válidas e inválidas coherentes con ambas implementaciones.
 - **Para la tesis**: el capítulo de limitaciones debe incorporar la declaración de alcance comparativo de la sección 6 (la baseline es un análogo del modelo centralizado, no el SNT real).
 
-- **Se gana**: una baseline cuyo diseño es defendible — paridad de reglas por construcción, esquema espejo de las estructuras decididas, asimetrías declaradas y acotadas a las propiedades comparadas — y seis issues de implementación desbloqueadas con criterios de aceptación claros.
+- **Se gana**: una baseline cuyo diseño es defendible — paridad de reglas por construcción, esquema espejo de las estructuras decididas, asimetrías declaradas y acotadas a las propiedades comparadas — y un historial de intervenciones comparable cualitativamente desde la migración 000004.
 - **Se pierde / costo**: la baseline se implementa en Go aunque no sea el stack natural de una API de referencia; la comparación queda formalmente acotada a un análogo del modelo centralizado, lo que impide afirmar mediciones contra el sistema productivo de ANMAT (renuncia deliberada, no accidental).
 - **Queda pendiente**: el ownership de otros contratos transversales no resueltos por esta revisión —incluido el catálogo de errores— y el mapeo HTTP definitivo y exhaustivo por `code`, que fija BASE-2 sobre la orientación de la sección 4.
 
@@ -127,6 +142,7 @@ No hay divergencia. El trabajo escrito define la baseline como "interfaz de serv
 ## Contexto utilizado
 
 - Issue GitHub #87: DES-18 · ADR-012: Diseño de la baseline centralizada y paridad funcional, consultada el 2026-08-17.
+- Issue GitHub #123: CC-10 · Consulta del historial de LabIntervention y paridad baseline, ampliada tras revisar M4 y el capítulo 4 de la tesis el 2026-09-22. El responsable del proyecto autorizó expresamente en esa revisión de trabajo modificar ADR-012 e incluir la migración, el historial y la consulta REST equivalentes en la baseline; esta línea deja esa autorización registrada en el propio ADR.
 - Pull request GitHub #107: review de BASE-4 sobre el ownership neutral del contrato del dataset, incorporada en la revisión 2 el 2026-09-12.
 - Issue GitHub #37: BASE-1 · Esquema relacional, consultada el 2026-08-17.
 - Issue GitHub #38: BASE-2 · API REST con los procesos core, consultada el 2026-08-17.

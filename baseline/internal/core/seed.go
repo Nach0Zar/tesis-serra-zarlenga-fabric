@@ -41,7 +41,8 @@ func (s *Store) SeedSnapshot(
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx, `
-		LOCK TABLE public.lab_interventions,
+		LOCK TABLE public.lab_intervention_events,
+		           public.lab_interventions,
 		           public.transfer_operations,
 		           public.return_operations,
 		           public.unit_events,
@@ -52,7 +53,7 @@ func (s *Store) SeedSnapshot(
 	}
 
 	var organizationsCount, unitsCount, eventsCount int64
-	var transfersCount, returnsCount, interventionsCount int64
+	var transfersCount, returnsCount, interventionsCount, interventionEventsCount int64
 	if err := tx.QueryRow(ctx, `
 		SELECT
 			(SELECT count(*) FROM public.organizations),
@@ -60,13 +61,14 @@ func (s *Store) SeedSnapshot(
 			(SELECT count(*) FROM public.unit_events),
 			(SELECT count(*) FROM public.transfer_operations),
 			(SELECT count(*) FROM public.return_operations),
-			(SELECT count(*) FROM public.lab_interventions)`).Scan(
+			(SELECT count(*) FROM public.lab_interventions),
+			(SELECT count(*) FROM public.lab_intervention_events)`).Scan(
 		&organizationsCount, &unitsCount, &eventsCount,
-		&transfersCount, &returnsCount, &interventionsCount,
+		&transfersCount, &returnsCount, &interventionsCount, &interventionEventsCount,
 	); err != nil {
 		return SeedResult{}, internal(err, "no se pudo comprobar que la baseline estuviera vacia")
 	}
-	if organizationsCount+unitsCount+eventsCount+transfersCount+returnsCount+interventionsCount != 0 {
+	if organizationsCount+unitsCount+eventsCount+transfersCount+returnsCount+interventionsCount+interventionEventsCount != 0 {
 		return SeedResult{}, NewError(AlreadyInitialized, "el seed exige una baseline sin datos de dominio")
 	}
 

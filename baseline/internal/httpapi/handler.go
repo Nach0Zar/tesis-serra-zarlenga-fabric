@@ -27,6 +27,7 @@ type Service interface {
 	QueryUnitsByState(context.Context, domain.State) ([]core.MedicationUnit, error)
 	ReadUnit(context.Context, string, string) (core.MedicationUnit, error)
 	GetUnitHistory(context.Context, string, string) ([]core.HistoryEntry, error)
+	GetLabInterventionHistory(context.Context, string, string) ([]core.LabInterventionHistoryEntry, error)
 	Dispatch(context.Context, core.Credential, string, string, core.DispatchRequest) (core.MedicationUnit, error)
 	Receive(context.Context, core.Credential, string, string, *core.CommercialData) (core.MedicationUnit, error)
 	Reject(context.Context, core.Credential, string, string, core.RejectRequest) (core.MedicationUnit, error)
@@ -62,6 +63,7 @@ func New(store Service, logger *slog.Logger) http.Handler {
 	mux.HandleFunc("GET /v1/units", handler.queryUnits)
 	mux.HandleFunc("GET /v1/units/{gtin}/{numeroSerie}", handler.readUnit)
 	mux.HandleFunc("GET /v1/units/{gtin}/{numeroSerie}/history", handler.history)
+	mux.HandleFunc("GET /v1/units/{gtin}/{numeroSerie}/lab-intervention-history", handler.labInterventionHistory)
 	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/dispatch", handler.dispatch)
 	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/receive", handler.receive)
 	mux.HandleFunc("POST /v1/units/{gtin}/{numeroSerie}/reject", handler.reject)
@@ -220,6 +222,16 @@ func (h *Handler) readUnit(response http.ResponseWriter, request *http.Request) 
 
 func (h *Handler) history(response http.ResponseWriter, request *http.Request) {
 	history, err := h.store.GetUnitHistory(request.Context(), request.PathValue("gtin"), request.PathValue("numeroSerie"))
+	if err != nil {
+		h.writeError(response, err)
+		return
+	}
+	writeJSON(response, http.StatusOK, history)
+}
+
+func (h *Handler) labInterventionHistory(response http.ResponseWriter, request *http.Request) {
+	history, err := h.store.GetLabInterventionHistory(
+		request.Context(), request.PathValue("gtin"), request.PathValue("numeroSerie"))
 	if err != nil {
 		h.writeError(response, err)
 		return

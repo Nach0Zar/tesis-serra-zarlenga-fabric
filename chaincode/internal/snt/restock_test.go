@@ -245,6 +245,15 @@ func TestRestockRequiresRestockAuthorization(t *testing.T) {
 		if !found || authorization.Estado != LabInterventionConsumed {
 			t.Fatalf("la autorizacion deberia quedar CONSUMIDA: %+v", authorization)
 		}
+		history, err := contract.GetLabInterventionHistory(
+			testContext(stub, anmatMSP, RoleAuditor), validGTIN, validSerial)
+		requireNoError(t, err)
+		if len(history) != 2 || history[0].Value == nil ||
+			history[0].Value.Estado != LabInterventionActiva ||
+			history[1].Value == nil || history[1].Value.Estado != LabInterventionConsumed ||
+			history[1].TxID != "tx-reingreso-laboratorio" {
+			t.Fatalf("historial de consumo inesperado: %+v", history)
+		}
 
 		// Los dos marcadores que convierten la intervencion en coendoso real,
 		// esta vez con la operacion Restock y no WithdrawFromMarket.

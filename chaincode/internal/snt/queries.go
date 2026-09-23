@@ -73,6 +73,66 @@ func (c *SNTContract) GetUnitHistory(
 	return entries, nil
 }
 
+// GetLabInterventionHistory devuelve todas las modificaciones confirmadas de
+// la clave publica de autorizacion en orden cronologico. El vencimiento no
+// escribe estado: una autorizacion vencida sigue historicamente ACTIVA.
+func (c *SNTContract) GetLabInterventionHistory(
+	ctx contractapi.TransactionContextInterface,
+	gtin string,
+	numeroSerie string,
+) ([]LabInterventionHistoryEntry, error) {
+	if err := validateUnitRef(gtin, numeroSerie); err != nil {
+		return nil, err
+	}
+	if _, err := readUnit(ctx, gtin, numeroSerie); err != nil {
+		return nil, err
+	}
+	key, err := labInterventionKey(ctx.GetStub(), gtin, numeroSerie)
+	if err != nil {
+		return nil, cerr.Internal(err, "no se pudo construir la clave de intervencion")
+	}
+	iterator, err := ctx.GetStub().GetHistoryForKey(key)
+	if err != nil {
+		return nil, cerr.Internal(err, "no se pudo leer el historial de intervencion")
+	}
+	defer func() { _ = iterator.Close() }()
+
+	entries := []LabInterventionHistoryEntry{}
+	for iterator.HasNext() {
+		modification, err := iterator.Next()
+		if err != nil {
+			return nil, cerr.Internal(err, "no se pudo leer una entrada del historial de intervencion")
+		}
+		entry := LabInterventionHistoryEntry{
+			TxID:     modification.GetTxId(),
+			IsDelete: modification.GetIsDelete(),
+		}
+		if ts := modification.GetTimestamp(); ts != nil {
+			entry.Timestamp = ts.AsTime().UTC().Format(time.RFC3339)
+		}
+		if !entry.IsDelete {
+			if len(modification.GetValue()) == 0 {
+				return nil, cerr.New(cerr.InternalError, "entrada del historial de intervencion sin valor")
+			}
+			var view LabInterventionView
+			if err := json.Unmarshal(modification.GetValue(), &view); err != nil {
+				return nil, cerr.Internal(err, "entrada del historial de intervencion corrupta")
+			}
+			entry.Value = &view
+		}
+		entries = append(entries, entry)
+	}
+	if len(entries) == 0 {
+		return nil, cerr.New(cerr.LabInterventionNotFound,
+			"no existe historial de intervencion para la unidad %s/%s", gtin, numeroSerie).
+			WithDetails(map[string]any{"gtin": gtin, "numeroSerie": numeroSerie})
+	}
+	for left, right := 0, len(entries)-1; left < right; left, right = left+1, right-1 {
+		entries[left], entries[right] = entries[right], entries[left]
+	}
+	return entries, nil
+}
+
 // readUnitHistory devuelve las modificaciones CONFIRMADAS de la clave de una
 // unidad en orden cronologico, de la mas antigua a la mas reciente. Fabric 2.x
 // entrega GetHistoryForKey en el orden inverso; normalizarlo aca conserva el
@@ -112,7 +172,10 @@ func readUnitHistory(
 		if ts := modification.GetTimestamp(); ts != nil {
 			entry.Timestamp = ts.AsTime().UTC().Format(time.RFC3339)
 		}
-		if !modification.GetIsDelete() && len(modification.GetValue()) > 0 {
+		if !modification.GetIsDelete() {
+			if len(modification.GetValue()) == 0 {
+				return nil, cerr.New(cerr.InternalError, "entrada del historial de unidad sin valor")
+			}
 			var unit MedicationUnit
 			if err := json.Unmarshal(modification.GetValue(), &unit); err != nil {
 				return nil, cerr.Internal(err, "entrada del historial corrupta")

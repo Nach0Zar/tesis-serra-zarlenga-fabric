@@ -25,12 +25,14 @@ const (
 )
 
 type eventPrecondition func(
+	*Store,
 	context.Context,
 	pgx.Tx,
 	MedicationUnit,
 	Invoker,
 	domain.Transition,
 	time.Time,
+	string,
 ) error
 
 // Quarantine registra la puesta en cuarentena de una unidad.
@@ -131,8 +133,12 @@ func (s *Store) applyExtraordinaryEvent(
 		return MedicationUnit{}, err
 	}
 	now := s.now().UTC()
+	txID, err := s.newID()
+	if err != nil {
+		return MedicationUnit{}, internal(err, "no se pudo generar el identificador de transaccion")
+	}
 	if precondition != nil {
-		if err := precondition(ctx, tx, unit, invoker, transition, now); err != nil {
+		if err := precondition(s, ctx, tx, unit, invoker, transition, now, txID); err != nil {
 			return MedicationUnit{}, err
 		}
 	}
@@ -141,10 +147,6 @@ func (s *Store) applyExtraordinaryEvent(
 		if err := closeActiveTransferForExtraordinaryEvent(ctx, tx, unit, timestamp); err != nil {
 			return MedicationUnit{}, err
 		}
-	}
-	txID, err := s.newID()
-	if err != nil {
-		return MedicationUnit{}, internal(err, "no se pudo generar el identificador de transaccion")
 	}
 	unit.Estado = transition.To
 	unit.UltimaActualizacion = timestamp
@@ -238,12 +240,14 @@ func closeActiveTransferForExtraordinaryEvent(
 }
 
 func requireExpiredByDateInTransit(
+	_ *Store,
 	_ context.Context,
 	_ pgx.Tx,
 	unit MedicationUnit,
 	_ Invoker,
 	transition domain.Transition,
 	now time.Time,
+	_ string,
 ) error {
 	if transition.ID != transitionExpiredT13 {
 		return nil
@@ -263,12 +267,14 @@ func requireExpiredByDateInTransit(
 }
 
 func restockPrecondition(
+	s *Store,
 	ctx context.Context,
 	tx pgx.Tx,
 	unit MedicationUnit,
 	invoker Invoker,
 	_ domain.Transition,
 	now time.Time,
+	txID string,
 ) error {
 	expired, err := unitExpiredByDateAt(unit, now)
 	if err != nil {
@@ -281,29 +287,33 @@ func restockPrecondition(
 				"estado": string(unit.Estado), "fechaVencimiento": unit.FechaVencimiento, "causa": "VENCIDO_POR_FECHA",
 			})
 	}
-	return consumeLabIntervention(ctx, tx, unit, invoker, now, LabOpRestock)
+	return s.consumeLabIntervention(ctx, tx, unit, invoker, now, txID, LabOpRestock)
 }
 
 func consumeWithdrawIntervention(
+	s *Store,
 	ctx context.Context,
 	tx pgx.Tx,
 	unit MedicationUnit,
 	invoker Invoker,
 	_ domain.Transition,
 	now time.Time,
+	txID string,
 ) error {
-	return consumeLabIntervention(ctx, tx, unit, invoker, now, LabOpWithdrawFromMarket)
+	return s.consumeLabIntervention(ctx, tx, unit, invoker, now, txID, LabOpWithdrawFromMarket)
 }
 
 func consumeFinalDispositionIntervention(
+	s *Store,
 	ctx context.Context,
 	tx pgx.Tx,
 	unit MedicationUnit,
 	invoker Invoker,
 	_ domain.Transition,
 	now time.Time,
+	txID string,
 ) error {
-	return consumeLabIntervention(ctx, tx, unit, invoker, now, LabOpFinalDisposition)
+	return s.consumeLabIntervention(ctx, tx, unit, invoker, now, txID, LabOpFinalDisposition)
 }
 
 func unitExpiredByDateAt(unit MedicationUnit, now time.Time) (bool, error) {

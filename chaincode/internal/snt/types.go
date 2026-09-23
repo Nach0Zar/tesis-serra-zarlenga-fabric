@@ -185,6 +185,15 @@ type UnitHistoryEntry struct {
 	Value     *MedicationUnit `json:"value"`
 }
 
+// LabInterventionHistoryEntry conserva el snapshot completo de cada
+// modificacion confirmada de la clave unica LabIntervention.
+type LabInterventionHistoryEntry struct {
+	TxID      string               `json:"txId"`
+	Timestamp string               `json:"timestamp"`
+	IsDelete  bool                 `json:"isDelete"`
+	Value     *LabInterventionView `json:"value"`
+}
+
 // ReturnOperation es el registro historico de una devolucion, persistido en la
 // clave propia ReturnOp+[gtin, numeroSerie, txIdDevolucion] de la PDC del par
 // (ADR-006, punto 4).

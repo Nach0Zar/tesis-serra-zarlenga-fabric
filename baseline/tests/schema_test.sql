@@ -11,6 +11,7 @@ BEGIN
        AND table_type = 'BASE TABLE';
 
     IF actual_tables <> ARRAY[
+        'lab_intervention_events',
         'lab_interventions',
         'medication_units',
         'organizations',
@@ -102,6 +103,13 @@ SELECT pg_temp.assert_table_signature('public.lab_interventions', ARRAY[
     'revocada_en:timestamp with time zone:nullable',
     'motivo_revocacion:text:nullable'
 ]);
+SELECT pg_temp.assert_table_signature('public.lab_intervention_events', ARRAY[
+    'gtin:character varying(14):not null',
+    'numero_serie:character varying(20):not null',
+    'event_sequence:bigint:not null', 'tx_id:text:not null',
+    'event_timestamp:timestamp with time zone:not null',
+    'snapshot:jsonb:not null'
+]);
 SELECT pg_temp.assert_table_signature('public.unit_events', ARRAY[
     'gtin:character varying(14):not null',
     'numero_serie:character varying(20):not null', 'tx_id:text:not null',
@@ -141,7 +149,7 @@ BEGIN
      WHERE constraint_record.contype = 'p'
        AND constraint_record.connamespace = 'public'::regnamespace;
     IF primary_keys <> ARRAY[
-        'lab_interventions_pk', 'medication_units_pk', 'organizations_pkey',
+        'lab_intervention_events_pk', 'lab_interventions_pk', 'medication_units_pk', 'organizations_pkey',
         'return_operations_pk', 'transfer_operations_pk', 'unit_events_pk'
     ] THEN
         RAISE EXCEPTION 'unexpected primary keys: %', primary_keys;
@@ -153,6 +161,7 @@ BEGIN
      WHERE constraint_record.contype = 'f'
        AND constraint_record.connamespace = 'public'::regnamespace;
     IF foreign_keys <> ARRAY[
+        'lab_intervention_events_unit_fk',
         'lab_interventions_issuer_fk', 'lab_interventions_unit_fk',
         'return_operations_unit_fk', 'transfer_operations_unit_fk',
         'unit_events_invoker_fk', 'unit_events_unit_fk'
@@ -170,7 +179,7 @@ BEGIN
              AND constraint_record.connamespace = 'public'::regnamespace
            GROUP BY relation.relname
       ) AS table_checks;
-    IF check_counts <> ARRAY[9, 5, 5, 3, 12, 7]::BIGINT[] THEN
+    IF check_counts <> ARRAY[3, 9, 5, 5, 3, 12, 7]::BIGINT[] THEN
         RAISE EXCEPTION 'unexpected check constraint counts: %', check_counts;
     END IF;
 END;
@@ -211,11 +220,12 @@ BEGIN
          WHERE contype = 'f'
            AND conrelid IN (
                'public.lab_interventions'::regclass,
+               'public.lab_intervention_events'::regclass,
                'public.unit_events'::regclass,
                'public.transfer_operations'::regclass,
                'public.return_operations'::regclass
-           )) <> 6 THEN
-        RAISE EXCEPTION 'expected six foreign keys on event and operation tables';
+           )) <> 7 THEN
+        RAISE EXCEPTION 'expected seven foreign keys on event and operation tables';
     END IF;
 
     IF EXISTS (
@@ -224,6 +234,14 @@ BEGIN
            AND NOT tgisinternal
     ) THEN
         RAISE EXCEPTION 'unit_events append-only convention must not be enforced by database triggers';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM pg_trigger
+         WHERE tgrelid = 'public.lab_intervention_events'::regclass
+           AND NOT tgisinternal
+    ) THEN
+        RAISE EXCEPTION 'lab intervention history append-only convention must not be enforced by database triggers';
     END IF;
 
     IF (SELECT count(*) FROM pg_trigger
