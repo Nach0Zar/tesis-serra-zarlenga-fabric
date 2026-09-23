@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import hashlib
 import json
 import sys
 from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from endorsement_evidence import load_json, require, transaction_evidence
 
 
 TRANSACTIONS = {
@@ -35,41 +40,6 @@ SANITIZED = {
     "register-unit-marker-sanitized.json": "register-unit-lab",
     "dispatch-lab-drugstore-sanitized.json": "dispatch-lab-drugstore",
 }
-
-
-def require(condition: bool, message: str) -> None:
-    if not condition:
-        raise ValueError(message)
-
-
-def transaction_evidence(
-    block: dict, txid: str, expected_code: int, expected_channel: str = "snt-channel"
-) -> dict:
-    transactions = block["data"]["data"]
-    matches = [
-        index for index, tx in enumerate(transactions)
-        if tx["payload"]["header"]["channel_header"]["tx_id"] == txid
-    ]
-    require(len(matches) == 1, "expected exactly one matching transaction ID")
-    codes = base64.b64decode(block["metadata"]["metadata"][2], validate=True)
-    require(len(codes) == len(transactions), "validation filter length mismatch")
-    index = matches[0]
-    header = transactions[index]["payload"]["header"]["channel_header"]
-    require(
-        header["channel_id"] == expected_channel,
-        f"unexpected channel: expected {expected_channel}, got {header['channel_id']}",
-    )
-    require(codes[index] == expected_code, f"transaction {txid}: expected code {expected_code}, got {codes[index]}")
-    return {
-        "transactionId": txid,
-        "transactionIndex": index,
-        "blockNumber": int(block["header"]["number"]),
-        "validationCode": codes[index],
-    }
-
-
-def load_json(path: Path):
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def verify_run(directory: Path, expected_channel: str = "snt-channel") -> dict:

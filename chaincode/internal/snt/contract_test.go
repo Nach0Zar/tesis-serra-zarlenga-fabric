@@ -8,6 +8,7 @@ import (
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
+	"github.com/hyperledger/fabric-contract-api-go/v2/metadata"
 )
 
 // contractOperations es la superficie publica congelada por
@@ -100,6 +101,35 @@ func TestChaincodeBuildsWithContractAPI(t *testing.T) {
 	}
 	if chaincode == nil {
 		t.Fatal("NewChaincode devolvio un chaincode nulo")
+	}
+}
+
+// TestLabInterventionConditionalFieldsAreOptionalInMetadata protege la
+// diferencia entre `json:,omitempty` y `metadata:,optional`: Contract API no
+// infiere la segunda a partir de la primera. Si estos campos aparecen en
+// `required`, una autorizacion ACTIVA valida falla durante la serializacion de
+// la respuesta porque todavia no tiene datos de consumo ni revocacion.
+func TestLabInterventionConditionalFieldsAreOptionalInMetadata(t *testing.T) {
+	components := new(metadata.ComponentMetadata)
+	_, err := metadata.GetSchema(reflect.TypeOf(LabInterventionView{}), components)
+	if err != nil {
+		t.Fatalf("no se pudo generar el schema de LabInterventionView: %v", err)
+	}
+	schema, found := components.Schemas["LabInterventionView"]
+	if !found {
+		t.Fatal("metadata no contiene LabInterventionView")
+	}
+	required := make(map[string]bool, len(schema.Required))
+	for _, field := range schema.Required {
+		required[field] = true
+	}
+	for _, field := range []string{"consumidaEn", "revocadaEn", "motivoRevocacion"} {
+		if required[field] {
+			t.Fatalf("%s no puede ser required en LabInterventionView", field)
+		}
+		if _, found := schema.Properties[field]; !found {
+			t.Fatalf("metadata no contiene la propiedad condicional %s", field)
+		}
 	}
 }
 
