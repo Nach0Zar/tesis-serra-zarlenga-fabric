@@ -169,9 +169,9 @@ type LabInterventionView struct {
 	Estado           LabInterventionState     `json:"estado"`
 	EmitidaPor       string                   `json:"emitidaPor"`
 	EmitidaEn        string                   `json:"emitidaEn"`
-	ConsumidaEn      string                   `json:"consumidaEn,omitempty"`
-	RevocadaEn       string                   `json:"revocadaEn,omitempty"`
-	MotivoRevocacion string                   `json:"motivoRevocacion,omitempty"`
+	ConsumidaEn      string                   `json:"consumidaEn,omitempty" metadata:",optional"`
+	RevocadaEn       string                   `json:"revocadaEn,omitempty" metadata:",optional"`
+	MotivoRevocacion string                   `json:"motivoRevocacion,omitempty" metadata:",optional"`
 }
 
 // UnitHistoryEntry es una entrada del historial de una unidad

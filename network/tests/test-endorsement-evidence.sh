@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regresiones del harness sin Docker: peer observador atrasado, tx exacta y token.
+# Regresiones del harness sin Docker: peer observador, tx exacta y token.
 set -Eeuo pipefail
 REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 TEST_DIR="$(mktemp -d)"
@@ -16,7 +16,8 @@ if (prepare_run_directory) 2>/dev/null; then
 fi
 [[ "$(<"${RUN_DIR}/sentinel")" == preserve ]]
 
-select_identity() { :; }
+selected_identity=""
+select_identity() { selected_identity="$1"; }
 sleep() { :; }
 attempts=0
 txid="$(printf '%064d' 1)"
@@ -38,8 +39,11 @@ configtxlator() {
   [[ "$1" == proto_decode && "$2" == --input && "$6" == --output ]]
   cp -- "$3" "$7"
 }
+LAST_OBSERVER_MSP="LabMSP"
 capture_block observer-lag 10
 [[ "${attempts}" -eq 3 ]]
+[[ "${selected_identity}" == "LabMSP" ]]
+[[ ! -e "${RUN_DIR}/observer-lag-block-fetch.txt" ]]
 jq -e '.transactionIndex == 1 and .validationCode == 10 and .blockNumber == 42' \
   "${RUN_DIR}/observer-lag-transaction.json" >/dev/null
 

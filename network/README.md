@@ -5,7 +5,7 @@ Este directorio contiene la configuración de la red Hyperledger Fabric del prot
 La relación completa entre las issues de red y las implementaciones del
 chaincode está registrada en
 [`docs/net-cc-dependencies.md`](../docs/net-cc-dependencies.md). Ese documento
-también fija el orden de integración del Core y separa la evidencia futura de
+también fija el orden de integración del Core y separa la evidencia de
 operaciones extraordinarias en NET-9.
 
 ## Diagrama de despliegue
@@ -157,6 +157,7 @@ python3 network/scripts/validate-organizations-manifest.py
 
 ./test/integration/pdc-evidence.sh
 ./test/integration/endorsement-evidence.sh
+./test/integration/extraordinary-endorsement-evidence.sh
 ./network/network.sh verify
 ```
 
@@ -174,6 +175,49 @@ versionan en [`network/evidence/NET-6.md`](evidence/NET-6.md). El harness
 aborta si detecta stubs de CC: la evidencia final solo puede obtenerse después
 de integrar las CC Core, ejecutar `git pull origin develop`, regenerar el
 paquete y comenzar desde un ledger limpio.
+
+### Evidencia de endoso para operaciones extraordinarias
+
+NET-9 reutiliza la corrida verificada de NET-6 sobre el mismo ledger limpio y
+extiende la evidencia a las operaciones EXT ya integradas:
+
+```bash
+./test/integration/extraordinary-endorsement-evidence.sh
+```
+
+El harness exige exactamente una corrida NET-6 válida y comprueba, contra la
+transacción exacta de cada bloque:
+
+- cierre extraordinario de tránsito en T09 y T13–T16 con endosos de emisor,
+  receptor y regulador, cierre del registro privado y restauración de la SBE
+  de reposo al emisor;
+- rechazo Fabric con `ENDORSEMENT_POLICY_FAILURE` cuando falta cualquiera de
+  esos endosos o, fuera de tránsito, el regulador o el custodio;
+- marcadores regulatorios para las operaciones extraordinarias cubiertas;
+- autorización, vencimiento derivado, revocación, reemplazo y consumo de
+  `LabIntervention`, junto con su historial confirmado;
+- retiro, reingreso y disposición final por un laboratorio no custodio con
+  endosos del laboratorio, regulador y custodio actual;
+- separación entre rechazo de plataforma y rechazo tipificado por lógica;
+- ausencia de payload privado en los extractos sanitizados citables.
+
+Cada ejecución usa `build/evidence/net-9/run-<token>/`; un token repetido se
+rechaza sin borrar resultados anteriores. `artifacts.json` registra tamaño y
+SHA-256 de todo archivo verificado, mientras que `result.json` resume las
+aserciones completadas. Ambos se recalculan en CI mediante
+`network/scripts/verify-net9-evidence.py`. El procedimiento, límites y resultado
+citable se documentan en [`network/evidence/NET-9.md`](evidence/NET-9.md).
+
+Para una repetición manual puede fijarse un token alfanumérico único de hasta
+14 caracteres:
+
+```bash
+SNT_NET9_RUN_TOKEN=revision1 ./test/integration/extraordinary-endorsement-evidence.sh
+```
+
+El script no modifica el chaincode ni sus reglas: ejercita el contrato
+desplegado y decodifica evidencia nativa de Fabric. Tampoco inicia, despliega o
+detiene la red.
 
 ### Prueba funcional end-to-end de EXT-7
 
@@ -205,9 +249,9 @@ SNT_EXT7_RUN_TOKEN=revision1 ./test/integration/functional-e2e.sh
 
 El script no arranca, redespliega ni detiene la red. `network.sh down` conserva
 los volúmenes del ledger; no es necesario descartarlos porque cada ejecución
-usa seriales distintos. La prueba no consume el listener de NET-8 ni demuestra
-las políticas extraordinarias de NET-9: esas responsabilidades permanecen en
-sus respectivas issues.
+usa seriales distintos. La prueba no consume el listener de NET-8 ni sustituye
+la matriz de endoso de NET-9: esas responsabilidades permanecen en sus
+respectivos artefactos.
 
 ## Colecciones privadas y evidencia
 
@@ -291,8 +335,7 @@ El proceso implementa el mecanismo `cafiles` soportado por Fabric CA: un único 
 
 ## Fuera de alcance
 
-NET-6/NET-7 cubren únicamente el flujo Core. Las transiciones extraordinarias,
-la intervención de un laboratorio no custodio y su evidencia de red pertenecen
-a [NET-9](https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/issues/97).
-El listener regulatorio permanece en NET-8. Ninguno de esos comportamientos se
-simula ni se anticipa en los scripts Core.
+NET-6/NET-7 cubren únicamente el flujo Core. Las transiciones extraordinarias y
+la intervención de un laboratorio no custodio se validan por separado en
+[NET-9](https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/issues/97).
+El listener regulatorio permanece en NET-8; NET-9 no lo implementa ni lo usa.

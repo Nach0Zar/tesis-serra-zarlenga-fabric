@@ -90,8 +90,8 @@ jobs:
           python3 -m unittest discover -s network/tests -v
           ./network/tests/test-pdc-evidence-retry.sh
           bash network/tests/test-endorsement-evidence.sh
-          bash -n network/network.sh test/integration/pdc-evidence.sh test/integration/endorsement-evidence.sh test/integration/functional-e2e.sh network/tests/test-pdc-evidence-retry.sh network/tests/test-endorsement-evidence.sh
-          shellcheck network/network.sh test/integration/pdc-evidence.sh test/integration/endorsement-evidence.sh test/integration/functional-e2e.sh network/tests/test-pdc-evidence-retry.sh network/tests/test-endorsement-evidence.sh
+          bash -n network/network.sh test/integration/pdc-evidence.sh test/integration/endorsement-evidence-common.sh test/integration/endorsement-evidence.sh test/integration/extraordinary-endorsement-evidence.sh test/integration/functional-e2e.sh network/tests/test-pdc-evidence-retry.sh network/tests/test-endorsement-evidence.sh
+          shellcheck network/network.sh test/integration/pdc-evidence.sh test/integration/endorsement-evidence-common.sh test/integration/endorsement-evidence.sh test/integration/extraordinary-endorsement-evidence.sh test/integration/functional-e2e.sh network/tests/test-pdc-evidence-retry.sh network/tests/test-endorsement-evidence.sh
 
       - name: Generate cryptographic material
         shell: bash
@@ -128,6 +128,20 @@ jobs:
           NET6_RUN_DIR="$(dirname "${NET6_RESULTS[0]}")"
           python3 network/scripts/verify-net6-evidence.py run \
             --directory "${NET6_RUN_DIR}" --manifest "${NET6_RUN_DIR}/artifacts.json" \
+            --channel "${SNT_CHANNEL_NAME}"
+
+          ./test/integration/extraordinary-endorsement-evidence.sh
+          mapfile -t NET9_RESULTS < <(find build/evidence/net-9 -mindepth 2 -maxdepth 2 -type f -name result.json)
+          test "${#NET9_RESULTS[@]}" -eq 1
+          jq -e '
+            .schemaVersion == "1.0.0"
+            and .channel == "snt-channel"
+            and .chaincode == "snt"
+            and ([.assertions[]] | all)
+          ' "${NET9_RESULTS[0]}" >/dev/null
+          NET9_RUN_DIR="$(dirname "${NET9_RESULTS[0]}")"
+          python3 network/scripts/verify-net9-evidence.py run \
+            --directory "${NET9_RUN_DIR}" --manifest "${NET9_RUN_DIR}/artifacts.json" \
             --channel "${SNT_CHANNEL_NAME}"
 
           ./test/integration/functional-e2e.sh
