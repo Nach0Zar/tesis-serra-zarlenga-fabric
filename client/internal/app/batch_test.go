@@ -275,12 +275,21 @@ func TestBatchCommandsMapToTheirContractOperation(t *testing.T) {
 func TestBatchSurfacesQueryFailure(t *testing.T) {
 	client := &scriptedClient{queryErr: errors.New(`{"code":"INTERNAL_ERROR","message":"sin conexion"}`)}
 
-	_, stderr, code := runBatchCommand(t, client, batchArguments()...)
+	report, stderr, code := runBatchCommand(t, client, batchArguments()...)
 	if code != exitRuntime {
 		t.Fatalf("codigo = %d", code)
 	}
 	if !strings.Contains(stderr, "INTERNAL_ERROR") {
 		t.Fatalf("el error debe conservar el code contractual: %s", stderr)
+	}
+	// El reporte que igual se emite tiene que IDENTIFICAR la solicitud. Un
+	// objeto cero-valuado no dice de que lote se trata y no cumple el formato
+	// documentado.
+	if report.Operacion != "WithdrawFromMarket" || report.GTIN == "" || report.Lote == "" {
+		t.Fatalf("el reporte debe identificar la solicitud aunque la consulta falle: %+v", report)
+	}
+	if report.Unidades == nil {
+		t.Fatal("la lista de unidades debe ser vacia y no nula")
 	}
 }
 
@@ -320,13 +329,69 @@ func TestBatchKeepsPartialReportWhenInterrupted(t *testing.T) {
 	if report.Confirmadas != 1 {
 		t.Fatalf("la unidad confirmada antes del corte debe quedar visible: %+v", report)
 	}
-	// SN-2 se intento y fallo por contexto; SN-3 nunca se intento. Las dos
-	// quedan como NO_INTENTADA, que es lo que un reintento necesita saber.
-	if report.NoIntentadas != 2 {
-		t.Fatalf("unidades no intentadas = %d, se esperaban 2: %+v", report.NoIntentadas, report)
+	// La distincion que importa: SN-2 ya habia sido invocada cuando el contexto
+	// vencio --su desenlace es INDETERMINADO, porque el envio pudo confirmarse
+	// igual-- y solo SN-3 no se intento nunca. Meter las dos en la misma bolsa
+	// afirmaria sobre SN-2 algo que el cliente no sabe.
+	if report.Indeterminadas != 1 {
+		t.Fatalf("la unidad en curso debe quedar indeterminada: %+v", report)
+	}
+	if report.NoIntentadas != 1 {
+		t.Fatalf("solo SN-3 no se intento: %+v", report)
 	}
 	if report.Rechazadas != 0 {
 		t.Fatal("un corte por contexto no es un rechazo de la unidad")
+	}
+	for _, unidad := range report.Unidades {
+		switch unidad.NumeroSerie {
+		case "SN-2":
+			if unidad.Resultado != batchResultIndeterminate {
+				t.Fatalf("SN-2 = %+v", unidad)
+			}
+		case "SN-3":
+			if unidad.Resultado != batchResultNotAttempted {
+				t.Fatalf("SN-3 = %+v", unidad)
+			}
+		}
+	}
+}
+
+// TestBatchReconcilesInterruptedUnitThatCommitted cubre el caso que vuelve
+// necesaria la reconciliacion: el timeout ocurre DESPUES del envio y la
+// transaccion confirma igual.
+//
+// La relectura usa un contexto propio --el del lote ya vencio-- y encuentra la
+// unidad en el estado destino, de modo que se reporta CONFIRMADA en lugar de
+// indeterminada. Sin la reconciliacion, un retiro efectivamente aplicado
+// figuraria como no aplicado y el operador lo reintentaria a ciegas.
+func TestBatchReconcilesInterruptedUnitThatCommitted(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client := &scriptedClient{
+		queryPayload: unitsPayload(t,
+			medicationUnitView{NumeroSerie: "SN-1", Lote: "L-2026-01", Estado: "EN_CUSTODIA"},
+			medicationUnitView{NumeroSerie: "SN-2", Lote: "L-2026-01", Estado: "EN_CUSTODIA"},
+		),
+		responses:   map[string]error{},
+		rereads:     map[string]string{"SN-1": "RETIRADO_MERCADO"},
+		cancelAfter: 1,
+		cancel:      cancel,
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := runBatch(ctx, batchWithdraw, batchArguments(), &stdout, &stderr, stubDependencies(client))
+	if code == exitSuccess {
+		t.Fatal("el lote se interrumpio y no puede dar cero")
+	}
+	var report batchReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("la salida no es un reporte JSON: %v", err)
+	}
+	if report.Confirmadas != 1 || report.Indeterminadas != 0 {
+		t.Fatalf("la unidad interrumpida confirmo y debe reportarse asi: %+v", report)
+	}
+	if len(client.readUnits) != 1 || client.readUnits[0] != "SN-1" {
+		t.Fatalf("la unidad interrumpida debe releerse: %v", client.readUnits)
 	}
 }
 

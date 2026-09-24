@@ -160,8 +160,23 @@ no emitió ninguna transacción no puede quedar registrado como aplicado.
 
 **Interrupción.** Si el timeout vence a mitad del lote, el reporte se emite igual —el
 ledger ya tiene unidades retiradas y el operador necesita saber cuáles— con
-`interrumpido: true` y las unidades restantes marcadas `NO_INTENTADA`, distinguibles de
-las rechazadas.
+`interrumpido: true` y tres clases distintas:
+
+| Resultado | Significado |
+|---|---|
+| `NO_INTENTADA` | nunca se invocó; su estado es el que ya tenía |
+| `INDETERMINADA` | la invocación ya había empezado y no se pudo resolver |
+| `CONFIRMADA` | la invocación había empezado y la reconciliación la encontró aplicada |
+
+La unidad en curso **no** se declara `NO_INTENTADA`: `SubmitWithContext` puede vencer
+mientras espera el estado de commit, es decir **después** de haber enviado la
+transacción, y esa transacción puede confirmarse igual. El comando la relee con un
+contexto propio y acotado; si aparece en el estado destino la reporta confirmada, y si
+no, la deja `INDETERMINADA` en vez de afirmar un desenlace que no conoce.
+
+**Fallo de la consulta.** Si `QueryUnitsByGTIN` falla, el reporte se emite igual pero
+identificando la solicitud —operación, GTIN y lote— con la lista de unidades vacía, no
+como un objeto cero-valuado.
 
 ### Listener regulatorio de ANMAT
 

@@ -41,6 +41,11 @@ import (
 // El contrato ya declara que QueryUnitsByGTIN no pagina, de modo que este
 // comando hereda ese limite y no introduce uno nuevo.
 
+// reconcileTimeout acota la relectura que resuelve una unidad interrumpida.
+// Es corta a proposito: el lote ya fallo y esto es un ultimo intento de no
+// dejar el desenlace sin averiguar, no una prolongacion de la operacion.
+const reconcileTimeout = 10 * time.Second
+
 const (
 	batchWithdraw = "withdraw-batch"
 	batchProhibit = "prohibit-batch"
@@ -83,16 +88,17 @@ type batchUnitResult struct {
 }
 
 type batchReport struct {
-	Operacion    string            `json:"operacion"`
-	GTIN         string            `json:"gtin"`
-	Lote         string            `json:"lote"`
-	Alcanzadas   int               `json:"unidadesAlcanzadas"`
-	Confirmadas  int               `json:"confirmadas"`
-	YaAplicadas  int               `json:"yaAplicadas"`
-	Rechazadas   int               `json:"rechazadas"`
-	NoIntentadas int               `json:"noIntentadas"`
-	Interrumpido bool              `json:"interrumpido"`
-	Unidades     []batchUnitResult `json:"unidades"`
+	Operacion      string            `json:"operacion"`
+	GTIN           string            `json:"gtin"`
+	Lote           string            `json:"lote"`
+	Alcanzadas     int               `json:"unidadesAlcanzadas"`
+	Confirmadas    int               `json:"confirmadas"`
+	YaAplicadas    int               `json:"yaAplicadas"`
+	Rechazadas     int               `json:"rechazadas"`
+	NoIntentadas   int               `json:"noIntentadas"`
+	Indeterminadas int               `json:"indeterminadas"`
+	Interrumpido   bool              `json:"interrumpido"`
+	Unidades       []batchUnitResult `json:"unidades"`
 }
 
 const (
@@ -103,6 +109,14 @@ const (
 	// porque el contexto vencio antes. NO es un rechazo: sobre esa unidad no
 	// se intento nada y su estado en el ledger es el que ya tenia.
 	batchResultNotAttempted = "NO_INTENTADA"
+	// La unidad cuya invocacion YA empezo cuando el contexto vencio. No se
+	// puede afirmar que no se intento: SubmitWithContext puede vencer mientras
+	// espera el estado de commit, despues de haber enviado la transaccion, y
+	// esa transaccion puede confirmarse igual. Se relee la unidad con un
+	// contexto propio para reconciliar, y si esa lectura no alcanza a
+	// resolverlo el resultado queda declarado como indeterminado en lugar de
+	// afirmar una certeza que el cliente no tiene.
+	batchResultIndeterminate = "INDETERMINADA"
 )
 
 func isBatchCommand(command string) bool {
@@ -247,18 +261,23 @@ func applyBatch(
 	gatewayClient transactionClient,
 	opts batchOptions,
 ) (batchReport, error) {
-	units, err := unitsInLot(ctx, gatewayClient, opts.gtin, opts.lot)
-	if err != nil {
-		return batchReport{}, err
+	// El reporte se arma ANTES de consultar. Si la consulta falla, runBatch lo
+	// serializa igual y tiene que identificar la solicitud: un objeto con
+	// operacion, GTIN y lote vacios no le sirve a nadie y no cumple el formato
+	// que la documentacion promete.
+	report := batchReport{
+		Operacion: opts.function,
+		GTIN:      opts.gtin,
+		Lote:      opts.lot,
+		Unidades:  []batchUnitResult{},
 	}
 
-	report := batchReport{
-		Operacion:  opts.function,
-		GTIN:       opts.gtin,
-		Lote:       opts.lot,
-		Alcanzadas: len(units),
-		Unidades:   make([]batchUnitResult, 0, len(units)),
+	units, err := unitsInLot(ctx, gatewayClient, opts.gtin, opts.lot)
+	if err != nil {
+		return report, err
 	}
+	report.Alcanzadas = len(units)
+	report.Unidades = make([]batchUnitResult, 0, len(units))
 
 	// Una seleccion vacia NO es un lote aplicado con exito. Con un GTIN o un
 	// lote mal tipeado el comando no emitiria ninguna transaccion, y devolver
@@ -304,7 +323,8 @@ func applyBatch(
 			// las rechazadas.
 			if ctx.Err() != nil {
 				report.Interrumpido = true
-				markNotAttempted(&report, units[index:])
+				reconcileInterrupted(gatewayClient, opts, unit, &report)
+				markNotAttempted(&report, units[index+1:])
 				return report, invokeErr
 			}
 			contractError := contracterr.Normalize(invokeErr, opts.function)
@@ -432,4 +452,51 @@ func classifyRejection(
 // sin distinguir el origen.
 func newClientError(code, format string, arguments ...any) error {
 	return fmt.Errorf(`{"code":%q,"message":%q}`, code, fmt.Sprintf(format, arguments...))
+}
+
+// reconcileInterrupted resuelve, hasta donde el cliente puede, el desenlace de
+// la unidad cuya invocacion ya habia empezado cuando el contexto vencio.
+//
+// El problema es real y no teorico: SubmitWithContext puede vencer MIENTRAS
+// espera el estado de commit, es decir despues de haber enviado la transaccion
+// al ordenamiento. Esa transaccion puede confirmarse igual. Declarar la unidad
+// como NO_INTENTADA seria afirmar algo que el cliente no sabe.
+//
+// La reconciliacion usa un contexto PROPIO y acotado, porque el del lote ya
+// esta vencido y cualquier lectura con el fallaria de inmediato. Si la unidad
+// aparece en el estado destino, la transaccion confirmo y se reporta como tal.
+// Si no, el resultado queda INDETERMINADA y no rechazada: el cliente no puede
+// distinguir "no confirmo" de "todavia no confirmo", y presentar la segunda
+// como la primera reintroduciría la falsa certeza por el otro lado.
+func reconcileInterrupted(
+	gatewayClient transactionClient,
+	opts batchOptions,
+	unit medicationUnitView,
+	report *batchReport,
+) {
+	resultado := batchUnitResult{
+		NumeroSerie: unit.NumeroSerie,
+		Resultado:   batchResultIndeterminate,
+		Estado:      unit.Estado,
+	}
+
+	reconcileCtx, cancel := context.WithTimeout(context.Background(), reconcileTimeout)
+	defer cancel()
+
+	payload, err := gatewayClient.Query(
+		reconcileCtx, "ReadUnit", []string{opts.gtin, unit.NumeroSerie}, nil)
+	if err == nil {
+		var current medicationUnitView
+		if err := json.Unmarshal(payload, &current); err == nil {
+			resultado.Estado = current.Estado
+			if current.Estado == opts.targetState {
+				report.Confirmadas++
+				resultado.Resultado = batchResultConfirmed
+				report.Unidades = append(report.Unidades, resultado)
+				return
+			}
+		}
+	}
+	report.Indeterminadas++
+	report.Unidades = append(report.Unidades, resultado)
 }
