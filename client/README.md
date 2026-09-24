@@ -143,10 +143,25 @@ retiro **parcial** no puede reportarse como éxito global. Cada rechazo conserva
 `code` contractual.
 
 **Idempotencia.** Reintentar el lote no vuelve a invocar las unidades que ya están en
-el estado destino: se omiten con resultado `YA_APLICADA`. La decisión se toma por el
-**estado observado** y no atrapando `INVALID_STATE_TRANSITION`, porque ese mismo código
-lo produce también una unidad que *no* puede retirarse —una `DISPENSADO`, que ADR-001
-no declara como origen de T17–T19— y esa es un rechazo legítimo que debe verse.
+el estado destino: se omiten con resultado `YA_APLICADA`. La decisión **no** se toma
+atrapando `INVALID_STATE_TRANSITION`, porque ese mismo código lo produce también una
+unidad que *no* puede retirarse —una `DISPENSADO`, que ADR-001 no declara como origen
+de T17–T19— y esa es un rechazo legítimo que debe verse.
+
+Se decide en dos momentos: por el **estado observado** en la consulta que resolvió el
+lote, y —si la invocación igual devuelve `INVALID_STATE_TRANSITION`— **releyendo la
+unidad**, porque entre la consulta y la invocación otra corrida pudo aplicarla. Solo se
+marca `YA_APLICADA` si la unidad está *ahora* en el estado destino; en cualquier otro
+estado, o si la relectura falla, se conserva el rechazo.
+
+**Lote vacío.** Si el GTIN y el lote no alcanzan ninguna unidad, el comando **falla**
+con `INVALID_REQUEST` en vez de reportar un no-op como éxito: un retiro del mercado que
+no emitió ninguna transacción no puede quedar registrado como aplicado.
+
+**Interrupción.** Si el timeout vence a mitad del lote, el reporte se emite igual —el
+ledger ya tiene unidades retiradas y el operador necesita saber cuáles— con
+`interrumpido: true` y las unidades restantes marcadas `NO_INTENTADA`, distinguibles de
+las rechazadas.
 
 ### Listener regulatorio de ANMAT
 

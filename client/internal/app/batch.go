@@ -83,20 +83,26 @@ type batchUnitResult struct {
 }
 
 type batchReport struct {
-	Operacion   string            `json:"operacion"`
-	GTIN        string            `json:"gtin"`
-	Lote        string            `json:"lote"`
-	Alcanzadas  int               `json:"unidadesAlcanzadas"`
-	Confirmadas int               `json:"confirmadas"`
-	YaAplicadas int               `json:"yaAplicadas"`
-	Rechazadas  int               `json:"rechazadas"`
-	Unidades    []batchUnitResult `json:"unidades"`
+	Operacion    string            `json:"operacion"`
+	GTIN         string            `json:"gtin"`
+	Lote         string            `json:"lote"`
+	Alcanzadas   int               `json:"unidadesAlcanzadas"`
+	Confirmadas  int               `json:"confirmadas"`
+	YaAplicadas  int               `json:"yaAplicadas"`
+	Rechazadas   int               `json:"rechazadas"`
+	NoIntentadas int               `json:"noIntentadas"`
+	Interrumpido bool              `json:"interrumpido"`
+	Unidades     []batchUnitResult `json:"unidades"`
 }
 
 const (
 	batchResultConfirmed = "CONFIRMADA"
 	batchResultAlready   = "YA_APLICADA"
 	batchResultRejected  = "RECHAZADA"
+	// Una unidad que el lote alcanzaba pero que nunca se llego a invocar,
+	// porque el contexto vencio antes. NO es un rechazo: sobre esa unidad no
+	// se intento nada y su estado en el ledger es el que ya tenia.
+	batchResultNotAttempted = "NO_INTENTADA"
 )
 
 func isBatchCommand(command string) bool {
@@ -142,16 +148,22 @@ func runBatch(
 
 	report, err := applyBatch(ctx, gatewayClient, opts)
 	closeErr := gatewayClient.Close()
+
+	// El reporte se emite SIEMPRE, incluso cuando el lote aborto. Para cuando
+	// el contexto vence el ledger ya puede tener unidades retiradas, y el
+	// operador necesita saber cuales: callarlo por haber fallado dejaria una
+	// modificacion real sin registro visible, que es justo lo que el criterio
+	// de #114 sobre el retiro parcial busca evitar.
+	if writeErr := writeJSONLine(stdout, report); writeErr != nil {
+		writeRuntimeError(stderr, writeErr, "output")
+		return exitRuntime
+	}
 	if err != nil {
 		writeRuntimeError(stderr, err, command)
 		return exitRuntime
 	}
 	if closeErr != nil {
 		writeRuntimeError(stderr, closeErr, "close")
-		return exitRuntime
-	}
-	if err := writeJSONLine(stdout, report); err != nil {
-		writeRuntimeError(stderr, err, "output")
 		return exitRuntime
 	}
 
@@ -248,7 +260,19 @@ func applyBatch(
 		Unidades:   make([]batchUnitResult, 0, len(units)),
 	}
 
-	for _, unit := range units {
+	// Una seleccion vacia NO es un lote aplicado con exito. Con un GTIN o un
+	// lote mal tipeado el comando no emitiria ninguna transaccion, y devolver
+	// cero dejaria que una automatizacion registre como exitoso un no-op
+	// completo sobre un retiro del mercado. Se reporta el lote vacio -- para
+	// que quede constancia de que la seleccion no encontro nada -- y se
+	// devuelve error.
+	if len(units) == 0 {
+		return report, newClientError("INVALID_REQUEST",
+			"el lote %s del GTIN %s no alcanza ninguna unidad; ninguna transaccion fue emitida",
+			opts.lot, opts.gtin)
+	}
+
+	for index, unit := range units {
 		// La idempotencia se decide por el ESTADO OBSERVADO y no atrapando
 		// INVALID_STATE_TRANSITION. Los dos casos devuelven ese codigo y son
 		// distintos: una unidad ya retirada es trabajo hecho, y una unidad
@@ -272,20 +296,26 @@ func applyBatch(
 		})
 		payload, invokeErr := gatewayClient.Invoke(ctx, opts.function, []string{request}, nil)
 		if invokeErr != nil {
-			// Un fallo de contexto corta el lote: seguir invocando con el
-			// contexto vencido produciria una lista de errores de transporte
-			// que no dicen nada del estado de las unidades.
+			// Un fallo de contexto corta el lote, pero NO descarta lo hecho:
+			// para entonces el ledger ya puede tener unidades retiradas, y
+			// perder el reporte dejaria al operador sin saber cuales. Se
+			// devuelve el reporte acumulado junto con el error, con las
+			// unidades restantes marcadas NO_INTENTADA para distinguirlas de
+			// las rechazadas.
 			if ctx.Err() != nil {
-				return batchReport{}, invokeErr
+				report.Interrumpido = true
+				markNotAttempted(&report, units[index:])
+				return report, invokeErr
 			}
 			contractError := contracterr.Normalize(invokeErr, opts.function)
-			report.Rechazadas++
-			report.Unidades = append(report.Unidades, batchUnitResult{
-				NumeroSerie: unit.NumeroSerie,
-				Resultado:   batchResultRejected,
-				Estado:      unit.Estado,
-				Error:       &contractError,
-			})
+			resultado, yaAplicada := classifyRejection(
+				ctx, gatewayClient, opts, unit, contractError)
+			if yaAplicada {
+				report.YaAplicadas++
+			} else {
+				report.Rechazadas++
+			}
+			report.Unidades = append(report.Unidades, resultado)
 			continue
 		}
 
@@ -328,4 +358,78 @@ func unitsInLot(
 		}
 	}
 	return units, nil
+}
+
+// markNotAttempted deja constancia de las unidades que el lote alcanzaba y que
+// nunca se llegaron a invocar. Distinguirlas de las rechazadas importa: sobre
+// estas no se intento nada y su estado en el ledger es el que ya tenian, de
+// modo que reintentar el lote las toma sin ambiguedad.
+func markNotAttempted(report *batchReport, pending []medicationUnitView) {
+	for _, unit := range pending {
+		report.NoIntentadas++
+		report.Unidades = append(report.Unidades, batchUnitResult{
+			NumeroSerie: unit.NumeroSerie,
+			Resultado:   batchResultNotAttempted,
+			Estado:      unit.Estado,
+		})
+	}
+}
+
+// classifyRejection decide si un rechazo es trabajo ya hecho o un rechazo real.
+//
+// La idempotencia no puede apoyarse solo en el estado que devolvio la consulta
+// inicial: entre esa lectura y esta invocacion, otra corrida del mismo lote
+// pudo llevar la unidad al estado destino. Esta ejecucion recibe entonces
+// INVALID_STATE_TRANSITION por una unidad cuyo trabajo ya esta hecho.
+//
+// La relectura resuelve la carrera SIN perder la distincion que motivo el
+// diseño: solo se marca YA_APLICADA si la unidad esta AHORA en el estado
+// destino. Una unidad DISPENSADO devuelve el mismo codigo y sigue siendo un
+// rechazo legitimo -- ADR-001 no declara ese origen para T17-T19 --, y como no
+// esta en el estado destino, la relectura la deja donde estaba.
+//
+// Si la relectura falla se conserva el rechazo: ante la duda, el reporte
+// muestra el problema en lugar de esconderlo como trabajo hecho.
+func classifyRejection(
+	ctx context.Context,
+	gatewayClient transactionClient,
+	opts batchOptions,
+	unit medicationUnitView,
+	contractError contracterr.Error,
+) (batchUnitResult, bool) {
+	rejected := batchUnitResult{
+		NumeroSerie: unit.NumeroSerie,
+		Resultado:   batchResultRejected,
+		Estado:      unit.Estado,
+		Error:       &contractError,
+	}
+	if contractError.Code != "INVALID_STATE_TRANSITION" {
+		return rejected, false
+	}
+
+	payload, err := gatewayClient.Query(
+		ctx, "ReadUnit", []string{opts.gtin, unit.NumeroSerie}, nil)
+	if err != nil {
+		return rejected, false
+	}
+	var current medicationUnitView
+	if err := json.Unmarshal(payload, &current); err != nil {
+		return rejected, false
+	}
+	if current.Estado != opts.targetState {
+		rejected.Estado = current.Estado
+		return rejected, false
+	}
+	return batchUnitResult{
+		NumeroSerie: unit.NumeroSerie,
+		Resultado:   batchResultAlready,
+		Estado:      current.Estado,
+	}, true
+}
+
+// newClientError expresa una condicion detectada por el cliente con la misma
+// forma que un error del contrato, para que un consumidor ramifique por `code`
+// sin distinguir el origen.
+func newClientError(code, format string, arguments ...any) error {
+	return fmt.Errorf(`{"code":%q,"message":%q}`, code, fmt.Sprintf(format, arguments...))
 }
