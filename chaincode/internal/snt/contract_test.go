@@ -3,12 +3,14 @@ package snt
 import (
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/chaincode/internal/cerr"
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
 	"github.com/hyperledger/fabric-contract-api-go/v2/contractapi"
 	"github.com/hyperledger/fabric-contract-api-go/v2/metadata"
+	"github.com/hyperledger/fabric-contract-api-go/v2/serializer"
 )
 
 // contractOperations es la superficie publica congelada por
@@ -104,21 +106,85 @@ func TestChaincodeBuildsWithContractAPI(t *testing.T) {
 	}
 }
 
-// TestHistoryValueIsOptionalInMetadata extiende a los dos tipos de historial la
-// misma correccion que la version 2.11.1 aplico a LabInterventionView.
+// TestHistoryDeleteEntryValidatesAgainstTheGeneratedSchema protege la promesa
+// que el contrato hace para las dos operaciones de historial: en una entrada de
+// BORRADO, `value` es `null`.
 //
-// El contrato promete, para GetUnitHistory y GetLabInterventionHistory, que en
-// una entrada de BORRADO el campo `value` es `null`. Contract API deriva el
-// `required` del schema de la struct y no de `json:",omitempty"` -- que aca ni
-// siquiera esta, porque el campo se serializa siempre --, de modo que sin
-// `metadata:",optional"` el schema declara obligatorio un campo que el propio
-// contrato documenta como nulo. La respuesta prometida seria rechazada al
-// serializarse.
+// Ejerce el camino REAL y no la struct: compila el schema con CompileSchemas
+// --que es lo que envuelve el retorno con los components y resuelve los
+// `$ref`-- y devuelve la respuesta con el JSONSerializer del chaincode, que la
+// valida contra ese schema antes de entregarla.
 //
-// Hoy la condicion es inalcanzable: el chaincode no borra la clave de la unidad
-// ni la de intervencion. El test fija la propiedad igual, porque lo que esta
-// mal no es el comportamiento sino la CONTRADICCION entre el contrato y el
-// schema que el peer expone, y esa existe aunque nadie la ejerza.
+// Hoy la promesa se cumple, y por una razon que conviene tener fijada porque no
+// es evidente: el schema del componente referenciado por `value` declara
+// `properties`, `required` y `additionalProperties`, pero NO puede declarar
+// `type: "object"` -- ObjectMetadata de esta version de la libreria no tiene
+// ese campo --. En JSON Schema esas tres palabras clave solo restringen
+// instancias que YA son objetos, de modo que un `null` las satisface
+// vacuamente. Si una version futura emitiera el `type`, la respuesta que el
+// contrato promete pasaria a ser invalida y este test es el unico que lo
+// notaria.
+//
+// La validacion que ejerce es real y no vacua: con un MedicationUnit vacio en
+// lugar del nil, el serializador rechaza la respuesta por los campos
+// obligatorios que faltan.
+func TestHistoryDeleteEntryValidatesAgainstTheGeneratedSchema(t *testing.T) {
+	casos := map[string]any{
+		"UnitHistoryEntry": []UnitHistoryEntry{
+			{TxID: "tx-borrado", Timestamp: "2026-01-01T00:00:00Z", IsDelete: true, Value: nil},
+		},
+		"LabInterventionHistoryEntry": []LabInterventionHistoryEntry{
+			{TxID: "tx-borrado", Timestamp: "2026-01-01T00:00:00Z", IsDelete: true, Value: nil},
+		},
+	}
+
+	for nombre, respuesta := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			responseType := reflect.TypeOf(respuesta)
+			components := new(metadata.ComponentMetadata)
+			schema, err := metadata.GetSchema(responseType, components)
+			if err != nil {
+				t.Fatalf("no se pudo generar el schema: %v", err)
+			}
+
+			contractMetadata := metadata.ContractChaincodeMetadata{
+				Contracts: map[string]metadata.ContractMetadata{
+					"snt": {
+						Name: "snt",
+						Transactions: []metadata.TransactionMetadata{
+							{Name: nombre, Returns: metadata.ReturnMetadata{Schema: schema}},
+						},
+					},
+				},
+				Components: *components,
+			}
+			if err := contractMetadata.CompileSchemas(); err != nil {
+				t.Fatalf("no se pudo compilar el schema: %v", err)
+			}
+			returns := contractMetadata.Contracts["snt"].Transactions[0].Returns
+
+			serialized, err := new(serializer.JSONSerializer).ToString(
+				reflect.ValueOf(respuesta), responseType, &returns, components)
+			if err != nil {
+				t.Fatalf("la respuesta que el contrato promete no se pudo devolver: %v", err)
+			}
+			if !strings.Contains(serialized, `"value":null`) {
+				t.Fatalf("la entrada de borrado debe serializar value como null: %s", serialized)
+			}
+		})
+	}
+}
+
+// TestHistoryValueIsOptionalInMetadata declara `value` opcional en la metadata
+// legible por maquina de las dos entradas de historial.
+//
+// Alcance de lo que corrige, que NO es la validacion de la respuesta: el
+// servidor ya aceptaba `value: null` con el campo en `required`, porque la
+// clave esta presente y el schema referenciado la satisface vacuamente (ver el
+// test de arriba). Lo que estaba mal es lo que la metadata le DICE a un
+// consumidor: declarar obligatorio un campo que el propio contrato documenta
+// como nulo lleva a que un cliente generado desde ese schema lo modele como no
+// opcional y falle al recibir una entrada de borrado.
 func TestHistoryValueIsOptionalInMetadata(t *testing.T) {
 	for _, entry := range []any{UnitHistoryEntry{}, LabInterventionHistoryEntry{}} {
 		entryType := reflect.TypeOf(entry)

@@ -183,11 +183,18 @@ type UnitHistoryEntry struct {
 	Timestamp string `json:"timestamp"`
 	IsDelete  bool   `json:"isDelete"`
 	// `value` es NULO en una entrada de borrado, y el contrato lo promete asi.
-	// `metadata:",optional"` es lo que lo vuelve cierto en el schema que genera
-	// Contract API: sin eso el campo queda en `required` y una respuesta que el
-	// propio contrato documenta seria rechazada al serializarse. Es la misma
-	// correccion que la version 2.11.1 aplico a LabInterventionView, extendida
-	// a los dos tipos de historial.
+	//
+	// `metadata:",optional"` NO es lo que vuelve valida esa respuesta: el
+	// servidor ya la aceptaba con el campo en `required`, porque la clave esta
+	// presente y el schema referenciado no declara `type: "object"`, de modo
+	// que un null satisface vacuamente sus `properties` y `required`. Lo que el
+	// tag corrige es lo que la metadata le DICE a un consumidor: un cliente
+	// generado desde un schema que declara este campo obligatorio lo modela
+	// como no opcional y falla al recibir un borrado.
+	//
+	// TestHistoryDeleteEntryValidatesAgainstTheGeneratedSchema protege la
+	// validez de la respuesta, que es una propiedad distinta y que hoy depende
+	// de esa ausencia del `type`.
 	Value *MedicationUnit `json:"value" metadata:",optional"`
 }
 
@@ -197,7 +204,7 @@ type LabInterventionHistoryEntry struct {
 	TxID      string `json:"txId"`
 	Timestamp string `json:"timestamp"`
 	IsDelete  bool   `json:"isDelete"`
-	// Nulo en una entrada de borrado, por el mismo motivo que en
+	// Nulo en una entrada de borrado, con el mismo alcance que en
 	// UnitHistoryEntry.
 	Value *LabInterventionView `json:"value" metadata:",optional"`
 }
