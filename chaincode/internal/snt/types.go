@@ -179,19 +179,34 @@ type LabInterventionView struct {
 // punto, que es lo que la comprobacion 5 de ADR-011 necesita para recorrer los
 // cambios de custodio.
 type UnitHistoryEntry struct {
-	TxID      string          `json:"txId"`
-	Timestamp string          `json:"timestamp"`
-	IsDelete  bool            `json:"isDelete"`
-	Value     *MedicationUnit `json:"value"`
+	TxID      string `json:"txId"`
+	Timestamp string `json:"timestamp"`
+	IsDelete  bool   `json:"isDelete"`
+	// `value` es NULO en una entrada de borrado, y el contrato lo promete asi.
+	//
+	// `metadata:",optional"` NO es lo que vuelve valida esa respuesta: el
+	// servidor ya la aceptaba con el campo en `required`, porque la clave esta
+	// presente y el schema referenciado no declara `type: "object"`, de modo
+	// que un null satisface vacuamente sus `properties` y `required`. Lo que el
+	// tag corrige es lo que la metadata le DICE a un consumidor: un cliente
+	// generado desde un schema que declara este campo obligatorio lo modela
+	// como no opcional y falla al recibir un borrado.
+	//
+	// TestHistoryDeleteEntryValidatesAgainstTheGeneratedSchema protege la
+	// validez de la respuesta, que es una propiedad distinta y que hoy depende
+	// de esa ausencia del `type`.
+	Value *MedicationUnit `json:"value" metadata:",optional"`
 }
 
 // LabInterventionHistoryEntry conserva el snapshot completo de cada
 // modificacion confirmada de la clave unica LabIntervention.
 type LabInterventionHistoryEntry struct {
-	TxID      string               `json:"txId"`
-	Timestamp string               `json:"timestamp"`
-	IsDelete  bool                 `json:"isDelete"`
-	Value     *LabInterventionView `json:"value"`
+	TxID      string `json:"txId"`
+	Timestamp string `json:"timestamp"`
+	IsDelete  bool   `json:"isDelete"`
+	// Nulo en una entrada de borrado, con el mismo alcance que en
+	// UnitHistoryEntry.
+	Value *LabInterventionView `json:"value" metadata:",optional"`
 }
 
 // ReturnOperation es el registro historico de una devolucion, persistido en la
