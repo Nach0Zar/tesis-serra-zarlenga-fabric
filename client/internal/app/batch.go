@@ -1,0 +1,502 @@
+package app
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"strings"
+	"time"
+
+	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/client/internal/config"
+	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/client/internal/contracterr"
+)
+
+// El retiro y la prohibicion POR LOTE se resuelven aca, en el cliente, y no en
+// el chaincode. La razon es de endoso y no de comodidad: ADR-007 punto 6.a fija
+// la politica de reposo de la clave de una unidad en la organizacion de su
+// custodio actual, SIN rama alternativa. Un lote esta repartido entre varios
+// custodios, de modo que una transaccion unica sobre N unidades exigiria el
+// endoso simultaneo de TODAS sus organizaciones custodias: insatisfacible en la
+// practica, y con una ventana de fallo que crece con el tamano del lote.
+//
+// Que el endoso basado en estado imponga granularidad por unidad es un
+// RESULTADO del trabajo y no una limitacion del prototipo; queda documentado
+// como tal en docs/alcance-prototipo.md.
+//
+// Decision de esta issue (CLI-4, #114): los seriales del lote se resuelven con
+// QueryUnitsByGTIN, que ya esta en la superficie congelada, filtrando por lote
+// del lado del cliente. Las dos alternativas se descartaron con motivo:
+//
+//   - un indice UnitByLote en el chaincode replicaria el mecanismo de CC-9,
+//     pero exigiria un agregado MINOR al contrato congelado y una secuencia
+//     nueva de lifecycle para una consulta que el cliente puede derivar;
+//   - el bundle de domain/dataset conoce el mapeo lote -> seriales, pero solo
+//     para las unidades sembradas: el comando serviria para el dataset
+//     sintetico de medicion y no contra un ledger real.
+//
+// El costo es traer todas las unidades del GTIN y descartar las de otro lote.
+// El contrato ya declara que QueryUnitsByGTIN no pagina, de modo que este
+// comando hereda ese limite y no introduce uno nuevo.
+
+// reconcileTimeout acota la relectura que resuelve una unidad interrumpida.
+// Es corta a proposito: el lote ya fallo y esto es un ultimo intento de no
+// dejar el desenlace sin averiguar, no una prolongacion de la operacion.
+const reconcileTimeout = 10 * time.Second
+
+const (
+	batchWithdraw = "withdraw-batch"
+	batchProhibit = "prohibit-batch"
+)
+
+// medicationUnitView es la proyeccion de la vista publica que este comando
+// necesita: el serial para invocar, el lote para filtrar y el estado para
+// decidir la idempotencia. No se replica la vista completa del contrato
+// porque el cliente no persiste ni reexpone el resto de los campos.
+type medicationUnitView struct {
+	NumeroSerie string `json:"numeroSerie"`
+	Lote        string `json:"lote"`
+	Estado      string `json:"estado"`
+}
+
+type batchOptions struct {
+	organization    string
+	gtin            string
+	lot             string
+	reason          string
+	repositoryRoot  string
+	gatewayEndpoint string
+	tlsServerName   string
+	channelName     string
+	chaincodeName   string
+	timeout         time.Duration
+	function        string
+	targetState     string
+}
+
+// batchUnitResult es el resultado de UNA unidad. El reporte es por unidad
+// porque la operacion es por unidad: un retiro parcial tiene que quedar
+// visible, y reportar el lote como un unico exito o fracaso escondería
+// exactamente lo que el operador necesita saber.
+type batchUnitResult struct {
+	NumeroSerie string             `json:"numeroSerie"`
+	Resultado   string             `json:"resultado"`
+	Estado      string             `json:"estado,omitempty"`
+	Error       *contracterr.Error `json:"error,omitempty"`
+}
+
+type batchReport struct {
+	Operacion      string            `json:"operacion"`
+	GTIN           string            `json:"gtin"`
+	Lote           string            `json:"lote"`
+	Alcanzadas     int               `json:"unidadesAlcanzadas"`
+	Confirmadas    int               `json:"confirmadas"`
+	YaAplicadas    int               `json:"yaAplicadas"`
+	Rechazadas     int               `json:"rechazadas"`
+	NoIntentadas   int               `json:"noIntentadas"`
+	Indeterminadas int               `json:"indeterminadas"`
+	Interrumpido   bool              `json:"interrumpido"`
+	Unidades       []batchUnitResult `json:"unidades"`
+}
+
+const (
+	batchResultConfirmed = "CONFIRMADA"
+	batchResultAlready   = "YA_APLICADA"
+	batchResultRejected  = "RECHAZADA"
+	// Una unidad que el lote alcanzaba pero que nunca se llego a invocar,
+	// porque el contexto vencio antes. NO es un rechazo: sobre esa unidad no
+	// se intento nada y su estado en el ledger es el que ya tenia.
+	batchResultNotAttempted = "NO_INTENTADA"
+	// La unidad cuya invocacion YA empezo cuando el contexto vencio. No se
+	// puede afirmar que no se intento: SubmitWithContext puede vencer mientras
+	// espera el estado de commit, despues de haber enviado la transaccion, y
+	// esa transaccion puede confirmarse igual. Se relee la unidad con un
+	// contexto propio para reconciliar, y si esa lectura no alcanza a
+	// resolverlo el resultado queda declarado como indeterminado en lugar de
+	// afirmar una certeza que el cliente no tiene.
+	batchResultIndeterminate = "INDETERMINADA"
+)
+
+func isBatchCommand(command string) bool {
+	return command == batchWithdraw || command == batchProhibit
+}
+
+func runBatch(
+	ctx context.Context,
+	command string,
+	arguments []string,
+	stdout io.Writer,
+	stderr io.Writer,
+	deps dependencies,
+) int {
+	opts, help, err := parseBatchOptions(command, arguments, stderr)
+	if help {
+		return exitSuccess
+	}
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return exitUsage
+	}
+
+	repositoryRoot, err := resolveRepositoryRoot(opts.repositoryRoot, deps)
+	if err != nil {
+		writeRuntimeError(stderr, err, "configuration")
+		return exitRuntime
+	}
+	profile, err := deps.resolveProfile(
+		repositoryRoot, opts.organization, opts.gatewayEndpoint, opts.tlsServerName)
+	if err != nil {
+		writeRuntimeError(stderr, err, "configuration")
+		return exitRuntime
+	}
+	gatewayClient, err := deps.connect(profile, opts.channelName, opts.chaincodeName, opts.timeout)
+	if err != nil {
+		writeRuntimeError(stderr, err, "connect")
+		return exitRuntime
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, opts.timeout)
+	defer cancel()
+
+	report, err := applyBatch(ctx, gatewayClient, opts)
+	closeErr := gatewayClient.Close()
+
+	// El reporte se emite SIEMPRE, incluso cuando el lote aborto. Para cuando
+	// el contexto vence el ledger ya puede tener unidades retiradas, y el
+	// operador necesita saber cuales: callarlo por haber fallado dejaria una
+	// modificacion real sin registro visible, que es justo lo que el criterio
+	// de #114 sobre el retiro parcial busca evitar.
+	if writeErr := writeJSONLine(stdout, report); writeErr != nil {
+		writeRuntimeError(stderr, writeErr, "output")
+		return exitRuntime
+	}
+	if err != nil {
+		writeRuntimeError(stderr, err, command)
+		return exitRuntime
+	}
+	if closeErr != nil {
+		writeRuntimeError(stderr, closeErr, "close")
+		return exitRuntime
+	}
+
+	// Una sola unidad rechazada hace fallar el comando. Lo contrario --
+	// devolver 0 porque "la mayoria" se aplico -- convertiria un retiro
+	// parcial en un exito silencioso, que es justo lo que un retiro del
+	// mercado no puede ser.
+	if report.Rechazadas > 0 {
+		return exitRuntime
+	}
+	return exitSuccess
+}
+
+func parseBatchOptions(
+	command string,
+	arguments []string,
+	stderr io.Writer,
+) (batchOptions, bool, error) {
+	opts := batchOptions{
+		channelName:   config.DefaultChannelName,
+		chaincodeName: config.DefaultChaincodeName,
+		timeout:       5 * time.Minute,
+	}
+	switch command {
+	case batchWithdraw:
+		opts.function = "WithdrawFromMarket"
+		opts.targetState = "RETIRADO_MERCADO"
+	case batchProhibit:
+		opts.function = "ProhibitProduct"
+		opts.targetState = "PROHIBIDO"
+	default:
+		return batchOptions{}, false, fmt.Errorf("unknown batch command %q", command)
+	}
+
+	flags := flag.NewFlagSet(command, flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	flags.StringVar(&opts.organization, "org", "", "organización: anmat, lab, drogueria o farmacia")
+	flags.StringVar(&opts.gtin, "gtin", "", "GTIN-14 del producto")
+	flags.StringVar(&opts.lot, "lot", "", "lote de elaboración alcanzado")
+	flags.StringVar(&opts.reason, "reason", "", "motivo regulatorio del evento")
+	flags.StringVar(&opts.repositoryRoot, "repo-root", "", "raíz del repositorio")
+	flags.StringVar(&opts.gatewayEndpoint, "gateway-endpoint", "", "endpoint gRPC alternativo")
+	flags.StringVar(&opts.tlsServerName, "tls-server-name", "", "hostname TLS alternativo")
+	flags.StringVar(&opts.channelName, "channel", opts.channelName, "canal Fabric")
+	flags.StringVar(&opts.chaincodeName, "chaincode", opts.chaincodeName, "chaincode")
+	flags.DurationVar(&opts.timeout, "timeout", opts.timeout, "timeout total del lote")
+	flags.Usage = func() {
+		_, _ = fmt.Fprintf(stderr, "Usage: snt-client %s [options]\n", command)
+		flags.PrintDefaults()
+	}
+
+	if err := flags.Parse(arguments); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return batchOptions{}, true, nil
+		}
+		return batchOptions{}, false, err
+	}
+	if flags.NArg() != 0 {
+		return batchOptions{}, false, fmt.Errorf("unexpected positional arguments %q", flags.Args())
+	}
+	if opts.organization == "" {
+		return batchOptions{}, false, errors.New("--org is required")
+	}
+	if strings.TrimSpace(opts.gtin) == "" {
+		return batchOptions{}, false, errors.New("--gtin is required")
+	}
+	if strings.TrimSpace(opts.lot) == "" {
+		return batchOptions{}, false, errors.New("--lot is required")
+	}
+	if strings.TrimSpace(opts.reason) == "" {
+		return batchOptions{}, false, errors.New("--reason is required")
+	}
+	if opts.timeout <= 0 {
+		return batchOptions{}, false, errors.New("--timeout must be greater than zero")
+	}
+	return opts, false, nil
+}
+
+func applyBatch(
+	ctx context.Context,
+	gatewayClient transactionClient,
+	opts batchOptions,
+) (batchReport, error) {
+	// El reporte se arma ANTES de consultar. Si la consulta falla, runBatch lo
+	// serializa igual y tiene que identificar la solicitud: un objeto con
+	// operacion, GTIN y lote vacios no le sirve a nadie y no cumple el formato
+	// que la documentacion promete.
+	report := batchReport{
+		Operacion: opts.function,
+		GTIN:      opts.gtin,
+		Lote:      opts.lot,
+		Unidades:  []batchUnitResult{},
+	}
+
+	units, err := unitsInLot(ctx, gatewayClient, opts.gtin, opts.lot)
+	if err != nil {
+		return report, err
+	}
+	report.Alcanzadas = len(units)
+	report.Unidades = make([]batchUnitResult, 0, len(units))
+
+	// Una seleccion vacia NO es un lote aplicado con exito. Con un GTIN o un
+	// lote mal tipeado el comando no emitiria ninguna transaccion, y devolver
+	// cero dejaria que una automatizacion registre como exitoso un no-op
+	// completo sobre un retiro del mercado. Se reporta el lote vacio -- para
+	// que quede constancia de que la seleccion no encontro nada -- y se
+	// devuelve error.
+	if len(units) == 0 {
+		return report, newClientError("INVALID_REQUEST",
+			"el lote %s del GTIN %s no alcanza ninguna unidad; ninguna transaccion fue emitida",
+			opts.lot, opts.gtin)
+	}
+
+	for index, unit := range units {
+		// La idempotencia se decide por el ESTADO OBSERVADO y no atrapando
+		// INVALID_STATE_TRANSITION. Los dos casos devuelven ese codigo y son
+		// distintos: una unidad ya retirada es trabajo hecho, y una unidad
+		// DISPENSADA es un rechazo legitimo que ADR-001 produce porque T17-T19
+		// no declaran ese estado de origen. Confundirlos reportaria como
+		// "ya aplicada" una unidad que nunca se retiro.
+		if unit.Estado == opts.targetState {
+			report.YaAplicadas++
+			report.Unidades = append(report.Unidades, batchUnitResult{
+				NumeroSerie: unit.NumeroSerie,
+				Resultado:   batchResultAlready,
+				Estado:      unit.Estado,
+			})
+			continue
+		}
+
+		request := marshalArgument(unitEventRequest{
+			GTIN:         opts.gtin,
+			SerialNumber: unit.NumeroSerie,
+			Reason:       opts.reason,
+		})
+		payload, invokeErr := gatewayClient.Invoke(ctx, opts.function, []string{request}, nil)
+		if invokeErr != nil {
+			// Un fallo de contexto corta el lote, pero NO descarta lo hecho:
+			// para entonces el ledger ya puede tener unidades retiradas, y
+			// perder el reporte dejaria al operador sin saber cuales. Se
+			// devuelve el reporte acumulado junto con el error, con las
+			// unidades restantes marcadas NO_INTENTADA para distinguirlas de
+			// las rechazadas.
+			if ctx.Err() != nil {
+				report.Interrumpido = true
+				reconcileInterrupted(gatewayClient, opts, unit, &report)
+				markNotAttempted(&report, units[index+1:])
+				return report, invokeErr
+			}
+			contractError := contracterr.Normalize(invokeErr, opts.function)
+			resultado, yaAplicada := classifyRejection(
+				ctx, gatewayClient, opts, unit, contractError)
+			if yaAplicada {
+				report.YaAplicadas++
+			} else {
+				report.Rechazadas++
+			}
+			report.Unidades = append(report.Unidades, resultado)
+			continue
+		}
+
+		resultado := batchUnitResult{
+			NumeroSerie: unit.NumeroSerie,
+			Resultado:   batchResultConfirmed,
+			Estado:      opts.targetState,
+		}
+		var view medicationUnitView
+		if err := json.Unmarshal(payload, &view); err == nil && view.Estado != "" {
+			resultado.Estado = view.Estado
+		}
+		report.Confirmadas++
+		report.Unidades = append(report.Unidades, resultado)
+	}
+	return report, nil
+}
+
+// unitsInLot resuelve los seriales alcanzados por el lote con QueryUnitsByGTIN,
+// que es la consulta por criterio que el contrato ya expone, y filtra por lote
+// del lado del cliente.
+func unitsInLot(
+	ctx context.Context,
+	gatewayClient transactionClient,
+	gtin string,
+	lot string,
+) ([]medicationUnitView, error) {
+	payload, err := gatewayClient.Query(ctx, "QueryUnitsByGTIN", []string{gtin}, nil)
+	if err != nil {
+		return nil, err
+	}
+	var all []medicationUnitView
+	if err := json.Unmarshal(payload, &all); err != nil {
+		return nil, fmt.Errorf("decode QueryUnitsByGTIN response: %w", err)
+	}
+	units := make([]medicationUnitView, 0, len(all))
+	for _, unit := range all {
+		if unit.Lote == lot {
+			units = append(units, unit)
+		}
+	}
+	return units, nil
+}
+
+// markNotAttempted deja constancia de las unidades que el lote alcanzaba y que
+// nunca se llegaron a invocar. Distinguirlas de las rechazadas importa: sobre
+// estas no se intento nada y su estado en el ledger es el que ya tenian, de
+// modo que reintentar el lote las toma sin ambiguedad.
+func markNotAttempted(report *batchReport, pending []medicationUnitView) {
+	for _, unit := range pending {
+		report.NoIntentadas++
+		report.Unidades = append(report.Unidades, batchUnitResult{
+			NumeroSerie: unit.NumeroSerie,
+			Resultado:   batchResultNotAttempted,
+			Estado:      unit.Estado,
+		})
+	}
+}
+
+// classifyRejection decide si un rechazo es trabajo ya hecho o un rechazo real.
+//
+// La idempotencia no puede apoyarse solo en el estado que devolvio la consulta
+// inicial: entre esa lectura y esta invocacion, otra corrida del mismo lote
+// pudo llevar la unidad al estado destino. Esta ejecucion recibe entonces
+// INVALID_STATE_TRANSITION por una unidad cuyo trabajo ya esta hecho.
+//
+// La relectura resuelve la carrera SIN perder la distincion que motivo el
+// diseño: solo se marca YA_APLICADA si la unidad esta AHORA en el estado
+// destino. Una unidad DISPENSADO devuelve el mismo codigo y sigue siendo un
+// rechazo legitimo -- ADR-001 no declara ese origen para T17-T19 --, y como no
+// esta en el estado destino, la relectura la deja donde estaba.
+//
+// Si la relectura falla se conserva el rechazo: ante la duda, el reporte
+// muestra el problema en lugar de esconderlo como trabajo hecho.
+func classifyRejection(
+	ctx context.Context,
+	gatewayClient transactionClient,
+	opts batchOptions,
+	unit medicationUnitView,
+	contractError contracterr.Error,
+) (batchUnitResult, bool) {
+	rejected := batchUnitResult{
+		NumeroSerie: unit.NumeroSerie,
+		Resultado:   batchResultRejected,
+		Estado:      unit.Estado,
+		Error:       &contractError,
+	}
+	if contractError.Code != "INVALID_STATE_TRANSITION" {
+		return rejected, false
+	}
+
+	payload, err := gatewayClient.Query(
+		ctx, "ReadUnit", []string{opts.gtin, unit.NumeroSerie}, nil)
+	if err != nil {
+		return rejected, false
+	}
+	var current medicationUnitView
+	if err := json.Unmarshal(payload, &current); err != nil {
+		return rejected, false
+	}
+	if current.Estado != opts.targetState {
+		rejected.Estado = current.Estado
+		return rejected, false
+	}
+	return batchUnitResult{
+		NumeroSerie: unit.NumeroSerie,
+		Resultado:   batchResultAlready,
+		Estado:      current.Estado,
+	}, true
+}
+
+// newClientError expresa una condicion detectada por el cliente con la misma
+// forma que un error del contrato, para que un consumidor ramifique por `code`
+// sin distinguir el origen.
+func newClientError(code, format string, arguments ...any) error {
+	return fmt.Errorf(`{"code":%q,"message":%q}`, code, fmt.Sprintf(format, arguments...))
+}
+
+// reconcileInterrupted resuelve, hasta donde el cliente puede, el desenlace de
+// la unidad cuya invocacion ya habia empezado cuando el contexto vencio.
+//
+// El problema es real y no teorico: SubmitWithContext puede vencer MIENTRAS
+// espera el estado de commit, es decir despues de haber enviado la transaccion
+// al ordenamiento. Esa transaccion puede confirmarse igual. Declarar la unidad
+// como NO_INTENTADA seria afirmar algo que el cliente no sabe.
+//
+// La reconciliacion usa un contexto PROPIO y acotado, porque el del lote ya
+// esta vencido y cualquier lectura con el fallaria de inmediato. Si la unidad
+// aparece en el estado destino, la transaccion confirmo y se reporta como tal.
+// Si no, el resultado queda INDETERMINADA y no rechazada: el cliente no puede
+// distinguir "no confirmo" de "todavia no confirmo", y presentar la segunda
+// como la primera reintroduciría la falsa certeza por el otro lado.
+func reconcileInterrupted(
+	gatewayClient transactionClient,
+	opts batchOptions,
+	unit medicationUnitView,
+	report *batchReport,
+) {
+	resultado := batchUnitResult{
+		NumeroSerie: unit.NumeroSerie,
+		Resultado:   batchResultIndeterminate,
+		Estado:      unit.Estado,
+	}
+
+	reconcileCtx, cancel := context.WithTimeout(context.Background(), reconcileTimeout)
+	defer cancel()
+
+	payload, err := gatewayClient.Query(
+		reconcileCtx, "ReadUnit", []string{opts.gtin, unit.NumeroSerie}, nil)
+	if err == nil {
+		var current medicationUnitView
+		if err := json.Unmarshal(payload, &current); err == nil {
+			resultado.Estado = current.Estado
+			if current.Estado == opts.targetState {
+				report.Confirmadas++
+				resultado.Resultado = batchResultConfirmed
+				report.Unidades = append(report.Unidades, resultado)
+				return
+			}
+		}
+	}
+	report.Indeterminadas++
+	report.Unidades = append(report.Unidades, resultado)
+}
