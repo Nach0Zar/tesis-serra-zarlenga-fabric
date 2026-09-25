@@ -139,6 +139,9 @@ func runContext(
 	if len(arguments) > 0 && arguments[0] == "demo-core" {
 		return runDemoCore(arguments[1:], stdout, stderr, deps)
 	}
+	if len(arguments) > 0 && isBatchCommand(arguments[0]) {
+		return runBatch(ctx, arguments[0], arguments[1:], stdout, stderr, deps)
+	}
 
 	opts, help, err := parseOptions(arguments, stderr)
 	if help {
@@ -292,6 +295,8 @@ func printUsage(writer io.Writer) {
 	_, _ = fmt.Fprintln(writer, "  snt-client unit-history        --org <org> --gtin <gtin> --serial <serie>")
 	_, _ = fmt.Fprintln(writer, "  snt-client verify-unit         --org <org> --gtin <gtin> --serial <serie>")
 	_, _ = fmt.Fprintln(writer, "  snt-client query-units-by-gtin --org <org> --gtin <gtin>")
+	_, _ = fmt.Fprintln(writer, "  snt-client withdraw-batch      --org <org> --gtin <gtin> --lot <lote> --reason <motivo>")
+	_, _ = fmt.Fprintln(writer, "  snt-client prohibit-batch      --org <org> --gtin <gtin> --lot <lote> --reason <motivo>")
 	_, _ = fmt.Fprintln(writer, "  snt-client listen-anmat [--start-block <number>]")
 	_, _ = fmt.Fprintln(writer, "  snt-client demo-core [--repo-root <ruta>]")
 	_, _ = fmt.Fprintln(writer)
