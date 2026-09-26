@@ -38,18 +38,17 @@ func fixtureScenarios(t *testing.T) []dataset.UnitScenario {
 	}
 
 	scenario := func(sequence int, serial string) dataset.UnitScenario {
-		ref := dataset.UnitRef{GTIN: "07791234567898", NumeroSerie: serial}
+		ref := dataset.OperationRequest{GTIN: "07791234567898", NumeroSerie: serial}
 		return dataset.UnitScenario{
 			Sequence: sequence, InitialState: initialState, InitialCustodian: laboratory.CanonicalID,
-			Registration: dataset.Registration{
+			Preparation: []dataset.Invocation{{
 				Operation: "RegisterUnit", InvokerMSPID: laboratory.MSPID,
-				Request: dataset.RegisterUnitRequest{
+				Request: dataset.OperationRequest{
 					GTIN: ref.GTIN, NumeroSerie: ref.NumeroSerie,
 					Lote: "LOTE-SEED", FechaVencimiento: "2099-12-31",
 				},
-			},
-			ValidTransfers: []dataset.ValidTransfer{},
-			Dispense: &dataset.Dispense{
+			}},
+			ExpectedSuccess: &dataset.Invocation{
 				Operation: "Dispense", InvokerMSPID: "FarmaciaMSP", Request: ref,
 			},
 		}
@@ -58,11 +57,23 @@ func fixtureScenarios(t *testing.T) []dataset.UnitScenario {
 		scenario(1, "SEED-0001"),
 		scenario(2, "SEED-0002"),
 		scenario(3, "SEED-0003"),
+		scenario(4, "SEED-0004"),
+		scenario(5, "SEED-0005"),
 	}
-	scenarios[1].Dispense = nil
-	scenarios[1].ExpectedRejection = &dataset.ExpectedRejection{DecisionKind: "EXPLICIT_PROHIBITION"}
-	scenarios[2].Dispense = nil
-	scenarios[2].ExpectedRejection = &dataset.ExpectedRejection{DecisionKind: "DEFAULT_DENY"}
+	scenarios[1].ExpectedSuccess = nil
+	scenarios[1].ExpectedRejection = &dataset.ExpectedRejection{
+		Category:         dataset.RejectionUnauthorizedTransfer,
+		TransferDecision: &dataset.TransferDecision{Kind: "EXPLICIT_PROHIBITION"},
+	}
+	scenarios[2].ExpectedSuccess = nil
+	scenarios[2].ExpectedRejection = &dataset.ExpectedRejection{
+		Category:         dataset.RejectionUnauthorizedTransfer,
+		TransferDecision: &dataset.TransferDecision{Kind: "DEFAULT_DENY"},
+	}
+	scenarios[3].ExpectedSuccess = nil
+	scenarios[3].ExpectedRejection = &dataset.ExpectedRejection{Category: dataset.RejectionDuplicateIdentity}
+	scenarios[4].ExpectedSuccess = nil
+	scenarios[4].ExpectedRejection = &dataset.ExpectedRejection{Category: dataset.RejectionBlockingState}
 	return scenarios
 }
 
@@ -74,7 +85,7 @@ func writeFixture(
 	t.Helper()
 	directory := t.TempDir()
 	document := datasetDocument{
-		Schema: datasetSchema, SchemaVersion: dataset.SchemaVersion, Units: scenarios,
+		Schema: dataset.DatasetSchemaID, SchemaVersion: dataset.SchemaVersion, Units: scenarios,
 	}
 	encodedDataset, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
@@ -100,32 +111,42 @@ func writeFixture(
 	if err != nil {
 		t.Fatal(err)
 	}
-	happy, rejected, explicit, defaultDeny := 0, 0, 0, 0
+	happy, rejected, unauthorized, duplicate, blocking, explicit, defaultDeny := 0, 0, 0, 0, 0, 0, 0
 	for _, scenario := range scenarios {
-		if scenario.Dispense != nil {
+		if scenario.ExpectedSuccess != nil {
 			happy++
 		} else {
 			rejected++
-			if scenario.ExpectedRejection.DecisionKind == "EXPLICIT_PROHIBITION" {
-				explicit++
-			} else {
-				defaultDeny++
+			switch scenario.ExpectedRejection.Category {
+			case dataset.RejectionUnauthorizedTransfer:
+				unauthorized++
+				if scenario.ExpectedRejection.TransferDecision.Kind == "EXPLICIT_PROHIBITION" {
+					explicit++
+				} else {
+					defaultDeny++
+				}
+			case dataset.RejectionDuplicateIdentity:
+				duplicate++
+			case dataset.RejectionBlockingState:
+				blocking++
 			}
 		}
 	}
 	manifest := dataset.Manifest{
-		Schema: manifestSchema, SchemaVersion: dataset.SchemaVersion,
+		Schema: dataset.ManifestSchemaID, SchemaVersion: dataset.SchemaVersion,
 		Generator: dataset.GeneratorMetadata{Name: generatorName, Version: dataset.GeneratorVersion},
 		Seed:      dataset.FixedSeed, Parameters: dataset.Parameters{Units: len(scenarios)},
 		Sources: dataset.SourceMetadata{
 			TransferRulesetID: rulesetID, TransferMatrixSchemaVersion: matrixVersion,
+			StateMachineVersion:                domain.StateMachineVersion,
 			OrganizationsManifestSchemaVersion: organizationsVersion,
 		},
 		Dataset: dataset.Metadata{
 			File: dataset.DatasetFileName, HashFile: dataset.HashFileName,
 			SHA256: hash, Units: len(scenarios), HappyPathUnits: happy,
-			RejectionUnits: rejected, ExplicitProhibitionCases: explicit,
-			DefaultDenyCases: defaultDeny,
+			RejectionUnits: rejected, UnauthorizedTransferCases: unauthorized,
+			DuplicateIdentityCases: duplicate, BlockingStateCases: blocking,
+			ExplicitProhibitionCases: explicit, DefaultDenyCases: defaultDeny,
 		},
 		Organizations: organizations,
 	}
@@ -157,7 +178,7 @@ func TestLoadBundleAcceptsValidCLI3Bundle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(bundle.Organizations) != 7 || len(bundle.Registrations) != 3 {
+	if len(bundle.Organizations) != 7 || len(bundle.Registrations) != 5 {
 		t.Fatalf("unexpected bundle sizes: organizations=%d registrations=%d", len(bundle.Organizations), len(bundle.Registrations))
 	}
 }
@@ -174,7 +195,7 @@ func TestLoadBundleRejectsInvalidInputs(t *testing.T) {
 			prepare: func(t *testing.T) string {
 				return writeFixture(t, fixtureScenarios(t), func(manifest *dataset.Manifest) { manifest.Seed++ })
 			},
-			minimum: 3, wantSubstr: "seed invalida",
+			minimum: 5, wantSubstr: "seed invalida",
 		},
 		{
 			name: "wrong generator version",
@@ -183,7 +204,7 @@ func TestLoadBundleRejectsInvalidInputs(t *testing.T) {
 					manifest.Generator.Version = "9.9.9"
 				})
 			},
-			minimum: 3, wantSubstr: "generador",
+			minimum: 5, wantSubstr: "generador",
 		},
 		{
 			name: "wrong source version",
@@ -192,14 +213,14 @@ func TestLoadBundleRejectsInvalidInputs(t *testing.T) {
 					manifest.Sources.TransferMatrixSchemaVersion = "9.9.9"
 				})
 			},
-			minimum: 3, wantSubstr: "versiones fuente",
+			minimum: 5, wantSubstr: "versiones fuente",
 		},
 		{
 			name: "below minimum",
 			prepare: func(t *testing.T) string {
 				return writeFixture(t, fixtureScenarios(t), nil)
 			},
-			minimum: 4, wantSubstr: "al menos 4",
+			minimum: 6, wantSubstr: "al menos 6",
 		},
 		{
 			name: "out of order",
@@ -208,16 +229,16 @@ func TestLoadBundleRejectsInvalidInputs(t *testing.T) {
 				scenarios[1].Sequence = 9
 				return writeFixture(t, scenarios, nil)
 			},
-			minimum: 3, wantSubstr: "sequence debe ser 2",
+			minimum: 5, wantSubstr: "sequence debe ser 2",
 		},
 		{
 			name: "duplicate unit",
 			prepare: func(t *testing.T) string {
 				scenarios := fixtureScenarios(t)
-				scenarios[1].Registration.Request = scenarios[0].Registration.Request
+				scenarios[1].Preparation[0].Request = scenarios[0].Preparation[0].Request
 				return writeFixture(t, scenarios, nil)
 			},
-			minimum: 3, wantSubstr: "unidad duplicada",
+			minimum: 5, wantSubstr: "unidad duplicada",
 		},
 		{
 			name: "changed dataset hash",
@@ -236,7 +257,7 @@ func TestLoadBundleRejectsInvalidInputs(t *testing.T) {
 				}
 				return directory
 			},
-			minimum: 3, wantSubstr: "hash SHA-256",
+			minimum: 5, wantSubstr: "hash SHA-256",
 		},
 	}
 

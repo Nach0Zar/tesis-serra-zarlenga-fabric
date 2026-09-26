@@ -21,10 +21,8 @@ import (
 )
 
 const (
-	datasetSchema  = "urn:pfi-snt:synthetic-dataset:schema:1.0.0"
-	manifestSchema = "urn:pfi-snt:synthetic-dataset-manifest:schema:1.0.0"
-	generatorName  = "cli-3-dataset-generator"
-	initialState   = "EN_LABORATORIO"
+	generatorName = "cli-3-dataset-generator"
+	initialState  = "EN_LABORATORIO"
 )
 
 // Bundle contiene solamente la parte que BASE-4 debe persistir. Las recetas de
@@ -84,6 +82,9 @@ func loadBundle(directory string, minimumUnits int) (Bundle, error) {
 	}
 	if counts.happy != manifest.Dataset.HappyPathUnits ||
 		counts.rejected != manifest.Dataset.RejectionUnits ||
+		counts.unauthorizedTransfer != manifest.Dataset.UnauthorizedTransferCases ||
+		counts.duplicateIdentity != manifest.Dataset.DuplicateIdentityCases ||
+		counts.blockingState != manifest.Dataset.BlockingStateCases ||
 		counts.explicit != manifest.Dataset.ExplicitProhibitionCases ||
 		counts.defaultDeny != manifest.Dataset.DefaultDenyCases {
 		return Bundle{}, errors.New("los conteos de escenarios de dataset.json no coinciden con manifest.json")
@@ -132,7 +133,7 @@ func expectedOrganizations() ([]core.Organization, []dataset.Organization, error
 		if err != nil {
 			return nil, nil, fmt.Errorf("clasificar organizacion %s: %w", entry.MSPID, err)
 		}
-		if entry.Active && custodial {
+		if entry.Active && (custodial || entry.AgentType == domain.AgentRegulator) {
 			workload = append(workload, dataset.Organization{
 				MSPID: entry.MSPID, CanonicalID: entry.IDType + ":" + entry.ID,
 				AgentType: string(entry.AgentType), ClientRole: entry.ClientRole,
@@ -144,7 +145,7 @@ func expectedOrganizations() ([]core.Organization, []dataset.Organization, error
 }
 
 func validateManifest(manifest dataset.Manifest, expected []dataset.Organization, minimumUnits int) error {
-	if manifest.Schema != manifestSchema || manifest.SchemaVersion != dataset.SchemaVersion {
+	if manifest.Schema != dataset.ManifestSchemaID || manifest.SchemaVersion != dataset.SchemaVersion {
 		return errors.New("schema o schemaVersion de manifest.json incompatible")
 	}
 	if manifest.Generator.Name != generatorName || manifest.Generator.Version != dataset.GeneratorVersion {
@@ -172,7 +173,10 @@ func validateManifest(manifest dataset.Manifest, expected []dataset.Organization
 		return errors.New("dataset.sha256 del manifiesto debe estar en minusculas")
 	}
 	if manifest.Dataset.HappyPathUnits+manifest.Dataset.RejectionUnits != manifest.Dataset.Units ||
-		manifest.Dataset.ExplicitProhibitionCases+manifest.Dataset.DefaultDenyCases != manifest.Dataset.RejectionUnits {
+		manifest.Dataset.UnauthorizedTransferCases+manifest.Dataset.DuplicateIdentityCases+
+			manifest.Dataset.BlockingStateCases != manifest.Dataset.RejectionUnits ||
+		manifest.Dataset.ExplicitProhibitionCases+manifest.Dataset.DefaultDenyCases !=
+			manifest.Dataset.UnauthorizedTransferCases {
 		return errors.New("los conteos del manifiesto son inconsistentes")
 	}
 
@@ -190,6 +194,7 @@ func validateManifest(manifest dataset.Manifest, expected []dataset.Organization
 	}
 	if manifest.Sources.TransferMatrixSchemaVersion != matrixVersion ||
 		manifest.Sources.TransferRulesetID != rulesetID ||
+		manifest.Sources.StateMachineVersion != domain.StateMachineVersion ||
 		manifest.Sources.OrganizationsManifestSchemaVersion != organizationsVersion {
 		return errors.New("las versiones fuente del bundle no coinciden con las embebidas en esta imagen")
 	}
@@ -206,10 +211,13 @@ func validateManifest(manifest dataset.Manifest, expected []dataset.Organization
 }
 
 type scenarioCounts struct {
-	happy       int
-	rejected    int
-	explicit    int
-	defaultDeny int
+	happy                int
+	rejected             int
+	unauthorizedTransfer int
+	duplicateIdentity    int
+	blockingState        int
+	explicit             int
+	defaultDeny          int
 }
 
 func readDataset(path string, organizations []dataset.Organization) ([]core.SeedRegistration, string, scenarioCounts, error) {
@@ -296,7 +304,7 @@ func readDataset(path string, organizations []dataset.Organization) ([]core.Seed
 	if !seenFields["$schema"] || !seenFields["schemaVersion"] || !seenFields["units"] {
 		return nil, "", scenarioCounts{}, errors.New("dataset.json no contiene todos los campos requeridos")
 	}
-	if schema != datasetSchema || schemaVersion != dataset.SchemaVersion {
+	if schema != dataset.DatasetSchemaID || schemaVersion != dataset.SchemaVersion {
 		return nil, "", scenarioCounts{}, errors.New("schema o schemaVersion de dataset.json incompatible")
 	}
 	return registrations, hex.EncodeToString(hasher.Sum(nil)), counts, nil
@@ -314,10 +322,11 @@ func validateScenario(
 	if scenario.InitialState != initialState {
 		return core.SeedRegistration{}, fmt.Errorf("units[%d].initialState debe ser %s", expectedSequence-1, initialState)
 	}
-	if scenario.Registration.Operation != "RegisterUnit" {
+	if len(scenario.Preparation) == 0 || scenario.Preparation[0].Operation != "RegisterUnit" {
 		return core.SeedRegistration{}, fmt.Errorf("units[%d] no comienza con RegisterUnit", expectedSequence-1)
 	}
-	organization, found := organizations[scenario.Registration.InvokerMSPID]
+	registration := scenario.Preparation[0]
+	organization, found := organizations[registration.InvokerMSPID]
 	if !found || organization.AgentType != string(domain.AgentLaboratory) {
 		return core.SeedRegistration{}, fmt.Errorf("units[%d] no declara un laboratorio fundacional como invocador", expectedSequence-1)
 	}
@@ -325,31 +334,44 @@ func validateScenario(
 		return core.SeedRegistration{}, fmt.Errorf("units[%d].initialCustodian no coincide con su laboratorio", expectedSequence-1)
 	}
 	request := core.RegisterUnitRequest{
-		GTIN:             scenario.Registration.Request.GTIN,
-		NumeroSerie:      scenario.Registration.Request.NumeroSerie,
-		Lote:             scenario.Registration.Request.Lote,
-		FechaVencimiento: scenario.Registration.Request.FechaVencimiento,
+		GTIN:             registration.Request.GTIN,
+		NumeroSerie:      registration.Request.NumeroSerie,
+		Lote:             registration.Request.Lote,
+		FechaVencimiento: registration.Request.FechaVencimiento,
 	}
 	if err := core.ValidateRegisterUnitRequest(request); err != nil {
 		return core.SeedRegistration{}, fmt.Errorf("units[%d].registration invalida: %w", expectedSequence-1, err)
 	}
 
 	switch {
-	case scenario.Dispense != nil && scenario.ExpectedRejection == nil:
+	case scenario.ExpectedSuccess != nil && scenario.ExpectedRejection == nil:
 		counts.happy++
-	case scenario.Dispense == nil && scenario.ExpectedRejection != nil:
+	case scenario.ExpectedSuccess == nil && scenario.ExpectedRejection != nil:
 		counts.rejected++
-		switch scenario.ExpectedRejection.DecisionKind {
-		case "EXPLICIT_PROHIBITION":
-			counts.explicit++
-		case "DEFAULT_DENY":
-			counts.defaultDeny++
+		switch scenario.ExpectedRejection.Category {
+		case dataset.RejectionUnauthorizedTransfer:
+			counts.unauthorizedTransfer++
+			if scenario.ExpectedRejection.TransferDecision == nil {
+				return core.SeedRegistration{}, fmt.Errorf("units[%d] omite transferDecision", expectedSequence-1)
+			}
+			switch scenario.ExpectedRejection.TransferDecision.Kind {
+			case "EXPLICIT_PROHIBITION":
+				counts.explicit++
+			case "DEFAULT_DENY":
+				counts.defaultDeny++
+			default:
+				return core.SeedRegistration{}, fmt.Errorf("units[%d] tiene un kind de transferencia invalido", expectedSequence-1)
+			}
+		case dataset.RejectionDuplicateIdentity:
+			counts.duplicateIdentity++
+		case dataset.RejectionBlockingState:
+			counts.blockingState++
 		default:
-			return core.SeedRegistration{}, fmt.Errorf("units[%d] tiene un decisionKind de rechazo invalido", expectedSequence-1)
+			return core.SeedRegistration{}, fmt.Errorf("units[%d] tiene una categoria de rechazo invalida", expectedSequence-1)
 		}
 	default:
 		return core.SeedRegistration{}, fmt.Errorf("units[%d] debe declarar dispensa o rechazo, pero no ambos", expectedSequence-1)
 	}
 
-	return core.SeedRegistration{InvokerMSPID: scenario.Registration.InvokerMSPID, Request: request}, nil
+	return core.SeedRegistration{InvokerMSPID: registration.InvokerMSPID, Request: request}, nil
 }

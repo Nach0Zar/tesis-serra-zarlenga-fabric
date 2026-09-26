@@ -1,10 +1,12 @@
 package dataset
 
 const (
-	// SchemaVersion versiona en conjunto el dataset y su manifiesto.
-	SchemaVersion = "1.0.0"
+	// SchemaVersion versiona en conjunto el dataset y su manifiesto. La version
+	// 2 cambia la forma de cada receta para declarar una preparacion ejecutable
+	// comun a resultados exitosos y rechazos esperados.
+	SchemaVersion = "2.0.0"
 	// GeneratorVersion identifica la implementacion que produjo el bundle.
-	GeneratorVersion = "1.0.0"
+	GeneratorVersion = "2.0.0"
 	// FixedSeed es la semilla unica exigida por CLI-3 y el protocolo de medicion.
 	FixedSeed uint64 = 20260727
 	// MinimumUnits es el piso experimental de docs/measurement-protocol.md §4.
@@ -17,29 +19,27 @@ const (
 	// HashFileName is the stable SHA-256 sidecar filename.
 	HashFileName = "dataset.sha256"
 
-	datasetSchemaID  = "urn:pfi-snt:synthetic-dataset:schema:1.0.0"
-	manifestSchemaID = "urn:pfi-snt:synthetic-dataset-manifest:schema:1.0.0"
+	// DatasetSchemaID identifica el schema compatible con SchemaVersion.
+	DatasetSchemaID = "urn:pfi-snt:synthetic-dataset:schema:2.0.0"
+	// ManifestSchemaID identifica el schema del manifiesto compatible.
+	ManifestSchemaID = "urn:pfi-snt:synthetic-dataset-manifest:schema:2.0.0"
+
+	// RejectionUnauthorizedTransfer identifica rechazos derivados de la matriz.
+	RejectionUnauthorizedTransfer = "UNAUTHORIZED_TRANSFER"
+	// RejectionDuplicateIdentity identifica un segundo alta de GTIN+serie.
+	RejectionDuplicateIdentity = "DUPLICATE_IDENTITY"
+	// RejectionBlockingState identifica operaciones ordinarias bloqueadas por estado.
+	RejectionBlockingState = "BLOCKING_STATE"
 )
 
-// UnitRef identifica una unidad de la misma forma que el contrato DES-5.
-type UnitRef struct {
-	GTIN        string `json:"gtin"`
-	NumeroSerie string `json:"numeroSerie"`
-}
-
-// RegisterUnitRequest replica el request publico de RegisterUnit.
-type RegisterUnitRequest struct {
+// OperationRequest contiene los campos publicos usados por las operaciones de
+// una receta. El JSON Schema cierra, segun operation, la combinacion admisible.
+type OperationRequest struct {
 	GTIN             string `json:"gtin"`
 	NumeroSerie      string `json:"numeroSerie"`
-	Lote             string `json:"lote"`
-	FechaVencimiento string `json:"fechaVencimiento"`
-}
-
-// Registration describes the initial RegisterUnit operation.
-type Registration struct {
-	Operation    string              `json:"operation"`
-	InvokerMSPID string              `json:"invokerMspId"`
-	Request      RegisterUnitRequest `json:"request"`
+	Lote             string `json:"lote,omitempty"`
+	FechaVencimiento string `json:"fechaVencimiento,omitempty"`
+	Motivo           string `json:"motivo,omitempty"`
 }
 
 // DestinationPrivateData carries the declared transfer recipient.
@@ -60,56 +60,52 @@ type DispatchPrivateData struct {
 	Commercial   CommercialPrivateData  `json:"commercial"`
 }
 
-// Dispatch describes one DispatchTransfer invocation.
-type Dispatch struct {
-	Operation    string              `json:"operation"`
-	InvokerMSPID string              `json:"invokerMspId"`
-	Request      UnitRef             `json:"request"`
-	PrivateData  DispatchPrivateData `json:"privateData"`
+// Invocation es una operacion concreta de la receta. RuleID y
+// MatrixSchemaVersion solo aparecen en despachos de preparacion autorizados;
+// TransitionID y StateMachineVersion solo aparecen en eventos de preparacion.
+type Invocation struct {
+	Operation           string               `json:"operation"`
+	InvokerMSPID        string               `json:"invokerMspId"`
+	Request             OperationRequest     `json:"request"`
+	PrivateData         *DispatchPrivateData `json:"privateData,omitempty"`
+	RuleID              string               `json:"ruleId,omitempty"`
+	MatrixSchemaVersion string               `json:"matrixSchemaVersion,omitempty"`
+	TransitionID        string               `json:"transitionId,omitempty"`
+	StateMachineVersion string               `json:"stateMachineVersion,omitempty"`
 }
 
-// Receive describes the matching ReceiveTransfer invocation.
-type Receive struct {
-	Operation    string  `json:"operation"`
-	InvokerMSPID string  `json:"invokerMspId"`
-	Request      UnitRef `json:"request"`
+// TransferDecision conserva la decision exacta de domain.DecideTransfer que
+// fundamenta un rechazo ordinario de transferencia.
+type TransferDecision struct {
+	Kind                string `json:"kind"`
+	RuleID              string `json:"ruleId,omitempty"`
+	Reason              string `json:"reason"`
+	MatrixSchemaVersion string `json:"matrixSchemaVersion"`
 }
 
-// Dispense describes the terminal Dispense invocation.
-type Dispense struct {
-	Operation    string  `json:"operation"`
-	InvokerMSPID string  `json:"invokerMspId"`
-	Request      UnitRef `json:"request"`
-}
-
-// ValidTransfer conserva un despacho y su recepcion como una unica unidad
-// conceptual de carga, aunque sean dos transacciones write (ADR-004; protocolo
-// §3.4). RuleID y MatrixSchemaVersion provienen de domain.DecideTransfer.
-type ValidTransfer struct {
-	RuleID              string   `json:"ruleId"`
-	MatrixSchemaVersion string   `json:"matrixSchemaVersion"`
-	Dispatch            Dispatch `json:"dispatch"`
-	Receive             Receive  `json:"receive"`
-}
-
-// ExpectedRejection describes a transfer that the domain matrix must reject.
+// ExpectedRejection declara la invocacion que debe fallar y la familia estable
+// usada por EVAL-2 y EVAL-3 para seleccionar exactamente los mismos registros.
 type ExpectedRejection struct {
-	DecisionKind      string   `json:"decisionKind"`
-	RuleID            string   `json:"ruleId,omitempty"`
-	Reason            string   `json:"reason"`
-	ExpectedErrorCode string   `json:"expectedErrorCode"`
-	Dispatch          Dispatch `json:"dispatch"`
+	Category            string               `json:"category"`
+	Operation           string               `json:"operation"`
+	InvokerMSPID        string               `json:"invokerMspId"`
+	Request             OperationRequest     `json:"request"`
+	PrivateData         *DispatchPrivateData `json:"privateData,omitempty"`
+	ExpectedErrorCode   string               `json:"expectedErrorCode"`
+	TransferDecision    *TransferDecision    `json:"transferDecision,omitempty"`
+	BlockingState       string               `json:"blockingState,omitempty"`
+	StateMachineVersion string               `json:"stateMachineVersion,omitempty"`
 }
 
-// UnitScenario es una receta autocontenida. Los caminos felices terminan en
-// Dispense; los de rechazo terminan en un Dispatch que la matriz debe denegar.
+// UnitScenario es una receta autocontenida. Preparation enumera exclusivamente
+// las operaciones exitosas minimas previas; luego la receta declara un unico
+// resultado esperado, exitoso o rechazado.
 type UnitScenario struct {
 	Sequence          int                `json:"sequence"`
 	InitialState      string             `json:"initialState"`
 	InitialCustodian  string             `json:"initialCustodian"`
-	Registration      Registration       `json:"registration"`
-	ValidTransfers    []ValidTransfer    `json:"validTransfers"`
-	Dispense          *Dispense          `json:"dispense,omitempty"`
+	Preparation       []Invocation       `json:"preparation"`
+	ExpectedSuccess   *Invocation        `json:"expectedSuccess,omitempty"`
 	ExpectedRejection *ExpectedRejection `json:"expectedRejection,omitempty"`
 }
 
@@ -128,22 +124,26 @@ type Parameters struct {
 type SourceMetadata struct {
 	TransferRulesetID                  string `json:"transferRulesetId"`
 	TransferMatrixSchemaVersion        string `json:"transferMatrixSchemaVersion"`
+	StateMachineVersion                string `json:"stateMachineVersion"`
 	OrganizationsManifestSchemaVersion string `json:"organizationsManifestSchemaVersion"`
 }
 
 // Metadata summarizes the generated workload and its digest.
 type Metadata struct {
-	File                     string `json:"file"`
-	HashFile                 string `json:"hashFile"`
-	SHA256                   string `json:"sha256"`
-	Units                    int    `json:"units"`
-	HappyPathUnits           int    `json:"happyPathUnits"`
-	RejectionUnits           int    `json:"rejectionUnits"`
-	ExplicitProhibitionCases int    `json:"explicitProhibitionCases"`
-	DefaultDenyCases         int    `json:"defaultDenyCases"`
+	File                      string `json:"file"`
+	HashFile                  string `json:"hashFile"`
+	SHA256                    string `json:"sha256"`
+	Units                     int    `json:"units"`
+	HappyPathUnits            int    `json:"happyPathUnits"`
+	RejectionUnits            int    `json:"rejectionUnits"`
+	UnauthorizedTransferCases int    `json:"unauthorizedTransferCases"`
+	DuplicateIdentityCases    int    `json:"duplicateIdentityCases"`
+	BlockingStateCases        int    `json:"blockingStateCases"`
+	ExplicitProhibitionCases  int    `json:"explicitProhibitionCases"`
+	DefaultDenyCases          int    `json:"defaultDenyCases"`
 }
 
-// Organization identifies an active custodial participant used by the workload.
+// Organization identifies an active participant referenced by the workload.
 type Organization struct {
 	MSPID       string `json:"mspId"`
 	CanonicalID string `json:"canonicalId"`

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:pfi-snt:synthetic-dataset-manifest:schema:1.0.0",
-  "title": "Manifiesto del dataset sintético CLI-3",
+  "$id": "urn:pfi-snt:synthetic-dataset-manifest:schema:2.0.0",
+  "title": "Manifiesto del dataset sintético CLI-5",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -16,10 +16,10 @@
   ],
   "properties": {
     "$schema": {
-      "const": "urn:pfi-snt:synthetic-dataset-manifest:schema:1.0.0"
+      "const": "urn:pfi-snt:synthetic-dataset-manifest:schema:2.0.0"
     },
     "schemaVersion": {
-      "const": "1.0.0"
+      "const": "2.0.0"
     },
     "generator": {
       "$ref": "#/$defs/generator"
@@ -48,25 +48,20 @@
     "generator": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "name",
-        "version"
-      ],
+      "required": ["name", "version"],
       "properties": {
         "name": {
           "const": "cli-3-dataset-generator"
         },
         "version": {
-          "const": "1.0.0"
+          "const": "2.0.0"
         }
       }
     },
     "parameters": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "units"
-      ],
+      "required": ["units"],
       "properties": {
         "units": {
           "type": "integer",
@@ -80,6 +75,7 @@
       "required": [
         "transferRulesetId",
         "transferMatrixSchemaVersion",
+        "stateMachineVersion",
         "organizationsManifestSchemaVersion"
       ],
       "properties": {
@@ -88,6 +84,10 @@
           "minLength": 1
         },
         "transferMatrixSchemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$"
+        },
+        "stateMachineVersion": {
           "type": "string",
           "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$"
         },
@@ -107,6 +107,9 @@
         "units",
         "happyPathUnits",
         "rejectionUnits",
+        "unauthorizedTransferCases",
+        "duplicateIdentityCases",
+        "blockingStateCases",
         "explicitProhibitionCases",
         "defaultDenyCases"
       ],
@@ -131,7 +134,19 @@
         },
         "rejectionUnits": {
           "type": "integer",
+          "minimum": 3
+        },
+        "unauthorizedTransferCases": {
+          "type": "integer",
           "minimum": 2
+        },
+        "duplicateIdentityCases": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "blockingStateCases": {
+          "type": "integer",
+          "minimum": 1
         },
         "explicitProhibitionCases": {
           "type": "integer",
@@ -144,14 +159,19 @@
       }
     },
     "organization": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/custodialOrganization"
+        },
+        {
+          "$ref": "#/$defs/regulatorOrganization"
+        }
+      ]
+    },
+    "custodialOrganization": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "mspId",
-        "canonicalId",
-        "agentType",
-        "clientRole"
-      ],
+      "required": ["mspId", "canonicalId", "agentType", "clientRole"],
       "properties": {
         "mspId": {
           "type": "string",
@@ -173,6 +193,27 @@
         },
         "clientRole": {
           "const": "operator"
+        }
+      }
+    },
+    "regulatorOrganization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mspId", "canonicalId", "agentType", "clientRole"],
+      "properties": {
+        "mspId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9.-]+MSP$"
+        },
+        "canonicalId": {
+          "type": "string",
+          "pattern": "^REG:[A-Z0-9.-]+$"
+        },
+        "agentType": {
+          "const": "REGULATOR"
+        },
+        "clientRole": {
+          "const": "regulatory-admin"
         }
       }
     }
