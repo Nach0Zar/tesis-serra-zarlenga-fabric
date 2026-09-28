@@ -345,29 +345,43 @@ El bundle contiene:
 
 | Archivo | Contenido |
 |---|---|
-| `dataset.json` | Recetas de registro, transferencias y dispensación o rechazo esperado. |
-| `manifest.json` | Semilla, parámetros, versión del generador, versiones de las fuentes, organizaciones y hash del dataset. |
+| `dataset.json` | Recetas ordenadas con preparación mínima y un resultado exitoso o rechazo esperado. |
+| `manifest.json` | Semilla, parámetros, versión del generador, versiones de las fuentes, organizaciones, conteos por categoría y hash del dataset. |
 | `dataset.sha256` | Hash SHA-256 verificable con herramientas convencionales. |
 
-Cada camino feliz comienza con `RegisterUnit`, representa cada
-transferencia como el par `DispatchTransfer` +
-`ReceiveTransfer` y termina con `Dispense`. Los casos inválidos
-preparan primero un custodio alcanzable mediante pares válidos y luego describen
-un `DispatchTransfer` que debe rechazarse con
-`TRANSFER_NOT_AUTHORIZED`. Se incluyen tanto prohibiciones explícitas
-como decisiones por ausencia de regla.
+Cada registro de `units` declara `preparation` y exactamente uno entre
+`expectedSuccess` y `expectedRejection`. Un camino feliz comienza con
+`RegisterUnit`, representa cada transferencia como el par
+`DispatchTransfer` + `ReceiveTransfer` y termina con `Dispense`. Un rechazo
+declara siempre categoría, operación, invocador, request, código de error
+esperado y la preparación exitosa mínima que deja a la unidad en la
+precondición del intento.
+
+Las categorías estables son:
+
+| Categoría | Intento y error esperado | Fuente compartida |
+|---|---|---|
+| `UNAUTHORIZED_TRANSFER` | `DispatchTransfer` → `TRANSFER_NOT_AUTHORIZED` | `domain/authorized-transfers.json`, mediante `domain.DecideTransfer`; incluye prohibición explícita y default deny. |
+| `DUPLICATE_IDENTITY` | segundo `RegisterUnit` con el mismo GTIN + número de serie → `UNIT_ALREADY_EXISTS` | identidad ya creada por el primer paso de `preparation`. |
+| `BLOCKING_STATE` | `DispatchTransfer` o `Dispense` → `INVALID_STATE_TRANSITION` | catálogo y transiciones de `domain/states.go`. |
+
+Los casos bloqueantes no mantienen una segunda lista manual de estados: el
+generador recorre `domain.States()`, selecciona con `domain.IsBlockingState()`
+y comprueba la incompatibilidad de cada operación ordinaria mediante
+`domain.LookupTransition()`. La transición de preparación también se obtiene de
+`domain.Transitions()` y queda identificada en la receta.
 
 Las fechas de vencimiento se generan deliberadamente entre 2099-01-01 y
-2101-12-31 para que todas las unidades permanezcan vigentes durante las rondas
-de CLI-3. Los rechazos por unidad vencida no forman parte de este dataset:
-corresponden a EXT-2 (#28).
+2101-12-31. El escenario bloqueante `VENCIDO` no depende del paso del reloj:
+prepara T12 con `ReportExpired` y un motivo documentado, tal como permite el
+contrato compartido desde `EN_CUSTODIA`.
 
 Los pares se derivan en tiempo de generación mediante
 `domain.DecideTransfer`; no existe una segunda matriz en el cliente.
 Las organizaciones se leen de la copia embebida y verificada del manifiesto
 fundacional.
 
-Los formatos cerrados, versión `1.0.0`, están definidos con JSON Schema
+Los formatos cerrados, versión `2.0.0`, están definidos con JSON Schema
 Draft 2020-12 en:
 
 - `../domain/dataset/schema/dataset.schema.json`
@@ -376,6 +390,13 @@ Draft 2020-12 en:
 El contrato, los schemas y el generador determinístico viven en el paquete
 neutral `domain/dataset`; este módulo conserva únicamente el adaptador CLI
 `cmd/datasetgen`.
+
+EVAL-2 y EVAL-3 deben seleccionar y ejecutar los mismos registros de
+`dataset.json`, conservando su orden y sin regenerar casos por backend. La
+categoría no habilita dos datasets ni dos interpretaciones: solo permite
+segmentar los resultados de Fabric y baseline sobre las mismas recetas. El
+`manifest.json` registra la cantidad de cada categoría, y `dataset.sha256`
+identifica el orden y contenido exactos usados por ambos SUT.
 
 ## Validación
 
@@ -386,5 +407,7 @@ make build
 ```
 
 Las pruebas verifican, entre otras invariantes, GTIN-14 con dígito de control,
-seriales válidos y únicos, cobertura de ambos tipos de rechazo, pares
-despacho-recepción y reproducibilidad byte a byte.
+seriales válidos y únicos, cobertura de las tres categorías, derivación desde
+la matriz y la máquina de estados compartidas, referencias válidas, rechazo de
+combinaciones mal formadas por los schemas, pares despacho-recepción y
+reproducibilidad byte a byte.

@@ -24,6 +24,8 @@ const (
 	explicitProhibitionDecision = "EXPLICIT_PROHIBITION"
 	defaultDenyDecision         = "DEFAULT_DENY"
 	expectedTransferError       = "TRANSFER_NOT_AUTHORIZED"
+	expectedDuplicateError      = "UNIT_ALREADY_EXISTS"
+	expectedBlockingError       = "INVALID_STATE_TRANSITION"
 	generatorName               = "cli-3-dataset-generator"
 )
 
@@ -62,15 +64,34 @@ type deniedCase struct {
 	SetupPath   []organization
 }
 
+type ordinaryOperation struct {
+	Name  string
+	Event domain.Event
+}
+
+type blockingCase struct {
+	State                 domain.State
+	PreparationTransition domain.Transition
+	PreparationOperation  string
+	PreparationInvoker    organization
+	RejectedOperation     ordinaryOperation
+	SetupPath             []organization
+	DispatchDestination   organization
+}
+
 type generationPlan struct {
 	organizations       []organization
+	participants        []organization
 	happyPaths          [][]organization
 	deniedCases         []deniedCase
+	blockingCases       []blockingCase
 	explicitDenials     int
 	defaultDenials      int
 	matrixSchemaVersion string
 	matrixRulesetID     string
 	manifestVersion     string
+	stateMachineVersion string
+	duplicateCaseCount  int
 }
 
 // Generate produce un unico bundle consumible por Fabric y baseline. La seed
@@ -88,8 +109,9 @@ func generateBundle(outputDir string, units int) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if units < len(plan.deniedCases) {
-		return Result{}, fmt.Errorf("units=%d no alcanza para los %d casos de rechazo derivados de la matriz", units, len(plan.deniedCases))
+	rejections := len(plan.deniedCases) + plan.duplicateCaseCount + len(plan.blockingCases)
+	if units < rejections {
+		return Result{}, fmt.Errorf("units=%d no alcanza para los %d casos de rechazo derivados", units, rejections)
 	}
 	if err := os.MkdirAll(outputDir, 0o750); err != nil {
 		return Result{}, fmt.Errorf("crear output-dir: %w", err)
@@ -151,6 +173,18 @@ func newGenerationPlan() (generationPlan, error) {
 			explicit, defaults)
 	}
 
+	regulator, err := loadRegulator()
+	if err != nil {
+		return generationPlan{}, err
+	}
+	blockingCases, err := collectBlockingCases(organizations, labs, graph, regulator)
+	if err != nil {
+		return generationPlan{}, err
+	}
+	if len(blockingCases) == 0 {
+		return generationPlan{}, errors.New("la maquina de estados no produjo casos bloqueantes")
+	}
+
 	matrixVersion, err := domain.MatrixSchemaVersion()
 	if err != nil {
 		return generationPlan{}, fmt.Errorf("leer schemaVersion de la matriz: %w", err)
@@ -164,15 +198,24 @@ func newGenerationPlan() (generationPlan, error) {
 		return generationPlan{}, fmt.Errorf("leer schemaVersion del manifiesto de organizaciones: %w", err)
 	}
 
+	participants := append(append([]organization(nil), organizations...), regulator)
+	sort.Slice(participants, func(i, j int) bool {
+		return participants[i].MSPID < participants[j].MSPID
+	})
+
 	return generationPlan{
 		organizations:       organizations,
+		participants:        participants,
 		happyPaths:          happyPaths,
 		deniedCases:         deniedCases,
+		blockingCases:       blockingCases,
 		explicitDenials:     explicit,
 		defaultDenials:      defaults,
 		matrixSchemaVersion: matrixVersion,
 		matrixRulesetID:     rulesetID,
 		manifestVersion:     manifestVersion,
+		stateMachineVersion: domain.StateMachineVersion,
+		duplicateCaseCount:  1,
 	}, nil
 }
 
@@ -190,18 +233,30 @@ func loadCustodialOrganizations() ([]organization, error) {
 		if !entry.Active || !custodial {
 			continue
 		}
-		organizations = append(organizations, organization{
-			MSPID:      entry.MSPID,
-			ID:         entry.ID,
-			IDType:     entry.IDType,
-			AgentType:  entry.AgentType,
-			ClientRole: entry.ClientRole,
-		})
+		organizations = append(organizations, organizationFromManifest(entry))
 	}
 	sort.Slice(organizations, func(i, j int) bool {
 		return organizations[i].MSPID < organizations[j].MSPID
 	})
 	return organizations, nil
+}
+
+func loadRegulator() (organization, error) {
+	entry, err := foundational.Regulator()
+	if err != nil {
+		return organization{}, fmt.Errorf("leer regulador del manifiesto fundacional: %w", err)
+	}
+	if !entry.Active {
+		return organization{}, errors.New("el regulador fundacional no esta activo")
+	}
+	return organizationFromManifest(entry), nil
+}
+
+func organizationFromManifest(entry foundational.Organization) organization {
+	return organization{
+		MSPID: entry.MSPID, ID: entry.ID, IDType: entry.IDType,
+		AgentType: entry.AgentType, ClientRole: entry.ClientRole,
+	}
 }
 
 func organizationsByType(all []organization, agentType domain.AgentType) []organization {
@@ -315,14 +370,131 @@ func collectDeniedCases(
 				explicit++
 			}
 			cases = append(cases, deniedCase{
-				Origin:      origin,
-				Destination: destination,
-				Decision:    decision,
-				SetupPath:   append([]organization(nil), setupPath...),
+				Origin: origin, Destination: destination, Decision: decision,
+				SetupPath: append([]organization(nil), setupPath...),
 			})
 		}
 	}
 	return cases, explicit, defaults, nil
+}
+
+func collectBlockingCases(
+	organizations []organization,
+	labs []organization,
+	graph map[string][]organization,
+	regulator organization,
+) ([]blockingCase, error) {
+	pharmacies := organizationsByType(organizations, domain.AgentPharmacy)
+	if len(pharmacies) == 0 {
+		return nil, errors.New("el manifiesto no declara una farmacia activa")
+	}
+
+	var pharmacy organization
+	var setupPath []organization
+	var dispatchDestination organization
+	for _, candidate := range pharmacies {
+		path, found := shortestPathFromAny(labs, candidate, graph)
+		if !found || len(graph[candidate.MSPID]) == 0 {
+			continue
+		}
+		pharmacy = candidate
+		setupPath = path
+		dispatchDestination = graph[candidate.MSPID][0]
+		break
+	}
+	if pharmacy.MSPID == "" {
+		return nil, errors.New("no hay una farmacia alcanzable con destino autorizado para los casos bloqueantes")
+	}
+
+	ordinary := []ordinaryOperation{
+		{Name: "DispatchTransfer", Event: domain.EventDistribuirEslabonPosterior},
+		{Name: "Dispense", Event: domain.EventDispensarPaciente},
+	}
+	transitions := domain.Transitions()
+	var cases []blockingCase
+	for _, state := range domain.States() {
+		if !domain.IsBlockingState(state) {
+			continue
+		}
+		transition, err := transitionFromCustodyTo(state, transitions)
+		if err != nil {
+			return nil, err
+		}
+		operation, invoker, err := preparationOperation(transition, pharmacy, regulator)
+		if err != nil {
+			return nil, err
+		}
+		for _, rejected := range ordinary {
+			if _, declared := domain.LookupTransition(state, rejected.Event); declared {
+				continue
+			}
+			cases = append(cases, blockingCase{
+				State: state, PreparationTransition: transition,
+				PreparationOperation: operation, PreparationInvoker: invoker,
+				RejectedOperation: rejected, SetupPath: append([]organization(nil), setupPath...),
+				DispatchDestination: dispatchDestination,
+			})
+		}
+	}
+	return cases, nil
+}
+
+func transitionFromCustodyTo(state domain.State, transitions []domain.Transition) (domain.Transition, error) {
+	var found []domain.Transition
+	for _, transition := range transitions {
+		if transition.To != state {
+			continue
+		}
+		for _, from := range transition.From {
+			if from == domain.StateEnCustodia {
+				found = append(found, transition)
+				break
+			}
+		}
+	}
+	if len(found) != 1 {
+		return domain.Transition{}, fmt.Errorf(
+			"el estado bloqueante %s debe tener una unica preparacion directa desde EN_CUSTODIA; obtuvo %d",
+			state, len(found))
+	}
+	return found[0], nil
+}
+
+// preparationOperation traduce eventos de la maquina compartida al nombre del
+// contrato publico. No decide estados ni compatibilidades: ambas decisiones ya
+// vienen de domain.Transitions y domain.LookupTransition.
+func preparationOperation(
+	transition domain.Transition,
+	custodian organization,
+	regulator organization,
+) (string, organization, error) {
+	var operation string
+	var invoker organization
+	var actor domain.Actor
+	switch transition.Event {
+	case domain.EventPonerEnCuarentena:
+		operation, invoker, actor = "Quarantine", custodian, domain.ActorCurrentCustodian
+	case domain.EventInformarVencimiento:
+		operation, invoker, actor = "ReportExpired", custodian, domain.ActorCurrentCustodian
+	case domain.EventInformarDeterioro:
+		operation, invoker, actor = "ReportDamaged", custodian, domain.ActorCurrentCustodian
+	case domain.EventRetirarMercado:
+		operation, invoker, actor = "WithdrawFromMarket", regulator, domain.ActorANMAT
+	case domain.EventProhibirProducto:
+		operation, invoker, actor = "ProhibitProduct", regulator, domain.ActorANMAT
+	case domain.EventDevolverProducto:
+		operation, invoker, actor = "ReturnProduct", custodian, domain.ActorCurrentCustodian
+	default:
+		return "", organization{}, fmt.Errorf(
+			"el evento %s que prepara %s no tiene operacion publica mapeada",
+			transition.Event, transition.To)
+	}
+	if !transition.AllowsActor(actor) {
+		return "", organization{}, fmt.Errorf(
+			"la transicion %s no habilita al actor %s elegido para %s",
+			transition.ID, actor, operation)
+	}
+	return operation, invoker, nil
 }
 
 func shortestPathFromAny(
@@ -390,7 +562,7 @@ func writeDataset(path string, units int, plan generationPlan) (string, error) {
 		_ = file.Close()
 		return "", fmt.Errorf("escribir cabecera del dataset: %w", err)
 	}
-	if _, err := fmt.Fprintf(writer, "  %q: %q,%c", "$schema", datasetSchemaID, byte(10)); err != nil {
+	if _, err := fmt.Fprintf(writer, "  %q: %q,%c", "$schema", DatasetSchemaID, byte(10)); err != nil {
 		_ = file.Close()
 		return "", fmt.Errorf("escribir schema del dataset: %w", err)
 	}
@@ -458,118 +630,192 @@ func writeDataset(path string, units int, plan generationPlan) (string, error) {
 func buildUnitScenario(index int, plan generationPlan) (UnitScenario, error) {
 	sequence := index + 1
 	gtin, serial, lot, expiration := identifiersFor(sequence)
-	ref := UnitRef{GTIN: gtin, NumeroSerie: serial}
+	registerRequest := OperationRequest{
+		GTIN: gtin, NumeroSerie: serial, Lote: lot, FechaVencimiento: expiration,
+	}
+	ref := OperationRequest{GTIN: gtin, NumeroSerie: serial}
 
-	var path []organization
-	var rejection *deniedCase
-	if index < len(plan.deniedCases) {
-		selected := plan.deniedCases[index]
-		rejection = &selected
-		path = selected.SetupPath
-	} else {
+	deniedEnd := len(plan.deniedCases)
+	duplicateEnd := deniedEnd + plan.duplicateCaseCount
+	blockingEnd := duplicateEnd + len(plan.blockingCases)
+
+	switch {
+	case index < deniedEnd:
+		return buildTransferRejection(sequence, registerRequest, ref, plan.deniedCases[index])
+	case index < duplicateEnd:
+		return buildDuplicateRejection(sequence, registerRequest, plan)
+	case index < blockingEnd:
+		return buildBlockingRejection(sequence, registerRequest, ref, plan.blockingCases[index-duplicateEnd])
+	default:
 		// #nosec G115 -- sequence is index+1 and therefore strictly positive.
 		sequence64 := uint64(sequence)
 		rng := splitMix64{state: FixedSeed + sequence64*0x9e3779b97f4a7c15}
-		path = plan.happyPaths[rng.intn(len(plan.happyPaths))]
-	}
-	if len(path) == 0 {
-		return UnitScenario{}, fmt.Errorf("la unidad %d no tiene laboratorio de origen", sequence)
-	}
-
-	unit := UnitScenario{
-		Sequence:         sequence,
-		InitialState:     initialState,
-		InitialCustodian: path[0].canonicalID(),
-		Registration: Registration{
-			Operation:    "RegisterUnit",
-			InvokerMSPID: path[0].MSPID,
-			Request: RegisterUnitRequest{
-				GTIN:             gtin,
-				NumeroSerie:      serial,
-				Lote:             lot,
-				FechaVencimiento: expiration,
-			},
-		},
-		ValidTransfers: make([]ValidTransfer, 0, len(path)-1),
-	}
-
-	for edge := 0; edge+1 < len(path); edge++ {
-		transfer, err := makeValidTransfer(sequence, edge+1, ref, path[edge], path[edge+1])
+		path := plan.happyPaths[rng.intn(len(plan.happyPaths))]
+		preparation, err := makePreparation(sequence, registerRequest, path)
 		if err != nil {
 			return UnitScenario{}, err
 		}
-		unit.ValidTransfers = append(unit.ValidTransfers, transfer)
+		final := path[len(path)-1]
+		return UnitScenario{
+			Sequence: sequence, InitialState: initialState, InitialCustodian: path[0].canonicalID(),
+			Preparation: preparation,
+			ExpectedSuccess: &Invocation{
+				Operation: "Dispense", InvokerMSPID: final.MSPID, Request: ref,
+			},
+		}, nil
 	}
-
-	if rejection != nil {
-		dispatch := makeDispatch(sequence, len(path), ref, rejection.Origin, rejection.Destination)
-		kind := explicitProhibitionDecision
-		if rejection.Decision.RuleID == "" {
-			kind = defaultDenyDecision
-		}
-		unit.ExpectedRejection = &ExpectedRejection{
-			DecisionKind:      kind,
-			RuleID:            rejection.Decision.RuleID,
-			Reason:            rejection.Decision.Reason,
-			ExpectedErrorCode: expectedTransferError,
-			Dispatch:          dispatch,
-		}
-		return unit, nil
-	}
-
-	final := path[len(path)-1]
-	unit.Dispense = &Dispense{
-		Operation:    "Dispense",
-		InvokerMSPID: final.MSPID,
-		Request:      ref,
-	}
-	return unit, nil
 }
 
-func makeValidTransfer(
-	unitSequence int,
-	transferSequence int,
-	ref UnitRef,
-	origin organization,
-	destination organization,
-) (ValidTransfer, error) {
-	decision, err := domain.DecideTransfer(origin.AgentType, destination.AgentType)
+func buildTransferRejection(
+	sequence int,
+	registerRequest OperationRequest,
+	ref OperationRequest,
+	rejected deniedCase,
+) (UnitScenario, error) {
+	preparation, err := makePreparation(sequence, registerRequest, rejected.SetupPath)
 	if err != nil {
-		return ValidTransfer{}, fmt.Errorf("evaluar transferencia valida: %w", err)
+		return UnitScenario{}, err
 	}
-	if !decision.Allowed {
-		return ValidTransfer{}, fmt.Errorf("el plan produjo un par no autorizado %s -> %s", origin.AgentType, destination.AgentType)
+	kind := explicitProhibitionDecision
+	if rejected.Decision.RuleID == "" {
+		kind = defaultDenyDecision
 	}
-	return ValidTransfer{
-		RuleID:              decision.RuleID,
-		MatrixSchemaVersion: decision.SchemaVersion,
-		Dispatch:            makeDispatch(unitSequence, transferSequence, ref, origin, destination),
-		Receive: Receive{
-			Operation:    "ReceiveTransfer",
-			InvokerMSPID: destination.MSPID,
-			Request:      ref,
+	return UnitScenario{
+		Sequence: sequence, InitialState: initialState,
+		InitialCustodian: rejected.SetupPath[0].canonicalID(), Preparation: preparation,
+		ExpectedRejection: &ExpectedRejection{
+			Category: RejectionUnauthorizedTransfer, Operation: "DispatchTransfer",
+			InvokerMSPID: rejected.Origin.MSPID, Request: ref,
+			PrivateData:       makeDispatchPrivateData(sequence, len(rejected.SetupPath), rejected.Destination),
+			ExpectedErrorCode: expectedTransferError,
+			TransferDecision: &TransferDecision{
+				Kind: kind, RuleID: rejected.Decision.RuleID, Reason: rejected.Decision.Reason,
+				MatrixSchemaVersion: rejected.Decision.SchemaVersion,
+			},
 		},
 	}, nil
 }
 
-func makeDispatch(
+func buildDuplicateRejection(
+	sequence int,
+	registerRequest OperationRequest,
+	plan generationPlan,
+) (UnitScenario, error) {
+	labs := organizationsByType(plan.organizations, domain.AgentLaboratory)
+	if len(labs) == 0 {
+		return UnitScenario{}, errors.New("no hay laboratorio para preparar el duplicado")
+	}
+	lab := labs[0]
+	preparation := []Invocation{{
+		Operation: "RegisterUnit", InvokerMSPID: lab.MSPID, Request: registerRequest,
+	}}
+	return UnitScenario{
+		Sequence: sequence, InitialState: initialState,
+		InitialCustodian: lab.canonicalID(), Preparation: preparation,
+		ExpectedRejection: &ExpectedRejection{
+			Category: RejectionDuplicateIdentity, Operation: "RegisterUnit",
+			InvokerMSPID: lab.MSPID, Request: registerRequest,
+			ExpectedErrorCode: expectedDuplicateError,
+		},
+	}, nil
+}
+
+func buildBlockingRejection(
+	sequence int,
+	registerRequest OperationRequest,
+	ref OperationRequest,
+	blocked blockingCase,
+) (UnitScenario, error) {
+	preparation, err := makePreparation(sequence, registerRequest, blocked.SetupPath)
+	if err != nil {
+		return UnitScenario{}, err
+	}
+	preparation = append(preparation, Invocation{
+		Operation: blocked.PreparationOperation, InvokerMSPID: blocked.PreparationInvoker.MSPID,
+		Request: OperationRequest{
+			GTIN: ref.GTIN, NumeroSerie: ref.NumeroSerie,
+			Motivo: fmt.Sprintf("Preparacion deterministica del estado %s.", blocked.State),
+		},
+		TransitionID:        blocked.PreparationTransition.ID,
+		StateMachineVersion: domain.StateMachineVersion,
+	})
+
+	rejection := &ExpectedRejection{
+		Category: RejectionBlockingState, Operation: blocked.RejectedOperation.Name,
+		InvokerMSPID: blocked.SetupPath[len(blocked.SetupPath)-1].MSPID, Request: ref,
+		ExpectedErrorCode: expectedBlockingError, BlockingState: string(blocked.State),
+		StateMachineVersion: domain.StateMachineVersion,
+	}
+	if blocked.RejectedOperation.Name == "DispatchTransfer" {
+		rejection.PrivateData = makeDispatchPrivateData(
+			sequence, len(blocked.SetupPath)+1, blocked.DispatchDestination)
+	}
+
+	return UnitScenario{
+		Sequence: sequence, InitialState: initialState,
+		InitialCustodian: blocked.SetupPath[0].canonicalID(), Preparation: preparation,
+		ExpectedRejection: rejection,
+	}, nil
+}
+
+func makePreparation(
+	unitSequence int,
+	registerRequest OperationRequest,
+	path []organization,
+) ([]Invocation, error) {
+	if len(path) == 0 {
+		return nil, fmt.Errorf("la unidad %d no tiene laboratorio de origen", unitSequence)
+	}
+	preparation := []Invocation{{
+		Operation: "RegisterUnit", InvokerMSPID: path[0].MSPID, Request: registerRequest,
+	}}
+	ref := OperationRequest{GTIN: registerRequest.GTIN, NumeroSerie: registerRequest.NumeroSerie}
+	for edge := 0; edge+1 < len(path); edge++ {
+		transfer, err := makeValidTransferInvocations(
+			unitSequence, edge+1, ref, path[edge], path[edge+1])
+		if err != nil {
+			return nil, err
+		}
+		preparation = append(preparation, transfer...)
+	}
+	return preparation, nil
+}
+
+func makeValidTransferInvocations(
 	unitSequence int,
 	transferSequence int,
-	ref UnitRef,
+	ref OperationRequest,
 	origin organization,
 	destination organization,
-) Dispatch {
-	return Dispatch{
-		Operation:    "DispatchTransfer",
-		InvokerMSPID: origin.MSPID,
-		Request:      ref,
-		PrivateData: DispatchPrivateData{
-			Destinatario: DestinationPrivateData{Destino: destination.canonicalID()},
-			Commercial: CommercialPrivateData{
-				NumeroRemito:  fmt.Sprintf("R-%08d-%02d", unitSequence, transferSequence),
-				NumeroFactura: fmt.Sprintf("F-%08d-%02d", unitSequence, transferSequence),
-				Cantidad:      1,
-			},
+) ([]Invocation, error) {
+	decision, err := domain.DecideTransfer(origin.AgentType, destination.AgentType)
+	if err != nil {
+		return nil, fmt.Errorf("evaluar transferencia valida: %w", err)
+	}
+	if !decision.Allowed {
+		return nil, fmt.Errorf("el plan produjo un par no autorizado %s -> %s", origin.AgentType, destination.AgentType)
+	}
+	return []Invocation{
+		{
+			Operation: "DispatchTransfer", InvokerMSPID: origin.MSPID, Request: ref,
+			PrivateData: makeDispatchPrivateData(unitSequence, transferSequence, destination),
+			RuleID:      decision.RuleID, MatrixSchemaVersion: decision.SchemaVersion,
+		},
+		{Operation: "ReceiveTransfer", InvokerMSPID: destination.MSPID, Request: ref},
+	}, nil
+}
+
+func makeDispatchPrivateData(
+	unitSequence int,
+	transferSequence int,
+	destination organization,
+) *DispatchPrivateData {
+	return &DispatchPrivateData{
+		Destinatario: DestinationPrivateData{Destino: destination.canonicalID()},
+		Commercial: CommercialPrivateData{
+			NumeroRemito:  fmt.Sprintf("R-%08d-%02d", unitSequence, transferSequence),
+			NumeroFactura: fmt.Sprintf("F-%08d-%02d", unitSequence, transferSequence),
+			Cantidad:      1,
 		},
 	}
 }
@@ -625,38 +871,32 @@ func (r *splitMix64) intn(n int) int {
 }
 
 func buildManifest(units int, hash string, plan generationPlan) Manifest {
-	organizations := make([]Organization, 0, len(plan.organizations))
-	for _, org := range plan.organizations {
+	organizations := make([]Organization, 0, len(plan.participants))
+	for _, org := range plan.participants {
 		organizations = append(organizations, Organization{
-			MSPID:       org.MSPID,
-			CanonicalID: org.canonicalID(),
-			AgentType:   string(org.AgentType),
-			ClientRole:  org.ClientRole,
+			MSPID: org.MSPID, CanonicalID: org.canonicalID(),
+			AgentType: string(org.AgentType), ClientRole: org.ClientRole,
 		})
 	}
+	rejections := len(plan.deniedCases) + plan.duplicateCaseCount + len(plan.blockingCases)
 	return Manifest{
-		Schema:        manifestSchemaID,
-		SchemaVersion: SchemaVersion,
-		Generator: GeneratorMetadata{
-			Name:    generatorName,
-			Version: GeneratorVersion,
-		},
-		Seed:       FixedSeed,
-		Parameters: Parameters{Units: units},
+		Schema: ManifestSchemaID, SchemaVersion: SchemaVersion,
+		Generator: GeneratorMetadata{Name: generatorName, Version: GeneratorVersion},
+		Seed:      FixedSeed, Parameters: Parameters{Units: units},
 		Sources: SourceMetadata{
 			TransferRulesetID:                  plan.matrixRulesetID,
 			TransferMatrixSchemaVersion:        plan.matrixSchemaVersion,
+			StateMachineVersion:                plan.stateMachineVersion,
 			OrganizationsManifestSchemaVersion: plan.manifestVersion,
 		},
 		Dataset: Metadata{
-			File:                     DatasetFileName,
-			HashFile:                 HashFileName,
-			SHA256:                   hash,
-			Units:                    units,
-			HappyPathUnits:           units - len(plan.deniedCases),
-			RejectionUnits:           len(plan.deniedCases),
-			ExplicitProhibitionCases: plan.explicitDenials,
-			DefaultDenyCases:         plan.defaultDenials,
+			File: DatasetFileName, HashFile: HashFileName, SHA256: hash,
+			Units: units, HappyPathUnits: units - rejections, RejectionUnits: rejections,
+			UnauthorizedTransferCases: len(plan.deniedCases),
+			DuplicateIdentityCases:    plan.duplicateCaseCount,
+			BlockingStateCases:        len(plan.blockingCases),
+			ExplicitProhibitionCases:  plan.explicitDenials,
+			DefaultDenyCases:          plan.defaultDenials,
 		},
 		Organizations: organizations,
 	}
