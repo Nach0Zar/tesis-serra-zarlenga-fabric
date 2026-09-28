@@ -6,8 +6,9 @@
 // exige los identificadores propios de cada SUT. La segunda son las reglas
 // aritmeticas y temporales que JSON Schema no puede expresar: la coherencia
 // entre la tasa de operaciones conceptuales y la tasa de transacciones
-// efectivas (docs/measurement-protocol.md, seccion 3.4) y la consistencia entre
-// la ventana declarada y la duracion medida.
+// efectivas (docs/measurement-protocol.md, seccion 3.4), la consistencia entre
+// la ventana declarada y la duracion medida, y el encuadre de las ventanas de
+// un escenario de disponibilidad dentro de la corrida (seccion 8).
 package runmeta
 
 import (
@@ -39,6 +40,10 @@ const DefaultSchemaPath = "../benchmarks/schema/run-metadata.schema.json"
 // es exactamente 31 en binario.
 const rateTolerance = 1e-6
 
+// rejectionScenario nombra la ronda donde cada operacion se resuelve en una
+// sola invocacion.
+const rejectionScenario = "expected-rejections"
+
 // transactionsPerOperation traduce cada operacion conceptual del protocolo a la
 // cantidad de transacciones efectivas que el cliente envia al SUT. La
 // transferencia vale dos porque ADR-004 la implementa como despacho mas
@@ -49,6 +54,21 @@ var transactionsPerOperation = map[string]float64{
 	"dispense":      1,
 	"query-unit":    1,
 	"query-history": 1,
+}
+
+// expectedTransactionsPerOperation resuelve la equivalencia para un escenario
+// concreto. En una ronda de rechazo esperado la transferencia vale una sola
+// transaccion: el dataset compartido invoca DispatchTransfer y el rechazo
+// ocurre ahi, de modo que el par nunca se completa y no hay recepcion que
+// medir. Exigir dos obligaria a declarar una transaccion que no se envio.
+func expectedTransactionsPerOperation(scenario, operation string) (float64, bool) {
+	if scenario == rejectionScenario {
+		return 1, true
+	}
+
+	expected, known := transactionsPerOperation[operation]
+
+	return expected, known
 }
 
 // Validator aplica el contrato a documentos de metadatos.
@@ -169,11 +189,28 @@ func leafMessages(node *jsonschema.ValidationError, collected []string) []string
 }
 
 type metadata struct {
-	Scenario        string    `json:"scenario"`
-	DurationSeconds float64   `json:"durationSeconds"`
-	StartedAt       time.Time `json:"startedAt"`
-	EndedAt         time.Time `json:"endedAt"`
-	Rate            rate      `json:"rate"`
+	Scenario             string                `json:"scenario"`
+	DurationSeconds      float64               `json:"durationSeconds"`
+	StartedAt            time.Time             `json:"startedAt"`
+	EndedAt              time.Time             `json:"endedAt"`
+	Rate                 rate                  `json:"rate"`
+	FaultInjection       *faultInjection       `json:"faultInjection"`
+	ParticipationMarkers *participationMarkers `json:"participationMarkers"`
+}
+
+type faultInjection struct {
+	InjectedAt      time.Time  `json:"injectedAt"`
+	RecoveredAt     *time.Time `json:"recoveredAt"`
+	PreFaultSeconds float64    `json:"preFaultSeconds"`
+	FaultSeconds    float64    `json:"faultSeconds"`
+	RecoverySeconds float64    `json:"recoverySeconds"`
+}
+
+type participationMarkers struct {
+	Expected             int  `json:"expected"`
+	Observed             int  `json:"observed"`
+	FromRegistrations    *int `json:"fromRegistrations"`
+	FromRegulatoryEvents *int `json:"fromRegulatoryEvents"`
 }
 
 type rate struct {
@@ -194,19 +231,21 @@ type loadMix struct {
 
 func (m metadata) semanticFindings() []string {
 	var findings []string
-	findings = append(findings, m.Rate.findings()...)
+	findings = append(findings, m.Rate.findings(m.Scenario)...)
 	findings = append(findings, m.windowFindings()...)
+	findings = append(findings, m.faultFindings()...)
+	findings = append(findings, m.markerFindings()...)
 
 	return findings
 }
 
-func (r rate) findings() []string {
+func (r rate) findings(scenario string) []string {
 	var findings []string
 
-	if expected, known := transactionsPerOperation[r.Operation]; known && r.TransactionsPerOperation != expected {
+	if expected, known := expectedTransactionsPerOperation(scenario, r.Operation); known && r.TransactionsPerOperation != expected {
 		findings = append(findings, fmt.Sprintf(
-			"/rate/transactionsPerOperation: la operacion %q vale %g transacciones efectivas y el documento declara %g",
-			r.Operation, expected, r.TransactionsPerOperation,
+			"/rate/transactionsPerOperation: la operacion %q en el escenario %q vale %g transacciones efectivas y el documento declara %g",
+			r.Operation, scenario, expected, r.TransactionsPerOperation,
 		))
 	}
 
@@ -271,6 +310,87 @@ func (m metadata) windowFindings() []string {
 		return []string{fmt.Sprintf(
 			"/durationSeconds: la corrida declara haber medido %g s dentro de una ventana de %g s",
 			m.DurationSeconds, elapsed,
+		)}
+	}
+
+	return nil
+}
+
+// faultFindings encuadra las ventanas de un escenario de disponibilidad dentro
+// de la corrida. Un instante de inyeccion fuera de la ventana medida, o unas
+// ventanas que no suman la duracion declarada, dejan el crudo imposible de
+// segmentar en pre-falla, falla y recuperacion.
+func (m metadata) faultFindings() []string {
+	fault := m.FaultInjection
+	if fault == nil || m.StartedAt.IsZero() || m.EndedAt.IsZero() || fault.InjectedAt.IsZero() {
+		return nil
+	}
+
+	var findings []string
+
+	if fault.InjectedAt.Before(m.StartedAt) || fault.InjectedAt.After(m.EndedAt) {
+		findings = append(findings, fmt.Sprintf(
+			"/faultInjection/injectedAt: la falla se inyecta en %s, fuera de la ventana medida entre %s y %s",
+			fault.InjectedAt.Format(time.RFC3339), m.StartedAt.Format(time.RFC3339), m.EndedAt.Format(time.RFC3339),
+		))
+	}
+
+	// El tramo previo a la falla es, por definicion, lo que va del inicio de la
+	// corrida a la inyeccion.
+	observedPreFault := fault.InjectedAt.Sub(m.StartedAt).Seconds()
+	if !approxEqual(observedPreFault, fault.PreFaultSeconds) {
+		findings = append(findings, fmt.Sprintf(
+			"/faultInjection/preFaultSeconds: entre el inicio y la inyeccion pasan %g s y el documento declara %g",
+			observedPreFault, fault.PreFaultSeconds,
+		))
+	}
+
+	declared := fault.PreFaultSeconds + fault.FaultSeconds + fault.RecoverySeconds
+	if declared-rateTolerance > m.DurationSeconds {
+		findings = append(findings, fmt.Sprintf(
+			"/faultInjection: las ventanas suman %g s y la corrida declara haber medido %g",
+			declared, m.DurationSeconds,
+		))
+	}
+
+	if fault.RecoveredAt == nil {
+		return findings
+	}
+
+	if !fault.RecoveredAt.After(fault.InjectedAt) {
+		findings = append(findings, fmt.Sprintf(
+			"/faultInjection/recoveredAt: la recuperacion en %s no es posterior a la inyeccion en %s",
+			fault.RecoveredAt.Format(time.RFC3339), fault.InjectedAt.Format(time.RFC3339),
+		))
+
+		return findings
+	}
+
+	observedFault := fault.RecoveredAt.Sub(fault.InjectedAt).Seconds()
+	if !approxEqual(observedFault, fault.FaultSeconds) {
+		findings = append(findings, fmt.Sprintf(
+			"/faultInjection/faultSeconds: entre la inyeccion y la recuperacion pasan %g s y el documento declara %g",
+			observedFault, fault.FaultSeconds,
+		))
+	}
+
+	return findings
+}
+
+// markerFindings comprueba el desglose de los marcadores de participacion que
+// pide la seccion 3.5: si se declara de donde vienen, las partes tienen que dar
+// el total observado.
+func (m metadata) markerFindings() []string {
+	markers := m.ParticipationMarkers
+	if markers == nil || markers.FromRegistrations == nil || markers.FromRegulatoryEvents == nil {
+		return nil
+	}
+
+	total := *markers.FromRegistrations + *markers.FromRegulatoryEvents
+	if total != markers.Observed {
+		return []string{fmt.Sprintf(
+			"/participationMarkers: el desglose suma %d marcadores y se observaron %d",
+			total, markers.Observed,
 		)}
 	}
 

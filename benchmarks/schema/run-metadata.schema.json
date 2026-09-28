@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:pfi-snt:run-metadata:schema:1.0.0",
   "title": "Metadatos de una corrida experimental (DES-20)",
-  "description": "Contrato unico de metadata.json para las corridas de docs/measurement-protocol.md seccion 9. Fabric y baseline producen el mismo documento; los identificadores especificos de cada SUT se exigen condicionalmente.",
+  "description": "Contrato unico de metadata.json para las corridas de docs/measurement-protocol.md seccion 9. Fabric y baseline producen el mismo documento; los identificadores y los bloques propios de cada SUT y de cada familia de escenario se exigen condicionalmente.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -16,7 +16,6 @@
     "repetition",
     "dataset",
     "workers",
-    "durationSeconds",
     "rate",
     "startedAt",
     "endedAt",
@@ -42,8 +41,9 @@
       "enum": ["fabric", "baseline"]
     },
     "scenario": {
-      "description": "Nombre estable del escenario, derivado de las tablas de las secciones 6 y 8.",
+      "description": "Nombre estable del escenario, derivado de las tablas de las secciones 4, 6 y 8.",
       "enum": [
+        "dataset-preparation",
         "smoke",
         "write-register",
         "write-transfer",
@@ -63,11 +63,11 @@
       ]
     },
     "phase": {
-      "description": "Warm-up descartado o repeticion medida (seccion 7).",
-      "enum": ["warmup", "measurement"]
+      "description": "Construccion del snapshot inicial (seccion 4), warm-up descartado o repeticion medida (seccion 7).",
+      "enum": ["preparation", "warmup", "measurement"]
     },
     "repetition": {
-      "description": "0 para warm-up; 1..8 para repeticiones medidas (5 de la serie original mas hasta 3 de la serie extendida).",
+      "description": "0 para warm-up; 1..8 para repeticiones medidas, cubriendo la serie original de 5 y la extendida de 3. La preparacion usa el numero de la repeticion que habilita.",
       "type": "integer",
       "minimum": 0,
       "maximum": 8
@@ -83,12 +83,27 @@
       "minimum": 1
     },
     "durationSeconds": {
-      "description": "Duracion efectivamente medida de la ronda.",
+      "description": "Duracion efectivamente medida. Obligatoria salvo en el smoke, que la seccion 6.1 acota por cantidad y no por tiempo.",
       "type": "number",
       "exclusiveMinimum": 0
     },
+    "transactions": {
+      "description": "Exclusiva del smoke, que la seccion 6.1 acota por cantidad y no por tiempo: 30 transacciones por operacion core. El smoke emite un documento por operacion core.",
+      "type": "integer",
+      "minimum": 1
+    },
     "rate": {
       "$ref": "#/$defs/rate"
+    },
+    "rejectionFamily": {
+      "description": "Exclusiva de expected-rejections: familia de rechazo medida, con la misma nomenclatura que la categoria del dataset compartido (CLI-5).",
+      "enum": ["UNAUTHORIZED_TRANSFER", "DUPLICATE_IDENTITY", "BLOCKING_STATE"]
+    },
+    "faultInjection": {
+      "$ref": "#/$defs/faultInjection"
+    },
+    "participationMarkers": {
+      "$ref": "#/$defs/participationMarkers"
     },
     "startedAt": {
       "type": "string",
@@ -111,6 +126,7 @@
   },
   "allOf": [
     {
+      "description": "Identificadores y bloques exclusivos de Fabric.",
       "if": {
         "properties": { "sut": { "const": "fabric" } },
         "required": ["sut"]
@@ -119,6 +135,7 @@
         "properties": {
           "scenario": {
             "enum": [
+              "dataset-preparation",
               "smoke",
               "write-register",
               "write-transfer",
@@ -143,17 +160,12 @@
             }
           }
         }
-      }
-    },
-    {
-      "if": {
-        "properties": { "sut": { "const": "baseline" } },
-        "required": ["sut"]
       },
-      "then": {
+      "else": {
         "properties": {
           "scenario": {
             "enum": [
+              "dataset-preparation",
               "smoke",
               "write-register",
               "write-transfer",
@@ -174,23 +186,183 @@
               "fabric": false,
               "fabricCA": false
             }
-          }
+          },
+          "participationMarkers": false
         }
       }
     },
     {
+      "description": "El warm-up no lleva numero de repeticion y la medicion si.",
       "if": {
         "properties": { "phase": { "const": "warmup" } },
         "required": ["phase"]
       },
       "then": {
         "properties": { "repetition": { "const": 0 } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "phase": { "const": "measurement" } },
+        "required": ["phase"]
       },
-      "else": {
+      "then": {
         "properties": { "repetition": { "minimum": 1 } }
       }
     },
     {
+      "description": "La preparacion del snapshot inicial es su propia fase (seccion 4) y no se mezcla con las rondas medidas.",
+      "if": {
+        "properties": { "scenario": { "const": "dataset-preparation" } },
+        "required": ["scenario"]
+      },
+      "then": {
+        "properties": {
+          "phase": { "const": "preparation" },
+          "rate": { "properties": { "operation": { "const": "register" } } }
+        }
+      },
+      "else": {
+        "properties": { "phase": { "not": { "const": "preparation" } } }
+      }
+    },
+    {
+      "description": "El smoke se acota por cantidad de transacciones y no por duracion (seccion 6.1).",
+      "if": {
+        "properties": { "scenario": { "const": "smoke" } },
+        "required": ["scenario"]
+      },
+      "then": {
+        "required": ["transactions"],
+        "properties": { "durationSeconds": false }
+      },
+      "else": {
+        "required": ["durationSeconds"],
+        "properties": { "transactions": false }
+      }
+    },
+    {
+      "description": "Las rondas de rechazo esperado declaran que familia miden (seccion 6.5).",
+      "if": {
+        "properties": { "scenario": { "const": "expected-rejections" } },
+        "required": ["scenario"]
+      },
+      "then": {
+        "required": ["rejectionFamily"]
+      },
+      "else": {
+        "properties": { "rejectionFamily": false }
+      }
+    },
+    {
+      "description": "Cada familia de rechazo se ejerce sobre la operacion que el dataset compartido invoca para ella.",
+      "if": {
+        "properties": { "rejectionFamily": { "const": "UNAUTHORIZED_TRANSFER" } },
+        "required": ["rejectionFamily"]
+      },
+      "then": {
+        "properties": { "rate": { "properties": { "operation": { "const": "transfer" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "rejectionFamily": { "const": "DUPLICATE_IDENTITY" } },
+        "required": ["rejectionFamily"]
+      },
+      "then": {
+        "properties": { "rate": { "properties": { "operation": { "const": "register" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "rejectionFamily": { "const": "BLOCKING_STATE" } },
+        "required": ["rejectionFamily"]
+      },
+      "then": {
+        "properties": { "rate": { "properties": { "operation": { "enum": ["transfer", "dispense"] } } } }
+      }
+    },
+    {
+      "description": "Un rechazo se resuelve en la invocacion que lo provoca: el par despacho+recepcion no se completa, asi que la operacion vale una sola transaccion. Fuera de esas rondas rige la equivalencia de la seccion 3.4.",
+      "if": {
+        "properties": { "scenario": { "const": "expected-rejections" } },
+        "required": ["scenario"]
+      },
+      "then": {
+        "properties": { "rate": { "properties": { "transactionsPerOperation": { "const": 1 } } } }
+      },
+      "else": {
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "rate": {
+                  "properties": { "operation": { "const": "transfer" } },
+                  "required": ["operation"]
+                }
+              },
+              "required": ["rate"]
+            },
+            "then": {
+              "properties": { "rate": { "properties": { "transactionsPerOperation": { "const": 2 } } } }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "rate": {
+                  "properties": {
+                    "operation": { "enum": ["register", "dispense", "query-unit", "query-history"] }
+                  },
+                  "required": ["operation"]
+                }
+              },
+              "required": ["rate"]
+            },
+            "then": {
+              "properties": { "rate": { "properties": { "transactionsPerOperation": { "const": 1 } } } }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "description": "Los escenarios de disponibilidad registran cuando se inyecto la falla; sin eso el crudo no se puede segmentar en las ventanas de la seccion 8.",
+      "if": {
+        "properties": {
+          "scenario": {
+            "enum": ["raft-1", "raft-2", "peer-1a", "peer-1b", "peer-1c", "peer-1d", "db-1", "api-1"]
+          }
+        },
+        "required": ["scenario"]
+      },
+      "then": {
+        "required": ["faultInjection"]
+      },
+      "else": {
+        "properties": { "faultInjection": false }
+      }
+    },
+    {
+      "description": "La preparacion en Fabric declara los marcadores de participacion que agrego (secciones 3.5 y 4).",
+      "if": {
+        "allOf": [
+          {
+            "properties": { "scenario": { "const": "dataset-preparation" } },
+            "required": ["scenario"]
+          },
+          {
+            "properties": { "sut": { "const": "fabric" } },
+            "required": ["sut"]
+          }
+        ]
+      },
+      "then": {
+        "required": ["participationMarkers"]
+      }
+    },
+    {
+      "description": "Coherencia entre el escenario y la operacion conceptual medida.",
       "if": {
         "properties": { "scenario": { "const": "write-register" } },
         "required": ["scenario"]
@@ -304,7 +476,7 @@
       }
     },
     "rate": {
-      "description": "Tasa objetivo y efectiva. Separa la operacion conceptual del protocolo de la transaccion efectiva enviada al SUT: conforme la seccion 3.4, una transferencia es UNA operacion conceptual y DOS transacciones (despacho y recepcion).",
+      "description": "Tasa objetivo y efectiva. Separa la operacion conceptual del protocolo de la transaccion efectiva enviada al SUT: conforme la seccion 3.4, una transferencia del camino feliz es UNA operacion conceptual y DOS transacciones (despacho y recepcion).",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -327,12 +499,12 @@
           ]
         },
         "transactionsPerOperation": {
-          "description": "Transacciones efectivas por operacion conceptual. 2 para transferencia; 1 para el resto; para 'mixed' es el promedio ponderado por la mezcla.",
+          "description": "Transacciones efectivas por operacion conceptual.",
           "type": "number",
           "exclusiveMinimum": 0
         },
         "targetOperationsPerSecond": {
-          "description": "Tasa objetivo expresada en operaciones conceptuales por segundo. Para transferencia son pares despacho+recepcion por segundo.",
+          "description": "Tasa objetivo expresada en operaciones conceptuales por segundo. Para transferencia del camino feliz son pares despacho+recepcion por segundo.",
           "type": "number",
           "exclusiveMinimum": 0
         },
@@ -374,28 +546,6 @@
           "else": {
             "properties": { "mix": false }
           }
-        },
-        {
-          "if": {
-            "properties": { "operation": { "const": "transfer" } },
-            "required": ["operation"]
-          },
-          "then": {
-            "properties": { "transactionsPerOperation": { "const": 2 } }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "operation": {
-                "enum": ["register", "dispense", "query-unit", "query-history"]
-              }
-            },
-            "required": ["operation"]
-          },
-          "then": {
-            "properties": { "transactionsPerOperation": { "const": 1 } }
-          }
         }
       ]
     },
@@ -403,6 +553,57 @@
       "type": "number",
       "minimum": 0,
       "maximum": 100
+    },
+    "faultInjection": {
+      "description": "Ventanas de un escenario de disponibilidad (seccion 8). Sin el instante de inyeccion, el crudo no se puede separar en pre-falla, falla y recuperacion, y el tiempo de recuperacion de la seccion 3.3 no es calculable.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "injectedAt", "preFaultSeconds", "faultSeconds"],
+      "properties": {
+        "target": {
+          "description": "Componente dado de baja, en los terminos de las tablas de las secciones 8.1 y 8.2.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "injectedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "recoveredAt": {
+          "description": "Ausente si el escenario no restaura el componente, como la perdida de quorum de Raft-2.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "preFaultSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "faultSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "recoverySeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "dependentRequired": {
+        "recoveredAt": ["recoverySeconds"],
+        "recoverySeconds": ["recoveredAt"]
+      }
+    },
+    "participationMarkers": {
+      "description": "Marcadores de participacion escritos durante la corrida (ADR-007 punto 6, seccion 3.5). Solo Fabric los produce.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected", "observed"],
+      "properties": {
+        "expected": { "type": "integer", "minimum": 0 },
+        "observed": { "type": "integer", "minimum": 0 },
+        "fromRegistrations": { "type": "integer", "minimum": 0 },
+        "fromRegulatoryEvents": { "type": "integer", "minimum": 0 }
+      }
     },
     "host": {
       "description": "Host fisico unico para ambos SUT (seccion 5).",

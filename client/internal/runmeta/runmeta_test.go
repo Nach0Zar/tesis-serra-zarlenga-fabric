@@ -9,18 +9,34 @@ import (
 )
 
 const (
-	fabricExample   = "../../../benchmarks/examples/run-metadata.fabric.json"
-	baselineExample = "../../../benchmarks/examples/run-metadata.baseline.json"
-	mixedExample    = "../../../benchmarks/examples/run-metadata.mixed-fabric.json"
-	schemaFile      = "../../../benchmarks/schema/run-metadata.schema.json"
+	fabricExample       = "../../../benchmarks/examples/run-metadata.fabric.json"
+	baselineExample     = "../../../benchmarks/examples/run-metadata.baseline.json"
+	mixedExample        = "../../../benchmarks/examples/run-metadata.mixed-fabric.json"
+	rejectionsExample   = "../../../benchmarks/examples/run-metadata.rejections-fabric.json"
+	availabilityExample = "../../../benchmarks/examples/run-metadata.availability-fabric.json"
+	preparationExample  = "../../../benchmarks/examples/run-metadata.preparation-fabric.json"
+	smokeExample        = "../../../benchmarks/examples/run-metadata.smoke-baseline.json"
+	schemaFile          = "../../../benchmarks/schema/run-metadata.schema.json"
 )
+
+// allExamples son los documentos de benchmarks/examples. Cada uno ejercita una
+// rama condicional distinta del contrato.
+var allExamples = []string{
+	fabricExample,
+	baselineExample,
+	mixedExample,
+	rejectionsExample,
+	availabilityExample,
+	preparationExample,
+	smokeExample,
+}
 
 func TestTheExamplesSatisfyTheContract(t *testing.T) {
 	t.Parallel()
 
 	validator := newTestValidator(t)
 
-	for _, example := range []string{fabricExample, baselineExample, mixedExample} {
+	for _, example := range allExamples {
 		t.Run(filepath.Base(example), func(t *testing.T) {
 			t.Parallel()
 
@@ -235,6 +251,139 @@ func TestTheContractRejects(t *testing.T) {
 			mutate:  func(d map[string]any) { d["schemaVersion"] = "2.0.0" },
 			expect:  "/schemaVersion",
 		},
+		{
+			// El dataset compartido invoca DispatchTransfer y el rechazo ocurre
+			// ahi: el par nunca se completa, asi que declarar dos transacciones
+			// afirma una recepcion que no se envio.
+			name:    "un rechazo de transferencia contado como par completo",
+			example: rejectionsExample,
+			mutate: func(d map[string]any) {
+				object(d, "rate")["transactionsPerOperation"] = 2.0
+				object(d, "rate")["targetTransactionsPerSecond"] = 10.0
+			},
+			expect: "/rate/transactionsPerOperation",
+		},
+		{
+			name:    "una ronda de rechazo sin declarar su familia",
+			example: rejectionsExample,
+			mutate:  func(d map[string]any) { delete(d, "rejectionFamily") },
+			expect:  "missing property 'rejectionFamily'",
+		},
+		{
+			name:    "una familia de rechazo que no corresponde a la operacion",
+			example: rejectionsExample,
+			mutate:  func(d map[string]any) { d["rejectionFamily"] = "DUPLICATE_IDENTITY" },
+			expect:  "/rate/operation",
+		},
+		{
+			name:    "una familia de rechazo fuera de su ronda",
+			example: fabricExample,
+			mutate:  func(d map[string]any) { d["rejectionFamily"] = "BLOCKING_STATE" },
+			expect:  "'/rejectionFamily': la propiedad no corresponde",
+		},
+		{
+			name:    "un escenario de disponibilidad sin ventana de falla",
+			example: availabilityExample,
+			mutate:  func(d map[string]any) { delete(d, "faultInjection") },
+			expect:  "missing property 'faultInjection'",
+		},
+		{
+			name:    "una ventana de falla fuera de un escenario de disponibilidad",
+			example: fabricExample,
+			mutate: func(d map[string]any) {
+				d["faultInjection"] = map[string]any{
+					"target": "x", "injectedAt": "2026-10-05T14:04:00Z",
+					"preFaultSeconds": 60.0, "faultSeconds": 60.0,
+				}
+			},
+			expect: "'/faultInjection': la propiedad no corresponde",
+		},
+		{
+			name:    "una falla inyectada fuera de la ventana medida",
+			example: availabilityExample,
+			mutate:  func(d map[string]any) { object(d, "faultInjection")["injectedAt"] = "2026-10-05T16:00:00Z" },
+			expect:  "/faultInjection/injectedAt",
+		},
+		{
+			name:    "un tramo previo a la falla que no coincide con los relojes",
+			example: availabilityExample,
+			mutate:  func(d map[string]any) { object(d, "faultInjection")["preFaultSeconds"] = 30.0 },
+			expect:  "/faultInjection/preFaultSeconds",
+		},
+		{
+			name:    "una ventana de falla que no coincide con los relojes",
+			example: availabilityExample,
+			mutate:  func(d map[string]any) { object(d, "faultInjection")["recoveredAt"] = "2026-10-05T15:01:30Z" },
+			expect:  "/faultInjection/faultSeconds",
+		},
+		{
+			name:    "una recuperacion anterior a la inyeccion",
+			example: availabilityExample,
+			mutate:  func(d map[string]any) { object(d, "faultInjection")["recoveredAt"] = "2026-10-05T15:00:30Z" },
+			expect:  "/faultInjection/recoveredAt",
+		},
+		{
+			name:    "una recuperacion en fecha pero no en duracion",
+			example: availabilityExample,
+			mutate:  func(d map[string]any) { delete(object(d, "faultInjection"), "recoverySeconds") },
+			expect:  "recoverySeconds",
+		},
+		{
+			name:    "unas ventanas que exceden la duracion medida",
+			example: availabilityExample,
+			mutate:  func(d map[string]any) { object(d, "faultInjection")["recoverySeconds"] = 600.0 },
+			expect:  "/faultInjection:",
+		},
+		{
+			name:    "una preparacion sin declarar sus marcadores",
+			example: preparationExample,
+			mutate:  func(d map[string]any) { delete(d, "participationMarkers") },
+			expect:  "missing property 'participationMarkers'",
+		},
+		{
+			name:    "un desglose de marcadores que no suma lo observado",
+			example: preparationExample,
+			mutate:  func(d map[string]any) { object(d, "participationMarkers")["fromRegistrations"] = 49000.0 },
+			expect:  "/participationMarkers",
+		},
+		{
+			name:    "marcadores de participacion en la baseline",
+			example: baselineExample,
+			mutate: func(d map[string]any) {
+				d["participationMarkers"] = map[string]any{"expected": 1.0, "observed": 1.0}
+			},
+			expect: "'/participationMarkers': la propiedad no corresponde",
+		},
+		{
+			name:    "una preparacion declarada como medicion",
+			example: preparationExample,
+			mutate:  func(d map[string]any) { d["phase"] = "measurement" },
+			expect:  "/phase",
+		},
+		{
+			name:    "la fase de preparacion en otro escenario",
+			example: fabricExample,
+			mutate:  func(d map[string]any) { d["phase"] = "preparation" },
+			expect:  "/phase",
+		},
+		{
+			name:    "un smoke acotado por duracion",
+			example: smokeExample,
+			mutate:  func(d map[string]any) { d["durationSeconds"] = 30.0 },
+			expect:  "'/durationSeconds': la propiedad no corresponde",
+		},
+		{
+			name:    "un smoke sin su cantidad de transacciones",
+			example: smokeExample,
+			mutate:  func(d map[string]any) { delete(d, "transactions") },
+			expect:  "missing property 'transactions'",
+		},
+		{
+			name:    "una cantidad de transacciones fuera del smoke",
+			example: fabricExample,
+			mutate:  func(d map[string]any) { d["transactions"] = 30.0 },
+			expect:  "'/transactions': la propiedad no corresponde",
+		},
 	}
 
 	validator := newTestValidator(t)
@@ -270,7 +419,7 @@ func TestTheExamplesStayInSyncWithTheContract(t *testing.T) {
 		t.Fatalf("el contrato declara $id %q y el validador aplica %q", identifier, SchemaID)
 	}
 
-	for _, example := range []string{fabricExample, baselineExample, mixedExample} {
+	for _, example := range allExamples {
 		document := loadExample(t, example)
 		if reference, _ := document["$schema"].(string); reference != SchemaID {
 			t.Errorf("%s referencia %q en lugar de %q", example, reference, SchemaID)

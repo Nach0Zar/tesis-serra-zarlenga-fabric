@@ -437,8 +437,16 @@ ventana entre `startedAt` y `endedAt` no sea más corta que la duración medida.
 
 Esa distinción entre operación conceptual y transacción efectiva es la que
 resuelve la ambigüedad del antiguo campo `targetTps`: conforme ADR-004 y la
-sección 3.4 del protocolo, una transferencia es una sola operación y dos
-transacciones write.
+sección 3.4 del protocolo, una transferencia del camino feliz es una sola
+operación y dos transacciones write. En una ronda de rechazo esperado vale una
+sola: el dataset compartido invoca `DispatchTransfer` y el rechazo se resuelve
+ahí, así que el par nunca se completa.
+
+El contrato también cubre los escenarios que no son rondas de camino feliz. El
+smoke se acota por cantidad y no por duración, los escenarios de disponibilidad
+exigen el instante de inyección de la falla y sus tres ventanas, y la
+construcción del snapshot inicial es su propia fase con sus marcadores de
+participación. Las secciones 9.4 a 9.6 del protocolo detallan cada caso.
 
 ## Validación
 

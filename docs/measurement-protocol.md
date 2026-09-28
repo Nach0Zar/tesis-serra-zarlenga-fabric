@@ -375,12 +375,16 @@ Bloque comun, obligatorio para ambos SUT:
 | `repositoryCommit` | Commit completo del repositorio desde el que se ejecuto (seccion 5). |
 | `sut` | `fabric` o `baseline`. |
 | `scenario` | Nombre estable del escenario, de la lista cerrada de la seccion 9.2. |
-| `phase` | `warmup` o `measurement` (seccion 7). |
-| `repetition` | `0` en warm-up; `1`..`8` en mediciones, cubriendo la serie original de 5 y la extendida de 3. |
+| `phase` | `preparation` (seccion 4), `warmup` o `measurement` (seccion 7). |
+| `repetition` | `0` en warm-up; `1`..`8` en mediciones, cubriendo la serie original de 5 y la extendida de 3. La preparacion usa el numero de la repeticion que habilita. |
 | `dataset` | `seed`, `sha256` del bundle y cantidad de unidades (seccion 4). |
 | `workers` | Cantidad de workers. |
-| `durationSeconds` | Duracion efectivamente medida. |
+| `durationSeconds` | Duracion efectivamente medida. Obligatoria salvo en el smoke, que la seccion 6.1 acota por cantidad. |
+| `transactions` | Exclusiva del smoke: cantidad de transacciones de la ronda. |
 | `rate` | Tasas objetivo y efectiva, desambiguadas segun la seccion 9.3. |
+| `rejectionFamily` | Exclusiva de `expected-rejections` (seccion 9.4). |
+| `faultInjection` | Obligatoria y exclusiva de los escenarios de disponibilidad (seccion 9.5). |
+| `participationMarkers` | Marcadores de participacion escritos; solo Fabric, y obligatoria en la preparacion (seccion 9.6). |
 | `startedAt`, `endedAt` | Inicio y fin en RFC 3339. |
 | `host` | CPU, memoria, sistema operativo, kernel y WSL si aplica. |
 | `environment` | Versiones del entorno y de los artefactos medidos. |
@@ -401,6 +405,7 @@ Los nombres salen de las tablas de las secciones 6 y 8 y son una lista cerrada; 
 
 | Escenario | Origen | SUT que puede declararlo |
 |---|---|---|
+| `dataset-preparation` | Seccion 4 | Ambos |
 | `smoke` | Seccion 6.1 | Ambos |
 | `write-register`, `write-transfer`, `write-dispense` | Seccion 6.2 | Ambos |
 | `read-unit`, `read-history` | Seccion 6.3 | Ambos |
@@ -424,7 +429,50 @@ El escenario y la operacion medida deben coincidir: `write-transfer` exige `rate
 | `effectiveTransactionsPerSecond` | Tasa efectiva observada durante la ronda. |
 | `mix` | Obligatoria y exclusiva de `operation: mixed`: porcentajes de la seccion 6.4 sobre operaciones conceptuales, que deben sumar 100. |
 
+La equivalencia de dos transacciones por transferencia rige en el camino feliz. En una ronda de rechazo esperado no: el dataset compartido invoca `DispatchTransfer` y el rechazo se resuelve ahi, de modo que el par nunca se completa y la operacion vale **una** transaccion. Exigir dos obligaria a declarar una recepcion que no se envio, que es la misma ambiguedad que `targetTps` producia.
+
 El validador comprueba la aritmetica, que JSON Schema no puede expresar: que la tasa de transacciones derive de la de operaciones, que la mezcla sume 100 y que su promedio ponderado coincida con `transactionsPerOperation`. Tambien verifica que la ventana entre `startedAt` y `endedAt` no sea mas corta que la duracion que la corrida dice haber medido.
+
+### 9.4 Rondas de rechazo esperado
+
+`rejectionFamily` es obligatoria y exclusiva de `expected-rejections`, y usa la misma nomenclatura que la categoria del dataset compartido, para que la evidencia se pueda cruzar con el bundle que la produjo:
+
+| Familia | Operacion admitida | Invocacion del dataset |
+|---|---|---|
+| `UNAUTHORIZED_TRANSFER` | `transfer` | `DispatchTransfer` |
+| `DUPLICATE_IDENTITY` | `register` | `RegisterUnit` |
+| `BLOCKING_STATE` | `transfer` o `dispense` | `DispatchTransfer` o `Dispense` |
+
+Cada familia se mide en su propia ronda. Sin esa separacion, el costo de validacion de las tres se promedia en una sola cifra y el analisis comparativo de EVAL-8 (#48) no puede distinguirlas.
+
+Reejecutar un mismo caso dentro de una ronda es valido: un rechazo no muta estado, de modo que repetirlo mide lo mismo. Lo que no se admite es fabricar casos por fuera del dataset compartido.
+
+### 9.5 Escenarios de disponibilidad
+
+`faultInjection` es obligatoria y exclusiva de los escenarios de la seccion 8. Sin el instante de inyeccion, el crudo no se puede separar en las tres ventanas y el tiempo de recuperacion de la seccion 3.3 no es calculable, de modo que la corrida no sirve para EVAL-4 (#44) ni EVAL-5 (#45) aunque contenga datos.
+
+| Campo | Descripcion |
+|---|---|
+| `target` | Componente dado de baja, en los terminos de las tablas 8.1 y 8.2. |
+| `injectedAt` | Instante de la inyeccion, dentro de la ventana medida. |
+| `recoveredAt` | Instante de la restauracion. Ausente si el escenario no restaura el componente, como la perdida de quorum de Raft-2. |
+| `preFaultSeconds`, `faultSeconds`, `recoverySeconds` | Duracion de cada ventana. La recomendada es 60 s cada una. |
+
+`recoveredAt` y `recoverySeconds` van juntas o no van. El validador comprueba ademas que `injectedAt` caiga dentro de la corrida, que el tramo entre el inicio y la inyeccion coincida con `preFaultSeconds`, que el tramo entre inyeccion y recuperacion coincida con `faultSeconds`, y que las ventanas no excedan la duracion medida.
+
+### 9.6 Preparacion del snapshot y marcadores de participacion
+
+La construccion del snapshot inicial de la seccion 4 es su propia fase y no se mezcla con las rondas medidas: se declara con `scenario: dataset-preparation` y `phase: preparation`, y ambos se exigen mutuamente.
+
+`participationMarkers` registra las escrituras de marcador de ADR-007 punto 6 que la seccion 3.5 pide atribuir. Solo Fabric las produce, asi que la baseline tiene prohibido el bloque. Es obligatorio en la preparacion de Fabric, donde las 50.000 altas implican 50.000 escrituras privadas adicionales, y opcional en el resto de los escenarios de Fabric.
+
+| Campo | Descripcion |
+|---|---|
+| `expected` | Cantidad esperada segun el escenario. |
+| `observed` | Cantidad confirmada. |
+| `fromRegistrations`, `fromRegulatoryEvents` | Desglose opcional; si se declara, debe sumar `observed`. |
+
+La comparacion entre `expected` y `observed` es la que detecta marcadores omitidos o duplicados, conforme la seccion 3.5.
 
 ## 10. Procesamiento de resultados
 

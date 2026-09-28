@@ -1,6 +1,6 @@
 UNITS ?= 50000
 OUTPUT_DIR ?= ../build/dataset
-RUN_METADATA ?= ../benchmarks/examples/run-metadata.fabric.json ../benchmarks/examples/run-metadata.baseline.json ../benchmarks/examples/run-metadata.mixed-fabric.json
+RUN_METADATA ?= $(wildcard ../benchmarks/examples/*.json)
 DEMO_ARGS ?=
 LISTENER_ARGS ?=
 
