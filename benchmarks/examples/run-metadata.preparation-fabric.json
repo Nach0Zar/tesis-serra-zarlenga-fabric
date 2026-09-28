@@ -26,7 +26,10 @@
     "expected": 50000,
     "observed": 50000,
     "fromRegistrations": 50000,
-    "fromRegulatoryEvents": 0
+    "fromRegulatoryEvents": 0,
+    "successfulWriteTransactions": 50000,
+    "perSecond": 41.6667,
+    "shareOfSuccessfulWrites": 1.0
   },
   "startedAt": "2026-10-05T13:00:00Z",
   "endedAt": "2026-10-05T13:20:00Z",

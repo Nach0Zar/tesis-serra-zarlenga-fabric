@@ -347,10 +347,46 @@ func TestTheContractRejects(t *testing.T) {
 			expect:  "/participationMarkers",
 		},
 		{
+			name:    "una tasa de marcadores que no deriva de la duracion",
+			example: preparationExample,
+			mutate:  func(d map[string]any) { object(d, "participationMarkers")["perSecond"] = 10.0 },
+			expect:  "/participationMarkers/perSecond",
+		},
+		{
+			name:    "una proporcion de marcadores que no deriva de las escrituras exitosas",
+			example: preparationExample,
+			mutate: func(d map[string]any) {
+				object(d, "participationMarkers")["successfulWriteTransactions"] = 100000.0
+			},
+			expect: "/participationMarkers/shareOfSuccessfulWrites",
+		},
+		{
+			name:    "una proporcion fuera del rango de una proporcion",
+			example: preparationExample,
+			mutate:  func(d map[string]any) { object(d, "participationMarkers")["shareOfSuccessfulWrites"] = 1.5 },
+			expect:  "/participationMarkers/shareOfSuccessfulWrites",
+		},
+		{
+			name:    "marcadores sin su denominador",
+			example: preparationExample,
+			mutate:  func(d map[string]any) { delete(object(d, "participationMarkers"), "successfulWriteTransactions") },
+			expect:  "missing property 'successfulWriteTransactions'",
+		},
+		{
+			name:    "marcadores sin su desglose por origen",
+			example: preparationExample,
+			mutate:  func(d map[string]any) { delete(object(d, "participationMarkers"), "fromRegulatoryEvents") },
+			expect:  "missing property 'fromRegulatoryEvents'",
+		},
+		{
 			name:    "marcadores de participacion en la baseline",
 			example: baselineExample,
 			mutate: func(d map[string]any) {
-				d["participationMarkers"] = map[string]any{"expected": 1.0, "observed": 1.0}
+				d["participationMarkers"] = map[string]any{
+					"expected": 1.0, "observed": 1.0, "fromRegistrations": 1.0,
+					"fromRegulatoryEvents": 0.0, "successfulWriteTransactions": 1.0,
+					"perSecond": 0.0083, "shareOfSuccessfulWrites": 1.0,
+				}
 			},
 			expect: "'/participationMarkers': la propiedad no corresponde",
 		},

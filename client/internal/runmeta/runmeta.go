@@ -40,6 +40,12 @@ const DefaultSchemaPath = "../benchmarks/schema/run-metadata.schema.json"
 // es exactamente 31 en binario.
 const rateTolerance = 1e-6
 
+// reportedRateTolerance es mas laxa que rateTolerance porque la tasa y la
+// proporcion de marcadores son cifras informadas, redondeadas para el reporte,
+// y no derivaciones exactas como targetTransactionsPerSecond. Sigue alcanzando
+// para detectar un denominador equivocado o un factor de dos.
+const reportedRateTolerance = 1e-3
+
 // rejectionScenario nombra la ronda donde cada operacion se resuelve en una
 // sola invocacion.
 const rejectionScenario = "expected-rejections"
@@ -207,10 +213,13 @@ type faultInjection struct {
 }
 
 type participationMarkers struct {
-	Expected             int  `json:"expected"`
-	Observed             int  `json:"observed"`
-	FromRegistrations    *int `json:"fromRegistrations"`
-	FromRegulatoryEvents *int `json:"fromRegulatoryEvents"`
+	Expected                    int     `json:"expected"`
+	Observed                    int     `json:"observed"`
+	FromRegistrations           *int    `json:"fromRegistrations"`
+	FromRegulatoryEvents        *int    `json:"fromRegulatoryEvents"`
+	SuccessfulWriteTransactions *int    `json:"successfulWriteTransactions"`
+	PerSecond                   float64 `json:"perSecond"`
+	ShareOfSuccessfulWrites     float64 `json:"shareOfSuccessfulWrites"`
 }
 
 type rate struct {
@@ -377,33 +386,71 @@ func (m metadata) faultFindings() []string {
 	return findings
 }
 
-// markerFindings comprueba el desglose de los marcadores de participacion que
-// pide la seccion 3.5: si se declara de donde vienen, las partes tienen que dar
-// el total observado.
+// markerFindings comprueba los tres reportes de marcadores que pide la seccion
+// 3.5: que el desglose por origen de el total observado, que la tasa por
+// segundo derive de la duracion medida y que la proporcion derive de las
+// escrituras exitosas de la ronda.
 func (m metadata) markerFindings() []string {
 	markers := m.ParticipationMarkers
-	if markers == nil || markers.FromRegistrations == nil || markers.FromRegulatoryEvents == nil {
+	if markers == nil {
 		return nil
 	}
 
-	total := *markers.FromRegistrations + *markers.FromRegulatoryEvents
-	if total != markers.Observed {
-		return []string{fmt.Sprintf(
-			"/participationMarkers: el desglose suma %d marcadores y se observaron %d",
-			total, markers.Observed,
-		)}
+	var findings []string
+
+	if markers.FromRegistrations != nil && markers.FromRegulatoryEvents != nil {
+		total := *markers.FromRegistrations + *markers.FromRegulatoryEvents
+		if total != markers.Observed {
+			findings = append(findings, fmt.Sprintf(
+				"/participationMarkers: el desglose suma %d marcadores y se observaron %d",
+				total, markers.Observed,
+			))
+		}
 	}
 
-	return nil
+	if m.DurationSeconds > 0 {
+		expected := float64(markers.Observed) / m.DurationSeconds
+		if !approxEqualWithin(expected, markers.PerSecond, reportedRateTolerance) {
+			findings = append(findings, fmt.Sprintf(
+				"/participationMarkers/perSecond: %d marcadores en %g s dan %g por segundo y el documento declara %g",
+				markers.Observed, m.DurationSeconds, expected, markers.PerSecond,
+			))
+		}
+	}
+
+	writes := markers.SuccessfulWriteTransactions
+	if writes == nil {
+		return findings
+	}
+
+	// Sin escrituras exitosas no hay proporcion que calcular; la unica cifra
+	// coherente es cero.
+	var expectedShare float64
+	if *writes > 0 {
+		expectedShare = float64(markers.Observed) / float64(*writes)
+	}
+
+	if !approxEqualWithin(expectedShare, markers.ShareOfSuccessfulWrites, reportedRateTolerance) {
+		findings = append(findings, fmt.Sprintf(
+			"/participationMarkers/shareOfSuccessfulWrites: %d marcadores sobre %d escrituras exitosas dan %g y el documento declara %g",
+			markers.Observed, *writes, expectedShare, markers.ShareOfSuccessfulWrites,
+		))
+	}
+
+	return findings
 }
 
 func approxEqual(a, b float64) bool {
+	return approxEqualWithin(a, b, rateTolerance)
+}
+
+func approxEqualWithin(a, b, tolerance float64) bool {
 	difference := math.Abs(a - b)
-	if difference <= rateTolerance {
+	if difference <= tolerance {
 		return true
 	}
 
 	scale := math.Max(math.Abs(a), math.Abs(b))
 
-	return difference <= scale*rateTolerance
+	return difference <= scale*tolerance
 }

@@ -594,15 +594,55 @@
       }
     },
     "participationMarkers": {
-      "description": "Marcadores de participacion escritos durante la corrida (ADR-007 punto 6, seccion 3.5). Solo Fabric los produce.",
+      "description": "Marcadores de participacion escritos durante la corrida (ADR-007 punto 6, seccion 3.5). Solo Fabric los produce. Los tres reportes que pide la seccion 3.5 son obligatorios juntos: el total desglosado, la tasa y proporcion, y el contraste entre esperados y observados.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["expected", "observed"],
+      "required": [
+        "expected",
+        "observed",
+        "fromRegistrations",
+        "fromRegulatoryEvents",
+        "successfulWriteTransactions",
+        "perSecond",
+        "shareOfSuccessfulWrites"
+      ],
       "properties": {
-        "expected": { "type": "integer", "minimum": 0 },
-        "observed": { "type": "integer", "minimum": 0 },
-        "fromRegistrations": { "type": "integer", "minimum": 0 },
-        "fromRegulatoryEvents": { "type": "integer", "minimum": 0 }
+        "expected": {
+          "description": "Cantidad esperada segun el escenario.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "observed": {
+          "description": "Escrituras de marcador confirmadas.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "fromRegistrations": {
+          "description": "Marcadores originados en altas RegisterUnit.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "fromRegulatoryEvents": {
+          "description": "Marcadores originados en eventos regulatorios.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "successfulWriteTransactions": {
+          "description": "Denominador de la proporcion: transacciones write exitosas de la ronda.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "perSecond": {
+          "description": "Tasa de escrituras de marcador por segundo. Debe ser igual a observed dividido durationSeconds.",
+          "type": "number",
+          "minimum": 0
+        },
+        "shareOfSuccessfulWrites": {
+          "description": "Proporcion respecto de las transacciones write exitosas, entre 0 y 1. Debe ser igual a observed dividido successfulWriteTransactions.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
       }
     },
     "host": {

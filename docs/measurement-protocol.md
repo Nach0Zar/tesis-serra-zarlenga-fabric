@@ -466,13 +466,20 @@ La construccion del snapshot inicial de la seccion 4 es su propia fase y no se m
 
 `participationMarkers` registra las escrituras de marcador de ADR-007 punto 6 que la seccion 3.5 pide atribuir. Solo Fabric las produce, asi que la baseline tiene prohibido el bloque. Es obligatorio en la preparacion de Fabric, donde las 50.000 altas implican 50.000 escrituras privadas adicionales, y opcional en el resto de los escenarios de Fabric.
 
+El bloque cubre los tres reportes que pide la seccion 3.5 y son obligatorios juntos:
+
 | Campo | Descripcion |
 |---|---|
 | `expected` | Cantidad esperada segun el escenario. |
-| `observed` | Cantidad confirmada. |
-| `fromRegistrations`, `fromRegulatoryEvents` | Desglose opcional; si se declara, debe sumar `observed`. |
+| `observed` | Escrituras de marcador confirmadas. |
+| `fromRegistrations`, `fromRegulatoryEvents` | Desglose por origen; debe sumar `observed`. |
+| `successfulWriteTransactions` | Denominador de la proporcion: transacciones write exitosas de la ronda. |
+| `perSecond` | Tasa de marcadores por segundo; debe ser `observed` dividido `durationSeconds`. |
+| `shareOfSuccessfulWrites` | Proporcion entre 0 y 1; debe ser `observed` dividido `successfulWriteTransactions`. |
 
-La comparacion entre `expected` y `observed` es la que detecta marcadores omitidos o duplicados, conforme la seccion 3.5.
+La comparacion entre `expected` y `observed` es la que detecta marcadores omitidos o duplicados. La tasa y la proporcion son las que atribuyen el volumen de trabajo adicional sin restarlo de la latencia ni presentar una ejecucion sin marcadores como resultado comparable, conforme la seccion 3.5.
+
+El validador recalcula la tasa y la proporcion con una tolerancia mas laxa que la de las tasas objetivo, porque son cifras informadas y redondeadas para el reporte; alcanza igual para detectar un denominador equivocado.
 
 ## 10. Procesamiento de resultados
 
