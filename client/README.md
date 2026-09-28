@@ -398,6 +398,14 @@ segmentar los resultados de Fabric y baseline sobre las mismas recetas. El
 `manifest.json` registra la cantidad de cada categoría, y `dataset.sha256`
 identifica el orden y contenido exactos usados por ambos SUT.
 
+La cantidad de recetas de una categoría no limita la cantidad de invocaciones
+de una ronda. Cada receta se prepara una sola vez; si la ronda requiere más
+invocaciones que casos disponibles, el workload debe recorrer los registros de
+la categoría en forma cíclica y volver a ejecutar únicamente el intento de
+rechazo, conservando el mismo orden y criterio de selección en Fabric y en la
+baseline. Esto es seguro porque un rechazo esperado no muta el estado preparado
+y evita fabricar casos ad hoc para completar una ronda.
+
 ## Validación
 
 ```bash
