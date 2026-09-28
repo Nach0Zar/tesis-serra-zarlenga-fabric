@@ -1,0 +1,453 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pfi-snt:run-metadata:schema:1.0.0",
+  "title": "Metadatos de una corrida experimental (DES-20)",
+  "description": "Contrato unico de metadata.json para las corridas de docs/measurement-protocol.md seccion 9. Fabric y baseline producen el mismo documento; los identificadores especificos de cada SUT se exigen condicionalmente.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "protocol",
+    "repositoryCommit",
+    "sut",
+    "scenario",
+    "phase",
+    "repetition",
+    "dataset",
+    "workers",
+    "durationSeconds",
+    "rate",
+    "startedAt",
+    "endedAt",
+    "host",
+    "environment"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "urn:pfi-snt:run-metadata:schema:1.0.0"
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "protocol": {
+      "const": "measurement-protocol"
+    },
+    "repositoryCommit": {
+      "description": "Commit del repositorio desde el que se ejecuto la corrida (seccion 5).",
+      "$ref": "#/$defs/gitCommit"
+    },
+    "sut": {
+      "description": "Sistema bajo prueba.",
+      "enum": ["fabric", "baseline"]
+    },
+    "scenario": {
+      "description": "Nombre estable del escenario, derivado de las tablas de las secciones 6 y 8.",
+      "enum": [
+        "smoke",
+        "write-register",
+        "write-transfer",
+        "write-dispense",
+        "read-unit",
+        "read-history",
+        "mixed",
+        "expected-rejections",
+        "raft-1",
+        "raft-2",
+        "peer-1a",
+        "peer-1b",
+        "peer-1c",
+        "peer-1d",
+        "db-1",
+        "api-1"
+      ]
+    },
+    "phase": {
+      "description": "Warm-up descartado o repeticion medida (seccion 7).",
+      "enum": ["warmup", "measurement"]
+    },
+    "repetition": {
+      "description": "0 para warm-up; 1..8 para repeticiones medidas (5 de la serie original mas hasta 3 de la serie extendida).",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 8
+    },
+    "discarded": {
+      "$ref": "#/$defs/discarded"
+    },
+    "dataset": {
+      "$ref": "#/$defs/dataset"
+    },
+    "workers": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "durationSeconds": {
+      "description": "Duracion efectivamente medida de la ronda.",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "rate": {
+      "$ref": "#/$defs/rate"
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "endedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "host": {
+      "$ref": "#/$defs/host"
+    },
+    "environment": {
+      "$ref": "#/$defs/environment"
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "sut": { "const": "fabric" } },
+        "required": ["sut"]
+      },
+      "then": {
+        "properties": {
+          "scenario": {
+            "enum": [
+              "smoke",
+              "write-register",
+              "write-transfer",
+              "write-dispense",
+              "read-unit",
+              "read-history",
+              "mixed",
+              "expected-rejections",
+              "raft-1",
+              "raft-2",
+              "peer-1a",
+              "peer-1b",
+              "peer-1c",
+              "peer-1d"
+            ]
+          },
+          "environment": {
+            "required": ["contractVersion", "packageID", "fabric", "fabricCA", "caliper"],
+            "properties": {
+              "baselineCommit": false,
+              "baselineImage": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "sut": { "const": "baseline" } },
+        "required": ["sut"]
+      },
+      "then": {
+        "properties": {
+          "scenario": {
+            "enum": [
+              "smoke",
+              "write-register",
+              "write-transfer",
+              "write-dispense",
+              "read-unit",
+              "read-history",
+              "mixed",
+              "expected-rejections",
+              "db-1",
+              "api-1"
+            ]
+          },
+          "environment": {
+            "required": ["baselineCommit", "baselineImage"],
+            "properties": {
+              "contractVersion": false,
+              "packageID": false,
+              "fabric": false,
+              "fabricCA": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "phase": { "const": "warmup" } },
+        "required": ["phase"]
+      },
+      "then": {
+        "properties": { "repetition": { "const": 0 } }
+      },
+      "else": {
+        "properties": { "repetition": { "minimum": 1 } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "scenario": { "const": "write-register" } },
+        "required": ["scenario"]
+      },
+      "then": {
+        "properties": { "rate": { "properties": { "operation": { "const": "register" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "scenario": { "const": "write-transfer" } },
+        "required": ["scenario"]
+      },
+      "then": {
+        "properties": { "rate": { "properties": { "operation": { "const": "transfer" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "scenario": { "const": "write-dispense" } },
+        "required": ["scenario"]
+      },
+      "then": {
+        "properties": { "rate": { "properties": { "operation": { "const": "dispense" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "scenario": { "const": "read-unit" } },
+        "required": ["scenario"]
+      },
+      "then": {
+        "properties": { "rate": { "properties": { "operation": { "const": "query-unit" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "scenario": { "const": "read-history" } },
+        "required": ["scenario"]
+      },
+      "then": {
+        "properties": { "rate": { "properties": { "operation": { "const": "query-history" } } } }
+      }
+    },
+    {
+      "description": "La carga mixta y todos los escenarios de disponibilidad de la seccion 8 se ejecutan con la mezcla de la seccion 6.4.",
+      "if": {
+        "properties": {
+          "scenario": {
+            "enum": ["mixed", "raft-1", "raft-2", "peer-1a", "peer-1b", "peer-1c", "peer-1d", "db-1", "api-1"]
+          }
+        },
+        "required": ["scenario"]
+      },
+      "then": {
+        "properties": { "rate": { "properties": { "operation": { "const": "mixed" } } } }
+      }
+    }
+  ],
+  "$defs": {
+    "gitCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "discarded": {
+      "description": "Presente solo si la corrida se invalida por una falla operacional externa al escenario (seccion 7). El crudo se conserva igual.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason"],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "dataset": {
+      "description": "Identificacion exacta del dataset compartido consumido por la corrida (seccion 4).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed", "sha256", "units"],
+      "properties": {
+        "seed": {
+          "const": 20260727
+        },
+        "sha256": {
+          "description": "Contenido de dataset.sha256 del bundle generado.",
+          "$ref": "#/$defs/sha256"
+        },
+        "manifestSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "units": {
+          "type": "integer",
+          "minimum": 50000
+        }
+      }
+    },
+    "rate": {
+      "description": "Tasa objetivo y efectiva. Separa la operacion conceptual del protocolo de la transaccion efectiva enviada al SUT: conforme la seccion 3.4, una transferencia es UNA operacion conceptual y DOS transacciones (despacho y recepcion).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "transactionsPerOperation",
+        "targetOperationsPerSecond",
+        "targetTransactionsPerSecond",
+        "effectiveTransactionsPerSecond"
+      ],
+      "properties": {
+        "operation": {
+          "description": "Operacion conceptual medida (seccion 2). 'mixed' describe la carga combinada de la seccion 6.4.",
+          "enum": [
+            "register",
+            "transfer",
+            "dispense",
+            "query-unit",
+            "query-history",
+            "mixed"
+          ]
+        },
+        "transactionsPerOperation": {
+          "description": "Transacciones efectivas por operacion conceptual. 2 para transferencia; 1 para el resto; para 'mixed' es el promedio ponderado por la mezcla.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "targetOperationsPerSecond": {
+          "description": "Tasa objetivo expresada en operaciones conceptuales por segundo. Para transferencia son pares despacho+recepcion por segundo.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "targetTransactionsPerSecond": {
+          "description": "Tasa objetivo expresada en transacciones efectivas por segundo. Debe ser igual a targetOperationsPerSecond por transactionsPerOperation.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "effectiveTransactionsPerSecond": {
+          "description": "Tasa efectiva de transacciones observada durante la ronda (seccion 6.2).",
+          "type": "number",
+          "minimum": 0
+        },
+        "rateController": {
+          "const": "fixed-rate"
+        },
+        "mix": {
+          "description": "Obligatoria y exclusiva de operation=mixed (seccion 6.4). Los porcentajes se cuentan sobre operaciones conceptuales y deben sumar 100.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["register", "transfer", "dispense", "query"],
+          "properties": {
+            "register": { "$ref": "#/$defs/percentage" },
+            "transfer": { "$ref": "#/$defs/percentage" },
+            "dispense": { "$ref": "#/$defs/percentage" },
+            "query": { "$ref": "#/$defs/percentage" }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "operation": { "const": "mixed" } },
+            "required": ["operation"]
+          },
+          "then": {
+            "required": ["mix"]
+          },
+          "else": {
+            "properties": { "mix": false }
+          }
+        },
+        {
+          "if": {
+            "properties": { "operation": { "const": "transfer" } },
+            "required": ["operation"]
+          },
+          "then": {
+            "properties": { "transactionsPerOperation": { "const": 2 } }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "enum": ["register", "dispense", "query-unit", "query-history"]
+              }
+            },
+            "required": ["operation"]
+          },
+          "then": {
+            "properties": { "transactionsPerOperation": { "const": 1 } }
+          }
+        }
+      ]
+    },
+    "percentage": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "host": {
+      "description": "Host fisico unico para ambos SUT (seccion 5).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu", "memoryGB", "os", "kernel"],
+      "properties": {
+        "cpu": { "type": "string", "minLength": 1 },
+        "cpuCores": { "type": "integer", "minimum": 1 },
+        "memoryGB": { "type": "number", "exclusiveMinimum": 0 },
+        "os": { "type": "string", "minLength": 1 },
+        "kernel": { "type": "string", "minLength": 1 },
+        "wsl": { "type": "string", "minLength": 1 }
+      }
+    },
+    "environment": {
+      "description": "Versiones del entorno y de los artefactos medidos. contractVersion y packageID son obligatorios y exclusivos de Fabric; baselineCommit y baselineImage son obligatorios y exclusivos de la baseline.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["docker", "dockerCompose"],
+      "properties": {
+        "docker": { "$ref": "#/$defs/version" },
+        "dockerCompose": { "$ref": "#/$defs/version" },
+        "contractVersion": {
+          "description": "Version del contrato publico congelado en docs/api-contract.md.",
+          "$ref": "#/$defs/semver"
+        },
+        "packageID": {
+          "description": "package_id de network/chaincode-package.lock, en formato label:sha256.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+:[0-9a-f]{64}$"
+        },
+        "fabric": { "$ref": "#/$defs/version" },
+        "fabricCA": { "$ref": "#/$defs/version" },
+        "caliper": { "$ref": "#/$defs/version" },
+        "baselineCommit": {
+          "description": "Commit exacto del codigo de la baseline medida.",
+          "$ref": "#/$defs/gitCommit"
+        },
+        "baselineImage": {
+          "description": "Imagen o runtime exacto de la baseline medida.",
+          "$ref": "#/$defs/version"
+        },
+        "postgres": { "$ref": "#/$defs/version" }
+      }
+    }
+  }
+}

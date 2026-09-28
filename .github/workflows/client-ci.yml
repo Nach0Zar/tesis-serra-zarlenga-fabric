@@ -13,6 +13,11 @@ on:
     paths:
       - "client/**"
       - "domain/**"
+      # El contrato de metadatos y sus ejemplos viven fuera del modulo, pero los
+      # valida `client/internal/runmeta`: sin esta ruta, editar el schema no
+      # dispararia ninguna verificacion.
+      - "benchmarks/schema/**"
+      - "benchmarks/examples/**"
       - ".github/workflows/client-ci.yml"
 
 permissions:

@@ -1,9 +1,10 @@
 UNITS ?= 50000
 OUTPUT_DIR ?= ../build/dataset
+RUN_METADATA ?= ../benchmarks/examples/run-metadata.fabric.json ../benchmarks/examples/run-metadata.baseline.json ../benchmarks/examples/run-metadata.mixed-fabric.json
 DEMO_ARGS ?=
 LISTENER_ARGS ?=
 
-.PHONY: build test test-race vet demo-core listen-anmat generate-dataset
+.PHONY: build test test-race vet demo-core listen-anmat generate-dataset validate-run-metadata
 
 build:
 	go build ./...
@@ -25,3 +26,6 @@ listen-anmat:
 
 generate-dataset:
 	go run ./cmd/datasetgen --units $(UNITS) --output-dir $(OUTPUT_DIR)
+
+validate-run-metadata:
+	go run ./cmd/runmeta $(RUN_METADATA)

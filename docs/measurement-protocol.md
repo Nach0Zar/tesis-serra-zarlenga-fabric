@@ -353,24 +353,78 @@ Cada `run-*` debe incluir, cuando aplique:
 - timestamp de inicio y fin;
 - parametros efectivos de la ronda.
 
-`metadata.json` debe registrar:
+### 9.1 Contrato de metadatos de la corrida (DES-20)
+
+`metadata.json` no es una lista libre de campos: es un documento validable contra un contrato unico y versionado, para que Fabric y la baseline produzcan evidencia comparable de forma automatica.
+
+| Artefacto | Ubicacion |
+|---|---|
+| Contrato | [`benchmarks/schema/run-metadata.schema.json`](../benchmarks/schema/run-metadata.schema.json) |
+| Identificador | `urn:pfi-snt:run-metadata:schema:1.0.0` |
+| Ejemplos validos | [`benchmarks/examples/`](../benchmarks/examples/) |
+| Validador | `go run ./cmd/runmeta <metadata.json>` desde `client/` |
+
+El contrato es JSON Schema Draft 2020-12 con `additionalProperties: false` en todos sus niveles: un campo no previsto invalida el documento en vez de pasar inadvertido.
+
+Bloque comun, obligatorio para ambos SUT:
 
 | Campo | Descripcion |
 |---|---|
+| `$schema`, `schemaVersion` | Version del contrato aplicada. |
 | `protocol` | `measurement-protocol`. |
-| `repositoryCommit` | Commit del repositorio. |
+| `repositoryCommit` | Commit completo del repositorio desde el que se ejecuto (seccion 5). |
 | `sut` | `fabric` o `baseline`. |
-| `host` | CPU, memoria, sistema operativo, WSL si aplica. |
-| `docker` | Versiones de Docker y Compose. |
-| `fabric` | Version de Fabric y Fabric CA si aplica. |
-| `caliper` | Version de Caliper si aplica. |
-| `datasetSeed` | `20260727`. |
-| `datasetHash` | Hash del dataset usado. |
-| `scenario` | Nombre estable del escenario. |
+| `scenario` | Nombre estable del escenario, de la lista cerrada de la seccion 9.2. |
+| `phase` | `warmup` o `measurement` (seccion 7). |
+| `repetition` | `0` en warm-up; `1`..`8` en mediciones, cubriendo la serie original de 5 y la extendida de 3. |
+| `dataset` | `seed`, `sha256` del bundle y cantidad de unidades (seccion 4). |
 | `workers` | Cantidad de workers. |
-| `targetTps` | TPS objetivo. |
-| `durationSeconds` | Duracion medida. |
-| `warmup` | Si la corrida fue warm-up o medicion. |
+| `durationSeconds` | Duracion efectivamente medida. |
+| `rate` | Tasas objetivo y efectiva, desambiguadas segun la seccion 9.3. |
+| `startedAt`, `endedAt` | Inicio y fin en RFC 3339. |
+| `host` | CPU, memoria, sistema operativo, kernel y WSL si aplica. |
+| `environment` | Versiones del entorno y de los artefactos medidos. |
+| `discarded` | Solo si la corrida se invalida por una falla externa al escenario (seccion 7); el crudo se conserva igual. |
+
+Identificadores propios de cada SUT, exigidos condicionalmente por `sut`. Son obligatorios porque sin ellos la evidencia no identifica que artefacto se midio, y son mutuamente excluyentes porque declarar los del otro SUT indica que la corrida se etiqueto mal:
+
+| `sut` | Campos obligatorios en `environment` | Campos prohibidos |
+|---|---|---|
+| `fabric` | `contractVersion`, `packageID`, `fabric`, `fabricCA`, `caliper`, `docker`, `dockerCompose` | `baselineCommit`, `baselineImage` |
+| `baseline` | `baselineCommit`, `baselineImage`, `docker`, `dockerCompose` | `contractVersion`, `packageID`, `fabric`, `fabricCA` |
+
+`contractVersion` es la version congelada en [`docs/api-contract.md`](api-contract.md) y `packageID` es el `package_id` de [`network/chaincode-package.lock`](../network/chaincode-package.lock), en formato `label:sha256`. Juntos fijan que codigo de chaincode produjo la medicion.
+
+### 9.2 Escenarios validos por SUT
+
+Los nombres salen de las tablas de las secciones 6 y 8 y son una lista cerrada; un escenario no previsto invalida el documento.
+
+| Escenario | Origen | SUT que puede declararlo |
+|---|---|---|
+| `smoke` | Seccion 6.1 | Ambos |
+| `write-register`, `write-transfer`, `write-dispense` | Seccion 6.2 | Ambos |
+| `read-unit`, `read-history` | Seccion 6.3 | Ambos |
+| `mixed` | Seccion 6.4 | Ambos |
+| `expected-rejections` | Seccion 6.5 | Ambos |
+| `raft-1`, `raft-2`, `peer-1a`, `peer-1b`, `peer-1c`, `peer-1d` | Seccion 8.1 | Solo `fabric` |
+| `db-1`, `api-1` | Seccion 8.2 | Solo `baseline` |
+
+El escenario y la operacion medida deben coincidir: `write-transfer` exige `rate.operation: transfer`, `read-history` exige `query-history`, y la carga mixta junto con todos los escenarios de disponibilidad exigen `mixed`.
+
+### 9.3 Tasa de operaciones frente a tasa de transacciones
+
+`targetTps` era ambiguo: no distinguia la operacion conceptual del protocolo de la transaccion efectiva enviada al SUT. Conforme la seccion 3.4, una transferencia es UNA operacion conceptual y DOS transacciones write, de modo que una misma cifra podia significar dos cargas distintas. El objeto `rate` separa ambas magnitudes:
+
+| Campo | Significado |
+|---|---|
+| `operation` | Operacion conceptual medida: `register`, `transfer`, `dispense`, `query-unit`, `query-history` o `mixed`. |
+| `transactionsPerOperation` | Transacciones efectivas por operacion conceptual: `2` para transferencia, `1` para el resto, y el promedio ponderado por la mezcla en `mixed`. |
+| `targetOperationsPerSecond` | Tasa objetivo en operaciones conceptuales por segundo. Para transferencia son pares despacho+recepcion por segundo. |
+| `targetTransactionsPerSecond` | Tasa objetivo en transacciones efectivas por segundo. Debe ser igual a `targetOperationsPerSecond` por `transactionsPerOperation`. |
+| `effectiveTransactionsPerSecond` | Tasa efectiva observada durante la ronda. |
+| `mix` | Obligatoria y exclusiva de `operation: mixed`: porcentajes de la seccion 6.4 sobre operaciones conceptuales, que deben sumar 100. |
+
+El validador comprueba la aritmetica, que JSON Schema no puede expresar: que la tasa de transacciones derive de la de operaciones, que la mezcla sume 100 y que su promedio ponderado coincida con `transactionsPerOperation`. Tambien verifica que la ventana entre `startedAt` y `endedAt` no sea mas corta que la duracion que la corrida dice haber medido.
 
 ## 10. Procesamiento de resultados
 
@@ -413,6 +467,7 @@ Antes de medir:
 - [ ] Smoke pasa en Fabric.
 - [ ] Smoke pasa en baseline.
 - [ ] Se registro metadata de entorno.
+- [ ] El `metadata.json` de la corrida valida contra el contrato de la seccion 9.1.
 - [ ] Se definio la carpeta de salida de crudos.
 - [ ] Se confirmo que no hay carga externa significativa en el host.
 

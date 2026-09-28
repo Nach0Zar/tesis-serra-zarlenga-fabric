@@ -8,6 +8,7 @@ require (
 	github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain v0.0.0
 	github.com/hyperledger/fabric-gateway v1.8.0
 	github.com/hyperledger/fabric-protos-go-apiv2 v0.3.7
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	google.golang.org/grpc v1.73.0
 )
 

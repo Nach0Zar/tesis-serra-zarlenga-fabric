@@ -398,6 +398,48 @@ segmentar los resultados de Fabric y baseline sobre las mismas recetas. El
 `manifest.json` registra la cantidad de cada categoría, y `dataset.sha256`
 identifica el orden y contenido exactos usados por ambos SUT.
 
+Reejecutar un mismo registro dentro de una ronda es válido y esperado: las
+rondas de rechazo esperado de la sección 6.5 del protocolo duran 60 s a 5 TPS y
+superan largamente la cantidad de casos de cada familia. Un rechazo no muta
+estado, así que repetirlo mide lo mismo. Lo que no se admite es fabricar casos
+nuevos por backend.
+
+## Validador de metadatos de corrida (DES-20)
+
+El comando `runmeta` valida el `metadata.json` de una corrida experimental
+contra el contrato versionado
+[`benchmarks/schema/run-metadata.schema.json`](../benchmarks/schema/run-metadata.schema.json),
+descripto en la sección 9.1 de
+[`docs/measurement-protocol.md`](../docs/measurement-protocol.md).
+
+Desde `client/`:
+
+```bash
+go run ./cmd/runmeta ../benchmarks/examples/run-metadata.fabric.json
+```
+
+- Argumentos posicionales: uno o más `metadata.json` a validar.
+- `--schema`: contrato a aplicar; por defecto,
+  `../benchmarks/schema/run-metadata.schema.json`.
+
+Sale con `0` si todos los documentos cumplen el contrato y con `1` si alguno no,
+detallando por documento cada incumplimiento con su ubicación dentro del JSON.
+
+La validación tiene dos capas. El JSON Schema rechaza campos desconocidos en
+cualquier nivel, escenarios fuera de la lista cerrada y la ausencia o presencia
+indebida de los identificadores propios de cada SUT: `contractVersion` y
+`packageID` en Fabric, `baselineCommit` y `baselineImage` en la baseline. Sobre
+eso, el validador agrega las reglas que JSON Schema no puede expresar: que
+`targetTransactionsPerSecond` derive de `targetOperationsPerSecond` por las
+transacciones que implica cada operación conceptual, que la mezcla de la carga
+combinada sume 100 y su promedio ponderado coincida con lo declarado, y que la
+ventana entre `startedAt` y `endedAt` no sea más corta que la duración medida.
+
+Esa distinción entre operación conceptual y transacción efectiva es la que
+resuelve la ambigüedad del antiguo campo `targetTps`: conforme ADR-004 y la
+sección 3.4 del protocolo, una transferencia es una sola operación y dos
+transacciones write.
+
 ## Validación
 
 ```bash
