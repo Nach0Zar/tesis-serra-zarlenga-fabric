@@ -366,6 +366,8 @@ Cada `run-*` debe incluir, cuando aplique:
 
 El contrato es JSON Schema Draft 2020-12 con `additionalProperties: false` en todos sus niveles: un campo no previsto invalida el documento en vez de pasar inadvertido.
 
+Los contadores enteros tienen techo en 2^53-1, el mayor entero exacto en doble precision. Por encima, un consumidor que interprete el JSON con numeros de punto flotante --- como los workloads de Caliper, escritos en JavaScript --- leeria un valor distinto del escrito, y la evidencia dejaria de significar lo mismo para quien la produce y para quien la procesa.
+
 Bloque comun, obligatorio para ambos SUT:
 
 | Campo | Descripcion |

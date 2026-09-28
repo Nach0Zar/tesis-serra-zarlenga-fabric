@@ -79,7 +79,7 @@
       "$ref": "#/$defs/dataset"
     },
     "workers": {
-      "type": "integer",
+      "$ref": "#/$defs/counter",
       "minimum": 1
     },
     "durationSeconds": {
@@ -89,7 +89,7 @@
     },
     "transactions": {
       "description": "Exclusiva del smoke, que la seccion 6.1 acota por cantidad y no por tiempo: 30 transacciones por operacion core. El smoke emite un documento por operacion core.",
-      "type": "integer",
+      "$ref": "#/$defs/counter",
       "minimum": 1
     },
     "rate": {
@@ -470,7 +470,7 @@
           "$ref": "#/$defs/sha256"
         },
         "units": {
-          "type": "integer",
+          "$ref": "#/$defs/counter",
           "minimum": 50000
         }
       }
@@ -549,6 +549,12 @@
         }
       ]
     },
+    "counter": {
+      "description": "Contador entero. El techo es 2^53-1, el mayor entero exacto en doble precision: por encima, un consumidor que interprete el JSON con numeros de punto flotante -- como los workloads de Caliper en JavaScript -- leeria un valor distinto del escrito.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
     "percentage": {
       "type": "number",
       "minimum": 0,
@@ -609,28 +615,23 @@
       "properties": {
         "expected": {
           "description": "Cantidad esperada segun el escenario.",
-          "type": "integer",
-          "minimum": 0
+          "$ref": "#/$defs/counter"
         },
         "observed": {
           "description": "Escrituras de marcador confirmadas.",
-          "type": "integer",
-          "minimum": 0
+          "$ref": "#/$defs/counter"
         },
         "fromRegistrations": {
           "description": "Marcadores originados en altas RegisterUnit.",
-          "type": "integer",
-          "minimum": 0
+          "$ref": "#/$defs/counter"
         },
         "fromRegulatoryEvents": {
           "description": "Marcadores originados en eventos regulatorios.",
-          "type": "integer",
-          "minimum": 0
+          "$ref": "#/$defs/counter"
         },
         "successfulWriteTransactions": {
           "description": "Denominador de la proporcion: transacciones write exitosas de la ronda.",
-          "type": "integer",
-          "minimum": 0
+          "$ref": "#/$defs/counter"
         },
         "perSecond": {
           "description": "Tasa de escrituras de marcador por segundo. Debe ser igual a observed dividido durationSeconds.",
@@ -652,7 +653,7 @@
       "required": ["cpu", "memoryGB", "os", "kernel"],
       "properties": {
         "cpu": { "type": "string", "minLength": 1 },
-        "cpuCores": { "type": "integer", "minimum": 1 },
+        "cpuCores": { "$ref": "#/$defs/counter", "minimum": 1 },
         "memoryGB": { "type": "number", "exclusiveMinimum": 0 },
         "os": { "type": "string", "minLength": 1 },
         "kernel": { "type": "string", "minLength": 1 },

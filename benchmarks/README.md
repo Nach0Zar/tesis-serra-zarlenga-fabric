@@ -51,7 +51,10 @@ Rechaza, entre otras cosas:
 - una ventana entre `startedAt` y `endedAt` más corta que la duración que la corrida dice haber medido;
 - una ronda de rechazo que no declare su familia, o que la declare sobre una operación que el dataset no invoca para ella;
 - un escenario de disponibilidad sin ventana de falla, o con una inyección fuera de la corrida o incoherente con los relojes;
-- una preparación de snapshot en Fabric sin sus marcadores de participación, un desglose que no sume lo observado, o una tasa o proporción de marcadores que no derive de la duración y de las escrituras exitosas.
+- una preparación de snapshot en Fabric sin sus marcadores de participación, un desglose que no sume lo observado, o una tasa o proporción de marcadores que no derive de la duración y de las escrituras exitosas;
+- marcadores observados sobre cero escrituras exitosas, que describe una corrida imposible;
+- un contador por encima de 2^53-1, que un consumidor de doble precisión leería alterado;
+- cualquier documento que no se pueda decodificar para evaluar las reglas semánticas: si no se pudieron comprobar, no se certifica.
 
 Tres reglas merecen mención porque corrigen ambigüedades concretas del protocolo previo:
 

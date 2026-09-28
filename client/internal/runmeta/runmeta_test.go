@@ -361,6 +361,19 @@ func TestTheContractRejects(t *testing.T) {
 			expect: "/participationMarkers/shareOfSuccessfulWrites",
 		},
 		{
+			// Cada marcador acompana a una escritura confirmada, asi que
+			// observar marcadores sin escrituras exitosas describe una corrida
+			// imposible. Antes pasaba: expectedShare caia en cero y coincidia
+			// con el cero declarado.
+			name:    "marcadores observados sin ninguna escritura exitosa",
+			example: preparationExample,
+			mutate: func(d map[string]any) {
+				object(d, "participationMarkers")["successfulWriteTransactions"] = 0.0
+				object(d, "participationMarkers")["shareOfSuccessfulWrites"] = 0.0
+			},
+			expect: "sobre 0 escrituras exitosas",
+		},
+		{
 			name:    "una proporcion fuera del rango de una proporcion",
 			example: preparationExample,
 			mutate:  func(d map[string]any) { object(d, "participationMarkers")["shareOfSuccessfulWrites"] = 1.5 },
@@ -549,4 +562,79 @@ func mentions(findings []string, fragment string) bool {
 	}
 
 	return false
+}
+
+// TestAZeroWriteRoundWithoutMarkersStaysValid protege el borde opuesto al
+// hallazgo del denominador cero: una ronda donde ninguna escritura se confirma
+// es posible --- la perdida de quorum de Raft-2 es justamente eso --- y con
+// cero marcadores el documento describe algo coherente.
+func TestAZeroWriteRoundWithoutMarkersStaysValid(t *testing.T) {
+	t.Parallel()
+
+	document := loadExample(t, preparationExample)
+	markers := object(document, "participationMarkers")
+	markers["expected"] = 0.0
+	markers["observed"] = 0.0
+	markers["fromRegistrations"] = 0.0
+	markers["fromRegulatoryEvents"] = 0.0
+	markers["successfulWriteTransactions"] = 0.0
+	markers["perSecond"] = 0.0
+	markers["shareOfSuccessfulWrites"] = 0.0
+
+	findings := newTestValidator(t).Validate(marshal(t, document))
+	if len(findings) != 0 {
+		t.Fatalf("una ronda sin escrituras ni marcadores es coherente y se reporta:\n%s",
+			strings.Join(findings, "\n"))
+	}
+}
+
+// TestTheContractRejectsCountersThatLosePrecision cubre un entero que el tipo
+// JSON admite pero que ningun consumidor puede leer sin alterarlo: por encima
+// de 2^53-1 un lector de doble precision --- como los workloads de Caliper en
+// JavaScript --- devuelve un valor distinto del escrito.
+func TestTheContractRejectsCountersThatLosePrecision(t *testing.T) {
+	t.Parallel()
+
+	document := replaceInExample(t, preparationExample, `"observed": 50000`, `"observed": 9223372036854775808`)
+
+	findings := newTestValidator(t).Validate(document)
+	if !mentions(findings, "/participationMarkers/observed") {
+		t.Fatalf("se esperaba un hallazgo sobre el contador y se obtuvo:\n%s", strings.Join(findings, "\n"))
+	}
+}
+
+// TestValidateNeverAcceptsADocumentItCouldNotDecode es la red de seguridad: si
+// las reglas semanticas no se pudieron evaluar, el documento se rechaza en vez
+// de certificarse. El caso usa un numero que el schema admite como tal y que
+// no entra en un float64, de modo que solo lo detiene la red.
+func TestValidateNeverAcceptsADocumentItCouldNotDecode(t *testing.T) {
+	t.Parallel()
+
+	document := replaceInExample(t, fabricExample, `"durationSeconds": 120`, `"durationSeconds": 1e400`)
+
+	findings := newTestValidator(t).Validate(document)
+	if len(findings) == 0 {
+		t.Fatal("un documento que no se puede decodificar no debe certificarse como valido")
+	}
+
+	if !mentions(findings, "no se pudo decodificar") {
+		t.Fatalf("se esperaba el hallazgo de la red de seguridad y se obtuvo:\n%s", strings.Join(findings, "\n"))
+	}
+}
+
+func replaceInExample(t *testing.T, path, target, replacement string) []byte {
+	t.Helper()
+
+	// #nosec G304 -- la ruta viene de constantes del propio test.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("leer %s: %v", path, err)
+	}
+
+	degraded := strings.Replace(string(raw), target, replacement, 1)
+	if degraded == string(raw) {
+		t.Fatalf("no se encontro %q en %s", target, path)
+	}
+
+	return []byte(degraded)
 }

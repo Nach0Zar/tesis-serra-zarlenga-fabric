@@ -129,11 +129,15 @@ func (v *Validator) Validate(document []byte) []string {
 	}
 
 	// Las reglas semanticas se evaluan sobre la estructura tipada. Si el
-	// documento ni siquiera tiene esa forma, el schema ya lo reporto y volver a
-	// insistir solo agregaria ruido.
+	// documento no se puede decodificar, esas reglas no corren, y devolver una
+	// lista vacia equivaldria a certificar lo que nunca se comprobo: el
+	// documento se rechaza explicitamente. Pasa, por ejemplo, con un entero que
+	// el schema admite pero que no entra en el tipo que lo recibe.
 	var parsed metadata
 	if err := json.Unmarshal(document, &parsed); err != nil {
-		return findings
+		return append(findings, fmt.Sprintf(
+			"/: el documento no se pudo decodificar, asi que las reglas semanticas no se pudieron evaluar: %v", err,
+		))
 	}
 
 	return append(findings, parsed.semanticFindings()...)
@@ -423,12 +427,21 @@ func (m metadata) markerFindings() []string {
 		return findings
 	}
 
-	// Sin escrituras exitosas no hay proporcion que calcular; la unica cifra
-	// coherente es cero.
-	var expectedShare float64
-	if *writes > 0 {
-		expectedShare = float64(markers.Observed) / float64(*writes)
+	// Sin escrituras exitosas no puede haber marcadores: cada marcador acompana
+	// a una escritura confirmada. Declarar lo contrario describe una corrida
+	// imposible, y la proporcion no seria calculable en ningun caso.
+	if *writes == 0 {
+		if markers.Observed > 0 {
+			findings = append(findings, fmt.Sprintf(
+				"/participationMarkers: se observaron %d marcadores sobre 0 escrituras exitosas",
+				markers.Observed,
+			))
+		}
+
+		return findings
 	}
+
+	expectedShare := float64(markers.Observed) / float64(*writes)
 
 	if !approxEqualWithin(expectedShare, markers.ShareOfSuccessfulWrites, reportedRateTolerance) {
 		findings = append(findings, fmt.Sprintf(
