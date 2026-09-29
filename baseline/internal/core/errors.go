@@ -9,6 +9,8 @@ import (
 // ramifica sobre mensajes: el cliente usa exclusivamente estos identificadores.
 type Code string
 
+// Codigos del catalogo estable. Cualquier alta aca debe existir tambien en el
+// contrato publico, o la comparacion dejaria de medir los mismos rechazos.
 const (
 	InvalidRequest           Code = "INVALID_REQUEST"
 	UnitNotFound             Code = "UNIT_NOT_FOUND"
@@ -33,6 +35,9 @@ const (
 	InternalError            Code = "INTERNAL_ERROR"
 )
 
+// ContractError es un rechazo atribuible al catalogo: lleva el codigo estable,
+// un mensaje legible y detalles opcionales. La causa interna se conserva para
+// los logs pero no se expone al cliente.
 type ContractError struct {
 	Code    Code           `json:"code"`
 	Message string         `json:"message"`
@@ -43,10 +48,13 @@ type ContractError struct {
 func (e *ContractError) Error() string { return fmt.Sprintf("%s: %s", e.Code, e.Message) }
 func (e *ContractError) Unwrap() error { return e.cause }
 
+// NewError arma un rechazo con su codigo y un mensaje formateado.
 func NewError(code Code, format string, args ...any) *ContractError {
 	return &ContractError{Code: code, Message: fmt.Sprintf(format, args...)}
 }
 
+// WithDetails devuelve una copia con los detalles adjuntos, dejando intacto el
+// error original.
 func (e *ContractError) WithDetails(details map[string]any) *ContractError {
 	clone := *e
 	clone.Details = details
@@ -60,6 +68,9 @@ func internal(err error, context string) *ContractError {
 	}
 }
 
+// ErrorCode extrae el codigo del catalogo de una cadena de errores. El segundo
+// valor es falso cuando el error no proviene del contrato, caso en el que
+// corresponde tratarlo como interno.
 func ErrorCode(err error) (Code, bool) {
 	var contractErr *ContractError
 	if !errors.As(err, &contractErr) {

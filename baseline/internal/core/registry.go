@@ -18,6 +18,8 @@ func lockOrganizationRegistry(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 
+// RegisterOrganization da de alta una organizacion. Solo admite una entrada
+// REGULATOR activa a la vez, que es la unicidad que el registro garantiza.
 func (s *Store) RegisterOrganization(ctx context.Context, credential Credential, req RegisterOrganizationRequest) (Organization, error) {
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -70,6 +72,9 @@ func (s *Store) RegisterOrganization(ctx context.Context, credential Credential,
 	return org, nil
 }
 
+// SetOrganizationActive habilita o deshabilita una organizacion sin borrarla,
+// de modo que su historial siga siendo interpretable. Rechaza con
+// LAST_ACTIVE_REGULATOR si dejaria al registro sin regulador activo.
 func (s *Store) SetOrganizationActive(ctx context.Context, credential Credential, mspID string, active bool) (Organization, error) {
 	tx, err := s.begin(ctx)
 	if err != nil {

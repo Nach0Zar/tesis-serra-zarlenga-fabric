@@ -1,3 +1,4 @@
+// Package main levanta el servidor HTTP de la linea base centralizada.
 package main
 
 import (

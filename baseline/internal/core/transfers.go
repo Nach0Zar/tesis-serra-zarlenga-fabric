@@ -33,6 +33,9 @@ func readActiveTransfer(ctx context.Context, tx pgx.Tx, gtin, serial string) (tr
 	return operation, true, nil
 }
 
+// Dispatch es el primer paso de la transferencia de custodia (ADR-004): deja la
+// unidad en transito hacia el destino declarado. La custodia NO cambia aca;
+// cambia recien con la recepcion.
 func (s *Store) Dispatch(ctx context.Context, credential Credential, gtin, serial string, req DispatchRequest) (MedicationUnit, error) {
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -112,6 +115,8 @@ func (s *Store) Dispatch(ctx context.Context, credential Credential, gtin, seria
 	return unit, nil
 }
 
+// Receive cierra la transferencia y mueve la custodia al receptor declarado.
+// Es el unico punto donde la custodia cambia de manos.
 func (s *Store) Receive(ctx context.Context, credential Credential, gtin, serial string, commercial *CommercialData) (MedicationUnit, error) {
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -204,6 +209,8 @@ func (s *Store) Receive(ctx context.Context, credential Credential, gtin, serial
 	return unit, nil
 }
 
+// Reject cierra una transferencia en transito sin mover la custodia: la unidad
+// vuelve al emisor. Solo el receptor declarado puede rechazar.
 func (s *Store) Reject(ctx context.Context, credential Credential, gtin, serial string, req RejectRequest) (MedicationUnit, error) {
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -275,6 +282,8 @@ func (s *Store) Reject(ctx context.Context, credential Credential, gtin, serial 
 	return unit, nil
 }
 
+// Dispense cierra el ciclo de una unidad. No persiste ningun dato del paciente:
+// el alcance del prototipo excluye datos personales sensibles.
 func (s *Store) Dispense(ctx context.Context, credential Credential, gtin, serial string) (MedicationUnit, error) {
 	tx, err := s.begin(ctx)
 	if err != nil {

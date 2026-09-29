@@ -130,6 +130,8 @@ func (s *Store) registerUnitInTx(
 	return unit, nil
 }
 
+// RegisterUnit da de alta una unidad y la deja en custodia de su laboratorio.
+// Rechaza con UNIT_ALREADY_EXISTS si el par GTIN + numero de serie ya existe.
 func (s *Store) RegisterUnit(ctx context.Context, credential Credential, req RegisterUnitRequest) (MedicationUnit, error) {
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -150,6 +152,8 @@ func (s *Store) RegisterUnit(ctx context.Context, credential Credential, req Reg
 	return unit, nil
 }
 
+// ReadUnit devuelve el estado publico vigente de una unidad. Es una lectura
+// abierta: conforme ADR-005 el estado publico no se restringe por invocante.
 func (s *Store) ReadUnit(ctx context.Context, gtin, serial string) (MedicationUnit, error) {
 	if err := validateUnitRef(gtin, serial); err != nil {
 		return MedicationUnit{}, err
@@ -166,6 +170,8 @@ func (s *Store) ReadUnit(ctx context.Context, gtin, serial string) (MedicationUn
 	return unit, nil
 }
 
+// QueryUnitsByGTIN devuelve todas las unidades de un GTIN, ordenadas de forma
+// estable para que la comparacion con Fabric no dependa del orden de lectura.
 func (s *Store) QueryUnitsByGTIN(ctx context.Context, gtin string) ([]MedicationUnit, error) {
 	if err := validateGTIN(gtin); err != nil {
 		return nil, err
@@ -218,6 +224,9 @@ func (s *Store) QueryUnitsByState(ctx context.Context, state domain.State) ([]Me
 	return units, nil
 }
 
+// GetUnitHistory devuelve las versiones confirmadas de una unidad, de la mas
+// antigua a la mas reciente. Es el equivalente de GetHistoryForKey en Fabric,
+// reconstruido desde la tabla de historial porque la baseline no tiene ledger.
 func (s *Store) GetUnitHistory(ctx context.Context, gtin, serial string) ([]HistoryEntry, error) {
 	if err := validateUnitRef(gtin, serial); err != nil {
 		return nil, err
