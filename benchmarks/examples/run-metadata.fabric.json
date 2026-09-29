@@ -1,0 +1,44 @@
+{
+  "$schema": "urn:pfi-snt:run-metadata:schema:1.0.0",
+  "schemaVersion": "1.0.0",
+  "protocol": "measurement-protocol",
+  "repositoryCommit": "ccb58f46a08d2ff4789d51f6f79a43203991ce5e",
+  "sut": "fabric",
+  "scenario": "write-transfer",
+  "phase": "measurement",
+  "repetition": 1,
+  "dataset": {
+    "seed": 20260727,
+    "sha256": "de523ee8fafeed0a39f8518b501fce4692192869030762816de353654385163d",
+    "units": 50000
+  },
+  "workers": 2,
+  "durationSeconds": 120,
+  "rate": {
+    "operation": "transfer",
+    "transactionsPerOperation": 2,
+    "targetOperationsPerSecond": 5,
+    "targetTransactionsPerSecond": 10,
+    "effectiveTransactionsPerSecond": 9.87,
+    "rateController": "fixed-rate"
+  },
+  "startedAt": "2026-10-05T14:03:12Z",
+  "endedAt": "2026-10-05T14:05:12Z",
+  "host": {
+    "cpu": "AMD Ryzen 7 5800H",
+    "cpuCores": 8,
+    "memoryGB": 16,
+    "os": "Ubuntu 22.04.4 LTS",
+    "kernel": "5.15.167.4-microsoft-standard-WSL2",
+    "wsl": "WSL2 2.2.4.0"
+  },
+  "environment": {
+    "docker": "27.1.1",
+    "dockerCompose": "2.29.1",
+    "contractVersion": "2.11.2",
+    "packageID": "snt_1.0:a4d9315a304ac10b467c096f37f4960f86e4ce2d828310aed58d5ad34082d9a9",
+    "fabric": "2.5.16",
+    "fabricCA": "1.5.15",
+    "caliper": "0.6.0"
+  }
+}
