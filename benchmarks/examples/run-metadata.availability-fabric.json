@@ -1,0 +1,59 @@
+{
+  "$schema": "urn:pfi-snt:run-metadata:schema:1.0.0",
+  "schemaVersion": "1.0.0",
+  "protocol": "measurement-protocol",
+  "repositoryCommit": "ccb58f46a08d2ff4789d51f6f79a43203991ce5e",
+  "sut": "fabric",
+  "scenario": "raft-1",
+  "phase": "measurement",
+  "repetition": 1,
+  "dataset": {
+    "seed": 20260727,
+    "sha256": "de523ee8fafeed0a39f8518b501fce4692192869030762816de353654385163d",
+    "units": 50000
+  },
+  "workers": 2,
+  "durationSeconds": 180,
+  "rate": {
+    "operation": "mixed",
+    "transactionsPerOperation": 1.55,
+    "targetOperationsPerSecond": 20,
+    "targetTransactionsPerSecond": 31,
+    "effectiveTransactionsPerSecond": 27.3,
+    "rateController": "fixed-rate",
+    "mix": {
+      "register": 10,
+      "transfer": 55,
+      "dispense": 10,
+      "query": 25
+    }
+  },
+  "faultInjection": {
+    "target": "1 orderer de 3, en organizaciones de ordenamiento distintas",
+    "injectedAt": "2026-10-05T15:01:00Z",
+    "recoveredAt": "2026-10-05T15:02:00Z",
+    "preFaultSeconds": 60,
+    "faultSeconds": 60,
+    "recoverySeconds": 60
+  },
+  "startedAt": "2026-10-05T15:00:00Z",
+  "endedAt": "2026-10-05T15:03:00Z",
+  "host": {
+    "cpu": "AMD Ryzen 7 5800H",
+    "cpuCores": 8,
+    "memoryGB": 16,
+    "os": "Ubuntu 22.04.4 LTS",
+    "kernel": "5.15.167.4-microsoft-standard-WSL2",
+    "wsl": "WSL2 2.2.4.0"
+  },
+  "environment": {
+    "docker": "27.1.1",
+    "dockerCompose": "2.29.1",
+    "contractVersion": "2.11.2",
+    "packageID": "snt_1.0:a4d9315a304ac10b467c096f37f4960f86e4ce2d828310aed58d5ad34082d9a9",
+    "fabric": "2.5.16",
+    "fabricCA": "1.5.15",
+    "caliper": "0.6.0"
+  },
+  "notes": "Falla simulada a nivel de contenedor en host unico, conforme la distincion registrada en EVAL-4."
+}

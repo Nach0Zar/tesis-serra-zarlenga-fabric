@@ -406,6 +406,50 @@ rechazo, conservando el mismo orden y criterio de selección en Fabric y en la
 baseline. Esto es seguro porque un rechazo esperado no muta el estado preparado
 y evita fabricar casos ad hoc para completar una ronda.
 
+## Validador de metadatos de corrida (DES-20)
+
+El comando `runmeta` valida el `metadata.json` de una corrida experimental
+contra el contrato versionado
+[`benchmarks/schema/run-metadata.schema.json`](../benchmarks/schema/run-metadata.schema.json),
+descripto en la sección 9.1 de
+[`docs/measurement-protocol.md`](../docs/measurement-protocol.md).
+
+Desde `client/`:
+
+```bash
+go run ./cmd/runmeta ../benchmarks/examples/run-metadata.fabric.json
+```
+
+- Argumentos posicionales: uno o más `metadata.json` a validar.
+- `--schema`: contrato a aplicar; por defecto,
+  `../benchmarks/schema/run-metadata.schema.json`.
+
+Sale con `0` si todos los documentos cumplen el contrato y con `1` si alguno no,
+detallando por documento cada incumplimiento con su ubicación dentro del JSON.
+
+La validación tiene dos capas. El JSON Schema rechaza campos desconocidos en
+cualquier nivel, escenarios fuera de la lista cerrada y la ausencia o presencia
+indebida de los identificadores propios de cada SUT: `contractVersion` y
+`packageID` en Fabric, `baselineCommit` y `baselineImage` en la baseline. Sobre
+eso, el validador agrega las reglas que JSON Schema no puede expresar: que
+`targetTransactionsPerSecond` derive de `targetOperationsPerSecond` por las
+transacciones que implica cada operación conceptual, que la mezcla de la carga
+combinada sume 100 y su promedio ponderado coincida con lo declarado, y que la
+ventana entre `startedAt` y `endedAt` no sea más corta que la duración medida.
+
+Esa distinción entre operación conceptual y transacción efectiva es la que
+resuelve la ambigüedad del antiguo campo `targetTps`: conforme ADR-004 y la
+sección 3.4 del protocolo, una transferencia del camino feliz es una sola
+operación y dos transacciones write. En una ronda de rechazo esperado vale una
+sola: el dataset compartido invoca `DispatchTransfer` y el rechazo se resuelve
+ahí, así que el par nunca se completa.
+
+El contrato también cubre los escenarios que no son rondas de camino feliz. El
+smoke se acota por cantidad y no por duración, los escenarios de disponibilidad
+exigen el instante de inyección de la falla y sus tres ventanas, y la
+construcción del snapshot inicial es su propia fase con sus marcadores de
+participación. Las secciones 9.4 a 9.6 del protocolo detallan cada caso.
+
 ## Validación
 
 ```bash
