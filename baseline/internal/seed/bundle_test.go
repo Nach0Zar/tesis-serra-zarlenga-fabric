@@ -245,6 +245,8 @@ func TestLoadBundleRejectsInvalidInputs(t *testing.T) {
 			prepare: func(t *testing.T) string {
 				directory := writeFixture(t, fixtureScenarios(t), nil)
 				path := filepath.Join(directory, dataset.DatasetFileName)
+				// #nosec G304 -- path apunta al fixture que el propio test
+				// acaba de escribir en t.TempDir().
 				file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
 				if err != nil {
 					t.Fatal(err)

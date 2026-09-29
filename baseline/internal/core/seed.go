@@ -109,10 +109,7 @@ func validateSeedInput(organizations []Organization, registrations []SeedRegistr
 	canonicalIDs := make(map[string]struct{}, len(organizations))
 	activeRegulators := 0
 	for _, org := range organizations {
-		request := RegisterOrganizationRequest{
-			MSPID: org.MSPID, ID: org.ID, IDType: org.IDType,
-			AgentType: org.AgentType, Active: org.Active,
-		}
+		request := RegisterOrganizationRequest(org)
 		if err := validateOrganization(request); err != nil {
 			return nil, fmt.Errorf("organizacion %s invalida: %w", org.MSPID, err)
 		}

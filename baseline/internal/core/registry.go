@@ -53,7 +53,9 @@ func (s *Store) RegisterOrganization(ctx context.Context, credential Credential,
 			return Organization{}, internal(err, "no se pudo comprobar la unicidad del regulador")
 		}
 	}
-	org := Organization{MSPID: req.MSPID, ID: req.ID, IDType: req.IDType, AgentType: req.AgentType, Active: req.Active}
+	// Conversion en lugar de literal: si los dos tipos dejan de ser identicos,
+	// esto falla al compilar en vez de descartar el campo nuevo en silencio.
+	org := Organization(req)
 	_, err = tx.Exec(ctx, `INSERT INTO public.organizations (msp_id,id,id_type,agent_type,active) VALUES ($1,$2,$3,$4,$5)`,
 		org.MSPID, org.ID, org.IDType, org.AgentType, org.Active)
 	if err != nil {
