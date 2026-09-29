@@ -374,6 +374,23 @@ func TestTheContractRejects(t *testing.T) {
 			expect: "sobre 0 escrituras exitosas",
 		},
 		{
+			// El retorno temprano que cerro el caso imposible dejaba de validar
+			// la proporcion tambien cuando la ronda si era valida (0 sobre 0).
+			name:    "una proporcion distinta de cero sin escrituras que la sustenten",
+			example: preparationExample,
+			mutate: func(d map[string]any) {
+				markers := object(d, "participationMarkers")
+				markers["expected"] = 0.0
+				markers["observed"] = 0.0
+				markers["fromRegistrations"] = 0.0
+				markers["fromRegulatoryEvents"] = 0.0
+				markers["successfulWriteTransactions"] = 0.0
+				markers["perSecond"] = 0.0
+				markers["shareOfSuccessfulWrites"] = 0.5
+			},
+			expect: "/participationMarkers/shareOfSuccessfulWrites",
+		},
+		{
 			name:    "una proporcion fuera del rango de una proporcion",
 			example: preparationExample,
 			mutate:  func(d map[string]any) { object(d, "participationMarkers")["shareOfSuccessfulWrites"] = 1.5 },
@@ -585,6 +602,13 @@ func TestAZeroWriteRoundWithoutMarkersStaysValid(t *testing.T) {
 	if len(findings) != 0 {
 		t.Fatalf("una ronda sin escrituras ni marcadores es coherente y se reporta:\n%s",
 			strings.Join(findings, "\n"))
+	}
+
+	// Que el borde sea valido no exime a la proporcion de validarse: con cero
+	// escrituras la unica cifra coherente es cero.
+	markers["shareOfSuccessfulWrites"] = 0.25
+	if findings := newTestValidator(t).Validate(marshal(t, document)); len(findings) == 0 {
+		t.Fatal("una proporcion distinta de cero sobre cero escrituras no debe aceptarse")
 	}
 }
 

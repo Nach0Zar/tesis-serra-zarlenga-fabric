@@ -429,19 +429,22 @@ func (m metadata) markerFindings() []string {
 
 	// Sin escrituras exitosas no puede haber marcadores: cada marcador acompana
 	// a una escritura confirmada. Declarar lo contrario describe una corrida
-	// imposible, y la proporcion no seria calculable en ningun caso.
-	if *writes == 0 {
-		if markers.Observed > 0 {
-			findings = append(findings, fmt.Sprintf(
-				"/participationMarkers: se observaron %d marcadores sobre 0 escrituras exitosas",
-				markers.Observed,
-			))
-		}
-
-		return findings
+	// imposible, y ahi la proporcion no esta definida, asi que informarla
+	// tambien solo agregaria ruido sobre el problema real.
+	if *writes == 0 && markers.Observed > 0 {
+		return append(findings, fmt.Sprintf(
+			"/participationMarkers: se observaron %d marcadores sobre 0 escrituras exitosas",
+			markers.Observed,
+		))
 	}
 
-	expectedShare := float64(markers.Observed) / float64(*writes)
+	// Una ronda sin escrituras ni marcadores es posible --- la perdida de
+	// quorum de Raft-2 es eso --- y su unica proporcion coherente es cero, que
+	// es lo que da la division cuando no hay nada que dividir.
+	var expectedShare float64
+	if *writes > 0 {
+		expectedShare = float64(markers.Observed) / float64(*writes)
+	}
 
 	if !approxEqualWithin(expectedShare, markers.ShareOfSuccessfulWrites, reportedRateTolerance) {
 		findings = append(findings, fmt.Sprintf(
