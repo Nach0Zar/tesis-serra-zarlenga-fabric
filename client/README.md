@@ -398,12 +398,6 @@ segmentar los resultados de Fabric y baseline sobre las mismas recetas. El
 `manifest.json` registra la cantidad de cada categoría, y `dataset.sha256`
 identifica el orden y contenido exactos usados por ambos SUT.
 
-Reejecutar un mismo registro dentro de una ronda es válido y esperado: las
-rondas de rechazo esperado de la sección 6.5 del protocolo duran 60 s a 5 TPS y
-superan largamente la cantidad de casos de cada familia. Un rechazo no muta
-estado, así que repetirlo mide lo mismo. Lo que no se admite es fabricar casos
-nuevos por backend.
-
 ## Validador de metadatos de corrida (DES-20)
 
 El comando `runmeta` valida el `metadata.json` de una corrida experimental
