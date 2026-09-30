@@ -1,3 +1,6 @@
+// Package httpapi expone la logica de dominio de la baseline como una API
+// REST. Traduce los codigos del catalogo a estados HTTP y acota el tamano de
+// los cuerpos recibidos.
 package httpapi
 
 import (
@@ -15,11 +18,15 @@ import (
 
 const maxBodyBytes = 64 << 10
 
+// Handler atiende las rutas de la API sobre un Service.
 type Handler struct {
 	store  Service
 	logger *slog.Logger
 }
 
+// Service es la superficie de dominio que la API necesita. Declararla como
+// interfaz, y no como *core.Store, permite que los tests del handler sustituyan
+// la implementacion sin levantar PostgreSQL.
 type Service interface {
 	Authenticate(string) (core.Credential, error)
 	RegisterUnit(context.Context, core.Credential, core.RegisterUnitRequest) (core.MedicationUnit, error)
@@ -53,6 +60,7 @@ type Service interface {
 
 type unitEventFunc func(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error)
 
+// New arma el router de la API. Con logger en nil usa el logger por defecto.
 func New(store Service, logger *slog.Logger) http.Handler {
 	if logger == nil {
 		logger = slog.Default()
@@ -88,6 +96,9 @@ func New(store Service, logger *slog.Logger) http.Handler {
 	return mux
 }
 
+// HTTPStatusForCode traduce un codigo del catalogo al estado HTTP que le
+// corresponde. Es la unica traduccion: el cuerpo siempre lleva el codigo
+// estable, porque el cliente ramifica sobre el y no sobre el estado.
 func HTTPStatusForCode(code core.Code) int {
 	switch code {
 	case core.InvalidRequest, core.InvalidDestination, core.InvalidLabIntervention:

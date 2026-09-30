@@ -115,11 +115,12 @@ func TestHTTPToPostgreSQLCoreFlow(t *testing.T) {
 		t.Fatalf("unexpected trace verdict: %#v", traceVerdict)
 	}
 
+	// #nosec G704 -- la URL sale de httptest.Server, levantado por este mismo test.
 	response, err := http.Get(server.URL + "/v1/units/07791234567898/SERIE-HTTP/history")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(response.Body)
 		t.Fatalf("history returned %d: %s", response.StatusCode, body)
@@ -158,16 +159,18 @@ func requestGETJSON(t *testing.T, url, key string, target any) {
 
 func requestJSON(t *testing.T, url, key, body string, expectedStatus int) {
 	t.Helper()
+	// #nosec G704 -- url sale de httptest.Server, levantado por este mismo test.
 	request, err := http.NewRequest(http.MethodPost, url, bytes.NewBufferString(body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	request.Header.Set("X-Org-Key", key)
+	// #nosec G704 -- idem: el destino es el servidor de prueba en memoria.
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != expectedStatus {
 		payload, _ := io.ReadAll(response.Body)
 		t.Fatalf("%s returned %d: %s", url, response.StatusCode, payload)

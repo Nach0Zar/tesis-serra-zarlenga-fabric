@@ -55,6 +55,8 @@ func loadBundle(directory string, minimumUnits int) (Bundle, error) {
 	}
 
 	sidecarPath := filepath.Join(directory, dataset.HashFileName)
+	// #nosec G304 -- directory lo elige quien corre la siembra, que ya tiene
+	// acceso al bundle del dataset en el sistema de archivos.
 	sidecar, err := os.ReadFile(sidecarPath)
 	if err != nil {
 		return Bundle{}, fmt.Errorf("leer dataset.sha256: %w", err)
@@ -97,11 +99,15 @@ func loadBundle(directory string, minimumUnits int) (Bundle, error) {
 }
 
 func decodeStrictJSON(path string, target any) error {
+	// #nosec G304 -- path se arma a partir del directorio del bundle que
+	// eligio quien corre la siembra.
 	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	// El archivo se abre solo para lectura: un error al cerrarlo no cambia lo
+	// que ya se decodifico ni deja nada a medio escribir.
+	defer func() { _ = file.Close() }()
 
 	decoder := json.NewDecoder(file)
 	decoder.DisallowUnknownFields()
@@ -221,11 +227,14 @@ type scenarioCounts struct {
 }
 
 func readDataset(path string, organizations []dataset.Organization) ([]core.SeedRegistration, string, scenarioCounts, error) {
+	// #nosec G304 -- path se arma a partir del directorio del bundle que
+	// eligio quien corre la siembra.
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, "", scenarioCounts{}, fmt.Errorf("abrir dataset.json: %w", err)
 	}
-	defer file.Close()
+	// Lectura unicamente; cerrar no puede invalidar el hash ya calculado.
+	defer func() { _ = file.Close() }()
 
 	hasher := sha256.New()
 	decoder := json.NewDecoder(io.TeeReader(file, hasher))

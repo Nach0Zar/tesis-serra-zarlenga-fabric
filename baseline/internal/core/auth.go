@@ -12,6 +12,8 @@ type credentialInput struct {
 	Role  string `json:"role"`
 }
 
+// Credential es la identidad que una API key habilita: la organizacion y el
+// rol con el que se presenta.
 type Credential struct {
 	MSPID string
 	Role  string
@@ -23,6 +25,9 @@ type Credentials struct {
 	byDigest map[[sha256.Size]byte]Credential
 }
 
+// ParseCredentials interpreta el array JSON de SNT_BASELINE_API_KEYS y guarda
+// unicamente el digest de cada clave. Falla si el array esta vacio o si algun
+// rol no pertenece al catalogo.
 func ParseCredentials(raw string) (Credentials, error) {
 	var entries []credentialInput
 	if err := json.Unmarshal([]byte(raw), &entries); err != nil {
@@ -55,6 +60,8 @@ func ParseCredentials(raw string) (Credentials, error) {
 	return Credentials{byDigest: byDigest}, nil
 }
 
+// Resolve devuelve la identidad asociada a una clave. El segundo valor es
+// falso si la clave esta vacia o no corresponde a ninguna credencial.
 func (c Credentials) Resolve(key string) (Credential, bool) {
 	if key == "" {
 		return Credential{}, false

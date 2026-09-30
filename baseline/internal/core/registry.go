@@ -18,6 +18,8 @@ func lockOrganizationRegistry(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 
+// RegisterOrganization da de alta una organizacion. Solo admite una entrada
+// REGULATOR activa a la vez, que es la unicidad que el registro garantiza.
 func (s *Store) RegisterOrganization(ctx context.Context, credential Credential, req RegisterOrganizationRequest) (Organization, error) {
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -53,7 +55,9 @@ func (s *Store) RegisterOrganization(ctx context.Context, credential Credential,
 			return Organization{}, internal(err, "no se pudo comprobar la unicidad del regulador")
 		}
 	}
-	org := Organization{MSPID: req.MSPID, ID: req.ID, IDType: req.IDType, AgentType: req.AgentType, Active: req.Active}
+	// Conversion en lugar de literal: si los dos tipos dejan de ser identicos,
+	// esto falla al compilar en vez de descartar el campo nuevo en silencio.
+	org := Organization(req)
 	_, err = tx.Exec(ctx, `INSERT INTO public.organizations (msp_id,id,id_type,agent_type,active) VALUES ($1,$2,$3,$4,$5)`,
 		org.MSPID, org.ID, org.IDType, org.AgentType, org.Active)
 	if err != nil {
@@ -68,6 +72,9 @@ func (s *Store) RegisterOrganization(ctx context.Context, credential Credential,
 	return org, nil
 }
 
+// SetOrganizationActive habilita o deshabilita una organizacion sin borrarla,
+// de modo que su historial siga siendo interpretable. Rechaza con
+// LAST_ACTIVE_REGULATOR si dejaria al registro sin regulador activo.
 func (s *Store) SetOrganizationActive(ctx context.Context, credential Credential, mspID string, active bool) (Organization, error) {
 	tx, err := s.begin(ctx)
 	if err != nil {

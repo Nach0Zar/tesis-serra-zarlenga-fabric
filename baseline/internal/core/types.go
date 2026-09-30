@@ -1,7 +1,14 @@
+// Package core implementa la logica de dominio de la linea base centralizada:
+// registro de organizaciones y unidades, transferencia de custodia en dos
+// pasos, dispensacion, eventos extraordinarios e historial. Reproduce los
+// mismos procesos que el chaincode para que la comparacion experimental mida
+// lo mismo en ambos SUT, sobre PostgreSQL y sin endoso ni ledger.
 package core
 
 import "github.com/Nach0Zar/tesis-serra-zarlenga-fabric/domain"
 
+// Tipos de identificador y roles admitidos, conforme ADR-003 y el manifiesto
+// de organizaciones.
 const (
 	IDTypeGLN  = "GLN"
 	IDTypeCUFE = "CUFE"
@@ -13,6 +20,7 @@ const (
 	RoleFinancierAuditor = "financier-auditor"
 )
 
+// Organization es una entidad registrada y habilitada para operar.
 type Organization struct {
 	MSPID     string           `json:"mspId"`
 	ID        string           `json:"id"`
@@ -21,8 +29,11 @@ type Organization struct {
 	Active    bool             `json:"active"`
 }
 
+// CanonicalID devuelve el identificador en la forma tipo:valor con la que se
+// comparan origen y destino de una transferencia.
 func (o Organization) CanonicalID() string { return o.IDType + ":" + o.ID }
 
+// MedicationUnit es el estado publico vigente de una unidad trazable.
 type MedicationUnit struct {
 	GTIN                string       `json:"gtin"`
 	NumeroSerie         string       `json:"numeroSerie"`
@@ -33,6 +44,8 @@ type MedicationUnit struct {
 	UltimaActualizacion string       `json:"ultimaActualizacion"`
 }
 
+// HistoryEntry es una version confirmada de una unidad. Value queda en nil
+// cuando la entrada corresponde a un borrado.
 type HistoryEntry struct {
 	TxID      string          `json:"txId"`
 	Timestamp string          `json:"timestamp"`
@@ -48,6 +61,7 @@ type LabInterventionHistoryEntry struct {
 	Value     *LabInterventionView `json:"value"`
 }
 
+// RegisterUnitRequest es el alta de una unidad por su laboratorio.
 type RegisterUnitRequest struct {
 	GTIN             string `json:"gtin"`
 	NumeroSerie      string `json:"numeroSerie"`
@@ -55,6 +69,8 @@ type RegisterUnitRequest struct {
 	FechaVencimiento string `json:"fechaVencimiento"`
 }
 
+// DispatchRequest es el primer paso de la transferencia de custodia: el
+// emisor despacha hacia un destino declarado (ADR-004).
 type DispatchRequest struct {
 	Destino       string `json:"destino"`
 	NumeroRemito  string `json:"numeroRemito"`
@@ -62,12 +78,16 @@ type DispatchRequest struct {
 	Cantidad      int    `json:"cantidad"`
 }
 
+// CommercialData son los datos comerciales del despacho, equivalentes a los
+// que en Fabric viajan por coleccion privada.
 type CommercialData struct {
 	NumeroRemito  string `json:"numeroRemito"`
 	NumeroFactura string `json:"numeroFactura"`
 	Cantidad      int    `json:"cantidad"`
 }
 
+// RejectRequest es el rechazo de una transferencia en transito por parte del
+// receptor declarado.
 type RejectRequest struct {
 	Motivo string `json:"motivo"`
 }
@@ -154,6 +174,7 @@ type TraceVerdict struct {
 	Verificaciones []TraceCheck `json:"verificaciones"`
 }
 
+// RegisterOrganizationRequest es el alta de una organizacion en el registro.
 type RegisterOrganizationRequest struct {
 	MSPID     string           `json:"mspId"`
 	ID        string           `json:"id"`
@@ -162,14 +183,19 @@ type RegisterOrganizationRequest struct {
 	Active    bool             `json:"active"`
 }
 
+// SetOrganizationActiveRequest habilita o deshabilita una organizacion sin
+// borrarla del registro.
 type SetOrganizationActiveRequest struct {
 	Active bool `json:"active"`
 }
 
+// Invoker es quien ejecuta una operacion: su organizacion ya resuelta contra
+// el registro y el rol con el que se presenta.
 type Invoker struct {
 	MSPID string
 	Org   Organization
 	Role  string
 }
 
+// CanonicalID devuelve el identificador canonico de la organizacion invocante.
 func (i Invoker) CanonicalID() string { return i.Org.CanonicalID() }

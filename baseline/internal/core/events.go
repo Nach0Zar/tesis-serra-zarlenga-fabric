@@ -24,9 +24,14 @@ const (
 	transitionExpiredT13 = "T13_MARK_EXPIRED_FROM_TRANSIT_OR_QUARANTINE"
 )
 
+// eventPrecondition es la condicion adicional que algunos eventos
+// extraordinarios exigen antes de aplicar la transicion. El contexto va
+// primero por convencion de Go; el Store viaja como parametro y no como
+// receptor porque estas funciones son datos: se eligen por evento en
+// applyExtraordinaryEvent.
 type eventPrecondition func(
-	*Store,
 	context.Context,
+	*Store,
 	pgx.Tx,
 	MedicationUnit,
 	Invoker,
@@ -138,7 +143,7 @@ func (s *Store) applyExtraordinaryEvent(
 		return MedicationUnit{}, internal(err, "no se pudo generar el identificador de transaccion")
 	}
 	if precondition != nil {
-		if err := precondition(s, ctx, tx, unit, invoker, transition, now, txID); err != nil {
+		if err := precondition(ctx, s, tx, unit, invoker, transition, now, txID); err != nil {
 			return MedicationUnit{}, err
 		}
 	}
@@ -240,8 +245,8 @@ func closeActiveTransferForExtraordinaryEvent(
 }
 
 func requireExpiredByDateInTransit(
-	_ *Store,
 	_ context.Context,
+	_ *Store,
 	_ pgx.Tx,
 	unit MedicationUnit,
 	_ Invoker,
@@ -267,8 +272,8 @@ func requireExpiredByDateInTransit(
 }
 
 func restockPrecondition(
-	s *Store,
 	ctx context.Context,
+	s *Store,
 	tx pgx.Tx,
 	unit MedicationUnit,
 	invoker Invoker,
@@ -291,8 +296,8 @@ func restockPrecondition(
 }
 
 func consumeWithdrawIntervention(
-	s *Store,
 	ctx context.Context,
+	s *Store,
 	tx pgx.Tx,
 	unit MedicationUnit,
 	invoker Invoker,
@@ -304,8 +309,8 @@ func consumeWithdrawIntervention(
 }
 
 func consumeFinalDispositionIntervention(
-	s *Store,
 	ctx context.Context,
+	s *Store,
 	tx pgx.Tx,
 	unit MedicationUnit,
 	invoker Invoker,

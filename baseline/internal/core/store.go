@@ -13,6 +13,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Store es el punto de entrada de la logica de dominio sobre PostgreSQL. El
+// reloj y el generador de identificadores son inyectables para que los tests
+// sean deterministicos.
 type Store struct {
 	pool        *pgxpool.Pool
 	credentials Credentials
@@ -20,10 +23,14 @@ type Store struct {
 	newID       func() (string, error)
 }
 
+// NewStore construye un Store con el reloj y el generador de identificadores
+// de produccion.
 func NewStore(pool *pgxpool.Pool, credentials Credentials) *Store {
 	return &Store{pool: pool, credentials: credentials, now: time.Now, newID: randomID}
 }
 
+// Authenticate resuelve una API key a su identidad, o devuelve
+// UNAUTHORIZED_ROLE si no corresponde a ninguna credencial declarada.
 func (s *Store) Authenticate(key string) (Credential, error) {
 	credential, ok := s.credentials.Resolve(key)
 	if !ok {

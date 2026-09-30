@@ -1,3 +1,4 @@
+// Package main siembra la baseline con el bundle del dataset compartido.
 package main
 
 import (
