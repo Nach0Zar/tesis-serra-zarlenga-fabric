@@ -1,0 +1,48 @@
+flowchart TB
+  subgraph host["Host WSL2 / Docker Compose"]
+    ca["fabric-ca.snt.local<br/>7 CA lógicas · 7054"]
+
+    subgraph ordering["Ordering service · etcdraft"]
+      oa["orderer.anmat.snt.local<br/>7050 · admin 7053"]
+      ol["orderer.lab.snt.local<br/>8050 · admin 8053"]
+      od["orderer.drogueria.snt.local<br/>9050 · admin 9053"]
+    end
+
+    channel[["snt-channel"]]
+
+    subgraph organizations["Organizaciones del canal"]
+      pa["AnmatMSP<br/>peer0.anmat · 7051"]
+      pl["LabMSP<br/>peer0.lab · 8051"]
+      pd["DrogueriaMSP<br/>peer0.drogueria · 9051"]
+      pdi["DistribuidorMSP<br/>peer0.distribuidor · 10051"]
+      pf["FarmaciaMSP<br/>peer0.farmacia · 11051"]
+      pc["CentroMedicoMSP<br/>peer0.centromedico · 12051"]
+      pfin["FinanciadorMSP<br/>peer0.financiador · 13051"]
+    end
+
+    cc["Chaincode snt<br/>mismo paquete en los 7 peers"]
+    pdc["PDC explícitas por par<br/>+ colecciones implícitas por MSP"]
+  end
+
+  ca -. "MSP, usuarios y TLS" .-> organizations
+  oa --> channel
+  ol --> channel
+  od --> channel
+  channel --- pa
+  channel --- pl
+  channel --- pd
+  channel --- pdi
+  channel --- pf
+  channel --- pc
+  channel --- pfin
+  organizations --> cc
+  cc --> pdc
+
+  classDef orderer fill:#f4e1c1,stroke:#9a6700,color:#2d2100
+  classDef peer fill:#d8ebff,stroke:#0969da,color:#001d35
+  classDef shared fill:#dafbe1,stroke:#1a7f37,color:#04260f
+  classDef private fill:#fbefff,stroke:#8250df,color:#2f0a52
+  class oa,ol,od orderer
+  class pa,pl,pd,pdi,pf,pc,pfin peer
+  class channel,cc shared
+  class pdc private

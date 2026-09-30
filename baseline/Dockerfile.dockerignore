@@ -1,0 +1,7 @@
+**
+!baseline/
+!baseline/**
+baseline/.env
+baseline/.env.*
+!domain/
+!domain/**

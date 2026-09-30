@@ -1,0 +1,465 @@
+# Cliente Fabric Gateway
+
+Cliente CLI para ejecutar operaciones de negocio e invocar o consultar el chaincode `snt` mediante
+[Fabric Gateway](https://github.com/hyperledger/fabric-gateway). Implementa el alcance
+de CLI-1 (#34) y CLI-2 (#35) contra el contrato público congelado en
+[`docs/api-contract.md`](../docs/api-contract.md), en la versión que declara su encabezado.
+
+Es una interfaz de línea de comandos; no incluye frontend.
+
+## Requisitos
+
+- Go 1.23 o posterior.
+- Red levantada, canal `snt-channel` creado y chaincode `snt` desplegado.
+- Material criptográfico generado bajo `network/organizations/`.
+- Identidades `User1` enroladas por NET-1.
+
+El módulo usa `fabric-gateway` v1.8.0, compatible con la versión de Go
+declarada por el repositorio.
+
+## Construcción y pruebas
+
+Desde `client/`:
+
+```bash
+go build ./...
+go test -race ./...
+go vet ./...
+```
+
+## Uso
+
+```text
+snt-client register-unit       --org <org> --gtin <gtin> --serial <serie> --lot <lote> --expiry <fecha>
+snt-client dispatch-transfer   --org <org> --gtin <gtin> --serial <serie> --transient-file <archivo|->
+snt-client receive-transfer    --org <org> --gtin <gtin> --serial <serie>
+snt-client reject-transfer     --org <org> --gtin <gtin> --serial <serie> --reason <motivo>
+snt-client dispense            --org <org> --gtin <gtin> --serial <serie>
+snt-client read-unit           --org <org> --gtin <gtin> --serial <serie>
+snt-client unit-history        --org <org> --gtin <gtin> --serial <serie>
+snt-client verify-unit         --org <org> --gtin <gtin> --serial <serie>
+snt-client query-units-by-gtin --org <org> --gtin <gtin>
+snt-client withdraw-batch      --org <org> --gtin <gtin> --lot <lote> --reason <motivo>
+snt-client prohibit-batch      --org <org> --gtin <gtin> --lot <lote> --reason <motivo>
+snt-client listen-anmat [--start-block <número>]
+```
+
+Los comandos tipados cubren los tres procesos core:
+
+1. alta mediante `register-unit`;
+2. transferencia, separada en `dispatch-transfer`, `receive-transfer` y `reject-transfer`;
+3. dispensación mediante `dispense`.
+
+También exponen lectura puntual, historial cronológico, verificación previa a la
+adquisición y consulta por GTIN. Cada
+comando arma exactamente el request público de `docs/api-contract.md`; el destino
+de una transferencia nunca forma parte de ese argumento.
+
+Ejemplo desde `client/`:
+
+```bash
+go run ./cmd/snt-client register-unit \
+  --org lab \
+  --gtin 07791234567898 \
+  --serial SN-0001-ABCD \
+  --lot L2026-014 \
+  --expiry 2027-12-31
+
+printf '%s' '{"destinatario":{"destino":"GLN:7791234500024"},"commercial":{"numeroRemito":"R-0001","numeroFactura":"F-0001","cantidad":1}}' |
+  go run ./cmd/snt-client dispatch-transfer \
+    --org lab \
+    --gtin 07791234567898 \
+    --serial SN-0001-ABCD \
+    --transient-file -
+```
+
+Las respuestas se escriben en stdout. Si el payload es JSON, se indenta sin
+modificar su contenido.
+
+### Demo completa para la defensa
+
+Con una red limpia ya levantada, el canal creado y `snt` desplegado:
+
+```bash
+make demo-core
+```
+
+El comando ejecuta y muestra quince pasos. El flujo feliz registra una unidad,
+la despacha laboratorio → droguería y droguería → farmacia, ejecuta `VerifyUnit`
+antes de cada recepción, dispensa y consulta la unidad y su historial. Una segunda
+unidad demuestra `RejectTransfer` desde una transferencia activa y se lee en
+estado `DEVUELTO`; `QueryUnitsByGTIN` cierra la demo mostrando ambas unidades.
+
+Los destinos se derivan de `network/organizations-manifest.json`. La demo usa
+por defecto el GTIN `07791234567898`, las series `DEMO-CORE-0001` y
+`DEMO-CORE-REJECT-1`, el lote `LOTE-DEMO-2026` y vencimiento `2099-12-31`.
+El resultado es reproducible
+contra un ledger recién creado. Para repetirla sin reiniciar el ledger se debe
+usar otra serie, porque el contrato rechaza correctamente una unidad duplicada:
+
+```bash
+make demo-core DEMO_ARGS="--serial DEMO-CORE-0002 --reject-serial DEMO-CORE-REJECT-2"
+```
+
+Se pueden sobrescribir también `--gtin`, `--reject-serial`, `--lot`, `--expiry`, `--channel`,
+`--chaincode`, `--repo-root`, `--timeout` y `--retry-interval`.
+
+### Retiro y prohibición por lote
+
+`withdraw-batch` y `prohibit-batch` aplican un retiro del mercado o una prohibición
+sobre todas las unidades de un lote, emitiendo **una transacción por unidad**.
+
+```bash
+snt-client withdraw-batch --org anmat \
+  --gtin 07791234567898 --lot L-2026-01 \
+  --reason "retiro dispuesto por desvío de calidad, disposición ANMAT 1234/2026"
+```
+
+**Por qué una transacción por unidad y no una por lote.** No es una simplificación:
+[ADR-007](../docs/adr/007-network-topology.md) punto 6.a fija la política de reposo de
+la clave de una unidad en la organización de su **custodio actual, sin rama
+alternativa**. Un lote está repartido entre varios custodios, así que una transacción
+única sobre el lote exigiría el endoso **simultáneo** de todas sus organizaciones
+custodias — insatisfacible en la práctica, y con una ventana de fallo que crece con el
+tamaño del lote. Que el endoso basado en estado imponga granularidad por unidad es un
+**resultado** del trabajo, documentado en [`docs/alcance-prototipo.md`](../docs/alcance-prototipo.md).
+
+**Cómo resuelve los seriales.** Con `QueryUnitsByGTIN`, que ya está en la superficie
+congelada del contrato, filtrando por lote del lado del cliente. No agrega un índice al
+chaincode ni depende del dataset sintético, de modo que funciona contra cualquier
+ledger. Hereda el límite ya declarado de esa consulta: no pagina.
+
+**Salida y código de salida.** Emite un reporte JSON con el recuento y el detalle por
+unidad:
+
+```json
+{"operacion":"WithdrawFromMarket","gtin":"07791234567898","lote":"L-2026-01",
+ "unidadesAlcanzadas":3,"confirmadas":2,"yaAplicadas":1,"rechazadas":0,
+ "unidades":[{"numeroSerie":"SN-1","resultado":"CONFIRMADA","estado":"RETIRADO_MERCADO"}]}
+```
+
+Una sola unidad rechazada hace terminar el comando con código distinto de cero: un
+retiro **parcial** no puede reportarse como éxito global. Cada rechazo conserva su
+`code` contractual.
+
+**Idempotencia.** Reintentar el lote no vuelve a invocar las unidades que ya están en
+el estado destino: se omiten con resultado `YA_APLICADA`. La decisión **no** se toma
+atrapando `INVALID_STATE_TRANSITION`, porque ese mismo código lo produce también una
+unidad que *no* puede retirarse —una `DISPENSADO`, que ADR-001 no declara como origen
+de T17–T19— y esa es un rechazo legítimo que debe verse.
+
+Se decide en dos momentos: por el **estado observado** en la consulta que resolvió el
+lote, y —si la invocación igual devuelve `INVALID_STATE_TRANSITION`— **releyendo la
+unidad**, porque entre la consulta y la invocación otra corrida pudo aplicarla. Solo se
+marca `YA_APLICADA` si la unidad está *ahora* en el estado destino; en cualquier otro
+estado, o si la relectura falla, se conserva el rechazo.
+
+**Lote vacío.** Si el GTIN y el lote no alcanzan ninguna unidad, el comando **falla**
+con `INVALID_REQUEST` en vez de reportar un no-op como éxito: un retiro del mercado que
+no emitió ninguna transacción no puede quedar registrado como aplicado.
+
+**Interrupción.** Si el timeout vence a mitad del lote, el reporte se emite igual —el
+ledger ya tiene unidades retiradas y el operador necesita saber cuáles— con
+`interrumpido: true` y tres clases distintas:
+
+| Resultado | Significado |
+|---|---|
+| `NO_INTENTADA` | nunca se invocó; su estado es el que ya tenía |
+| `INDETERMINADA` | la invocación ya había empezado y no se pudo resolver |
+| `CONFIRMADA` | la invocación había empezado y la reconciliación la encontró aplicada |
+
+La unidad en curso **no** se declara `NO_INTENTADA`: `SubmitWithContext` puede vencer
+mientras espera el estado de commit, es decir **después** de haber enviado la
+transacción, y esa transacción puede confirmarse igual. El comando la relee con un
+contexto propio y acotado; si aparece en el estado destino la reporta confirmada, y si
+no, la deja `INDETERMINADA` en vez de afirmar un desenlace que no conoce.
+
+**Fallo de la consulta.** Si `QueryUnitsByGTIN` falla, el reporte se emite igual pero
+identificando la solicitud —operación, GTIN y lote— con la lista de unidades vacía, no
+como un objeto cero-valuado.
+
+### Listener regulatorio de ANMAT
+
+`listen-anmat` se conecta exclusivamente con el perfil `anmat` y comprueba
+que su MSP sea `AnmatMSP`; el comando no admite `--org`. Después de
+establecer la suscripción de eventos del chaincode y la de bloques filtrados
+escribe `LISTENER_READY` en stderr. A partir de ese punto, stdout contiene
+JSON Lines para las alertas confirmadas `Quarantine`, `ReportExpired`,
+`ReportStolen` y `ReportLost`, y para toda transacción inválida incluida en
+un bloque de `snt-channel`.
+
+```bash
+make listen-anmat
+make listen-anmat LISTENER_ARGS="--start-block 0"
+```
+
+Sin `--start-block` observa desde el siguiente bloque confirmado. Con la
+opción realiza replay inclusivo y puede repetir registros; el `transactionId`
+permite identificarlos. No mantiene checkpoint persistente. `SIGINT` y
+`SIGTERM` cancelan el listener con salida exitosa; un payload malformado, un
+fallo de escritura o el cierre inesperado de cualquiera de los streams se
+informan como error operativo.
+
+La semántica completa, el formato de salida, la diferencia entre commit
+válido, transacción inválida y propuesta rechazada, y la demo farmacia →
+`ReportStolen` están en
+[`docs/anmat-event-listener.md`](../docs/anmat-event-listener.md).
+
+### Acceso genérico
+
+La interfaz de CLI-1 permanece disponible para cualquier función pública:
+
+```text
+snt-client query  --org <org> --function <name> [--arg <value> ...]
+snt-client invoke --org <org> --function <name> [--arg <value> ...]
+```
+
+`--arg` es repetible y conserva el orden exigido por la función pública.
+Los valores complejos se pasan como un único argumento JSON.
+
+Ejemplos desde `client/`:
+
+```bash
+go run ./cmd/snt-client query \
+  --org anmat \
+  --function QueryUnitsByGTIN \
+  --arg 07791234567898
+
+go run ./cmd/snt-client query \
+  --org farmacia \
+  --function ReadUnit \
+  --arg 07791234567898 \
+  --arg SN-0001-ABCD
+
+go run ./cmd/snt-client invoke \
+  --org lab \
+  --function RegisterUnit \
+  --arg '{"gtin":"07791234567898","numeroSerie":"SN-0001-ABCD","lote":"L2026-014","fechaVencimiento":"2027-12-31"}'
+```
+
+## Organizaciones e identidades
+
+`--org` admite las cuatro identidades requeridas por CLI-1:
+
+| Valor | MSP | Gateway local | Identidad |
+|---|---|---|---|
+| `anmat` | `AnmatMSP` | `localhost:7051` | `User1@anmat.snt.local` |
+| `lab` | `LabMSP` | `localhost:8051` | `User1@lab.snt.local` |
+| `drogueria` | `DrogueriaMSP` | `localhost:9051` | `User1@drogueria.snt.local` |
+| `farmacia` | `FarmaciaMSP` | `localhost:11051` | `User1@farmacia.snt.local` |
+
+El MSP y el hostname del peer se leen de
+`network/organizations-manifest.json`. El certificado, la clave privada
+y la CA TLS se resuelven desde el layout generado por NET-1. La conexión valida
+TLS contra la CA del peer de la organización seleccionada.
+
+El Gateway descubre y coordina los endosos requeridos por las políticas vigentes.
+Para entornos que no usan los puertos locales se pueden sobrescribir
+`--gateway-endpoint` y `--tls-server-name`. También están
+disponibles `--channel`, `--chaincode`, `--timeout`
+y `--repo-root`.
+
+## Transient data
+
+Las claves privadas definidas por DES-5 (`commercial`,
+`destinatario` y `devolucion`) se suministran mediante un
+objeto JSON en un archivo:
+
+```json
+{
+  "destinatario": {
+    "destino": "GLN:7791234500048"
+  },
+  "commercial": {
+    "numeroRemito": "R-0001-2026",
+    "numeroFactura": "A-0001-00001234",
+    "cantidad": 1
+  }
+}
+```
+
+```bash
+go run ./cmd/snt-client invoke \
+  --org drogueria \
+  --function DispatchTransfer \
+  --arg '{"gtin":"07791234567898","numeroSerie":"SN-0001-ABCD"}' \
+  --transient-file /ruta/segura/transient.json
+```
+
+El valor `--transient-file -` lee el objeto desde stdin. No existe una
+opción para incluir transient data directamente como argumento de proceso.
+
+## Errores
+
+`receive-transfer` reintenta únicamente el error contractual
+`INTERNAL_ERROR` con `details.reintentable=true` y
+`details.causa=PRIVATE_DATA_NOT_DISSEMINATED`, hasta consumir su timeout. Cada
+reintento se informa en stderr como un evento JSON. Los demás errores, incluido
+`RECEIVER_MISMATCH`, se devuelven inmediatamente.
+
+Los errores del chaincode se conservan en stderr con el envelope de DES-5:
+
+```json
+{
+  "code": "UNIT_NOT_FOUND",
+  "message": "La unidad no existe.",
+  "details": {
+    "key": "..."
+  }
+}
+```
+
+Los fallos de transporte o plataforma no clasificables se expresan como
+`INTERNAL_ERROR`. En esos casos, `details` incluye la etapa,
+una clasificación operativa y la causa original normalizada y truncada a 1024
+caracteres. Los rechazos de validación de Fabric incluyen además
+`validationCode` y `transactionId`.
+
+Los códigos de salida son `0` para éxito,
+`1` para fallos de ejecución y `2` para uso inválido de la CLI.
+
+## Generador de dataset sintético (CLI-3)
+
+El comando `datasetgen` produce una única receta de carga para ambos
+backends. La semilla `20260727` es fija y no se expone como parámetro,
+de modo que una misma versión del generador y de las fuentes de dominio produce
+el mismo archivo.
+
+Desde `client/`:
+
+```bash
+make generate-dataset
+```
+
+El comando equivalente y sus parámetros explícitos son:
+
+```bash
+go run ./cmd/datasetgen --units 50000 --output-dir ../build/dataset
+```
+
+- `--units`: cantidad de unidades; el mínimo aceptado es 50.000.
+- `--output-dir`: directorio del bundle; por defecto,
+  `../build/dataset`.
+
+El bundle contiene:
+
+| Archivo | Contenido |
+|---|---|
+| `dataset.json` | Recetas ordenadas con preparación mínima y un resultado exitoso o rechazo esperado. |
+| `manifest.json` | Semilla, parámetros, versión del generador, versiones de las fuentes, organizaciones, conteos por categoría y hash del dataset. |
+| `dataset.sha256` | Hash SHA-256 verificable con herramientas convencionales. |
+
+Cada registro de `units` declara `preparation` y exactamente uno entre
+`expectedSuccess` y `expectedRejection`. Un camino feliz comienza con
+`RegisterUnit`, representa cada transferencia como el par
+`DispatchTransfer` + `ReceiveTransfer` y termina con `Dispense`. Un rechazo
+declara siempre categoría, operación, invocador, request, código de error
+esperado y la preparación exitosa mínima que deja a la unidad en la
+precondición del intento.
+
+Las categorías estables son:
+
+| Categoría | Intento y error esperado | Fuente compartida |
+|---|---|---|
+| `UNAUTHORIZED_TRANSFER` | `DispatchTransfer` → `TRANSFER_NOT_AUTHORIZED` | `domain/authorized-transfers.json`, mediante `domain.DecideTransfer`; incluye prohibición explícita y default deny. |
+| `DUPLICATE_IDENTITY` | segundo `RegisterUnit` con el mismo GTIN + número de serie → `UNIT_ALREADY_EXISTS` | identidad ya creada por el primer paso de `preparation`. |
+| `BLOCKING_STATE` | `DispatchTransfer` o `Dispense` → `INVALID_STATE_TRANSITION` | catálogo y transiciones de `domain/states.go`. |
+
+Los casos bloqueantes no mantienen una segunda lista manual de estados: el
+generador recorre `domain.States()`, selecciona con `domain.IsBlockingState()`
+y comprueba la incompatibilidad de cada operación ordinaria mediante
+`domain.LookupTransition()`. La transición de preparación también se obtiene de
+`domain.Transitions()` y queda identificada en la receta.
+
+Las fechas de vencimiento se generan deliberadamente entre 2099-01-01 y
+2101-12-31. El escenario bloqueante `VENCIDO` no depende del paso del reloj:
+prepara T12 con `ReportExpired` y un motivo documentado, tal como permite el
+contrato compartido desde `EN_CUSTODIA`.
+
+Los pares se derivan en tiempo de generación mediante
+`domain.DecideTransfer`; no existe una segunda matriz en el cliente.
+Las organizaciones se leen de la copia embebida y verificada del manifiesto
+fundacional.
+
+Los formatos cerrados, versión `2.0.0`, están definidos con JSON Schema
+Draft 2020-12 en:
+
+- `../domain/dataset/schema/dataset.schema.json`
+- `../domain/dataset/schema/manifest.schema.json`
+
+El contrato, los schemas y el generador determinístico viven en el paquete
+neutral `domain/dataset`; este módulo conserva únicamente el adaptador CLI
+`cmd/datasetgen`.
+
+EVAL-2 y EVAL-3 deben seleccionar y ejecutar los mismos registros de
+`dataset.json`, conservando su orden y sin regenerar casos por backend. La
+categoría no habilita dos datasets ni dos interpretaciones: solo permite
+segmentar los resultados de Fabric y baseline sobre las mismas recetas. El
+`manifest.json` registra la cantidad de cada categoría, y `dataset.sha256`
+identifica el orden y contenido exactos usados por ambos SUT.
+
+La cantidad de recetas de una categoría no limita la cantidad de invocaciones
+de una ronda. Cada receta se prepara una sola vez; si la ronda requiere más
+invocaciones que casos disponibles, el workload debe recorrer los registros de
+la categoría en forma cíclica y volver a ejecutar únicamente el intento de
+rechazo, conservando el mismo orden y criterio de selección en Fabric y en la
+baseline. Esto es seguro porque un rechazo esperado no muta el estado preparado
+y evita fabricar casos ad hoc para completar una ronda.
+
+## Validador de metadatos de corrida (DES-20)
+
+El comando `runmeta` valida el `metadata.json` de una corrida experimental
+contra el contrato versionado
+[`benchmarks/schema/run-metadata.schema.json`](../benchmarks/schema/run-metadata.schema.json),
+descripto en la sección 9.1 de
+[`docs/measurement-protocol.md`](../docs/measurement-protocol.md).
+
+Desde `client/`:
+
+```bash
+go run ./cmd/runmeta ../benchmarks/examples/run-metadata.fabric.json
+```
+
+- Argumentos posicionales: uno o más `metadata.json` a validar.
+- `--schema`: contrato a aplicar; por defecto,
+  `../benchmarks/schema/run-metadata.schema.json`.
+
+Sale con `0` si todos los documentos cumplen el contrato y con `1` si alguno no,
+detallando por documento cada incumplimiento con su ubicación dentro del JSON.
+
+La validación tiene dos capas. El JSON Schema rechaza campos desconocidos en
+cualquier nivel, escenarios fuera de la lista cerrada y la ausencia o presencia
+indebida de los identificadores propios de cada SUT: `contractVersion` y
+`packageID` en Fabric, `baselineCommit` y `baselineImage` en la baseline. Sobre
+eso, el validador agrega las reglas que JSON Schema no puede expresar: que
+`targetTransactionsPerSecond` derive de `targetOperationsPerSecond` por las
+transacciones que implica cada operación conceptual, que la mezcla de la carga
+combinada sume 100 y su promedio ponderado coincida con lo declarado, y que la
+ventana entre `startedAt` y `endedAt` no sea más corta que la duración medida.
+
+Esa distinción entre operación conceptual y transacción efectiva es la que
+resuelve la ambigüedad del antiguo campo `targetTps`: conforme ADR-004 y la
+sección 3.4 del protocolo, una transferencia del camino feliz es una sola
+operación y dos transacciones write. En una ronda de rechazo esperado vale una
+sola: el dataset compartido invoca `DispatchTransfer` y el rechazo se resuelve
+ahí, así que el par nunca se completa.
+
+El contrato también cubre los escenarios que no son rondas de camino feliz. El
+smoke se acota por cantidad y no por duración, los escenarios de disponibilidad
+exigen el instante de inyección de la falla y sus tres ventanas, y la
+construcción del snapshot inicial es su propia fase con sus marcadores de
+participación. Las secciones 9.4 a 9.6 del protocolo detallan cada caso.
+
+## Validación
+
+```bash
+make test
+make vet
+make build
+```
+
+Las pruebas verifican, entre otras invariantes, GTIN-14 con dígito de control,
+seriales válidos y únicos, cobertura de las tres categorías, derivación desde
+la matriz y la máquina de estados compartidas, referencias válidas, rechazo de
+combinaciones mal formadas por los schemas, pares despacho-recepción y
+reproducibilidad byte a byte.
