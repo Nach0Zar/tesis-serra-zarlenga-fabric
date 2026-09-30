@@ -76,3 +76,16 @@ Las reglas puramente estructurales están en el schema, de modo que un workload 
 | EVAL-8 · Análisis cualitativo y estructural (#48) | `rejectionFamily` mantiene separadas las tres familias del dataset, de modo que el costo de validación de cada una sea comparable en lugar de promediarse. |
 
 La paridad entre ambos SUT es verificable de forma automática: dos corridas comparables deben coincidir en `scenario`, `dataset.sha256`, `workers`, `durationSeconds` y el bloque `rate` completo, y diferir únicamente en `sut` y `environment`.
+
+## Smoke local de Caliper (EVAL-1)
+
+El proyecto aislado [`caliper/`](caliper/) instala Caliper 0.7.1 con el binding
+`fabric:fabric-gateway` y ejecuta una única ronda diagnóstica de `ReadUnit`:
+1 worker, 30 consultas y tasa fija de 1 TPS. Consume una red ya desplegada y el
+bundle determinístico de 50.000 unidades; no crea canales, no instala
+chaincode y no sustituye las corridas experimentales de EVAL-2.
+
+La configuración efectiva, el reporte HTML, el contexto y `metadata.json` se
+guardan bajo `build/benchmarks/caliper/`, que está ignorado por Git. Los
+prerrequisitos y comandos reproducibles están documentados en
+[`caliper/README.md`](caliper/README.md).

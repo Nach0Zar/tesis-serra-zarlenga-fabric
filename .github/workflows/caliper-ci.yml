@@ -1,0 +1,68 @@
+name: Caliper CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+    paths:
+      - "benchmarks/caliper/**"
+      - "benchmarks/schema/**"
+      - "benchmarks/README.md"
+      - "docs/api-contract.md"
+      - "network/chaincode-package.lock"
+      - "network/compose.yaml"
+      - "network/organizations-manifest.json"
+      - ".github/workflows/caliper-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: caliper-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Validate Caliper setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: benchmarks/caliper/package-lock.json
+
+      - name: Set up pinned npm
+        run: npm install --global npm@11.6.2
+
+      - name: Install locked dependencies
+        working-directory: benchmarks/caliper
+        run: npm ci
+
+      - name: Check sources and pinned binding
+        working-directory: benchmarks/caliper
+        run: npm run check
+
+      - name: Test
+        working-directory: benchmarks/caliper
+        run: npm test
+
+      - name: Verify Caliper version
+        working-directory: benchmarks/caliper
+        run: npx --no-install caliper --version
+
+      - name: Verify Fabric Gateway binding dependencies
+        working-directory: benchmarks/caliper
+        run: npm ls @hyperledger/caliper-cli @hyperledger/caliper-fabric @hyperledger/fabric-gateway
