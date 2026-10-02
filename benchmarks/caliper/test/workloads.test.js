@@ -58,7 +58,7 @@ function status(state, start = 1000, end = 1010) {
     return value;
 }
 
-test('DES-7 profiles accept only their exact rates and phase/repetition pairs', () => {
+test('measurement profiles accept only their exact rates and phase/repetition pairs', () => {
     const transfer = buildProfile({scenario: 'write-transfer', phase: 'warmup', repetition: '0', rate: '10'});
     assert.equal(transfer.transactionsPerOperation, 2);
     assert.equal(transfer.workers, 2);
@@ -309,7 +309,7 @@ test('core operations record transfer pairs, retries and expected rejection code
     assert.equal(rejectionRecord.observedErrorCode, 'UNIT_ALREADY_EXISTS');
 });
 
-test('processable results aggregate operations and build valid DES-20 fields', (t) => {
+test('processable results aggregate operations and build valid metadata fields', (t) => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-caliper-results-'));
     t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
     appendOperation(path.join(directory, 'raw-worker-0.jsonl'), {

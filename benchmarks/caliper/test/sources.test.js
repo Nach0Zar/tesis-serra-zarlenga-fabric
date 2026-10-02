@@ -157,7 +157,7 @@ test('Docker Compose port and image versions are normalized', () => {
     }}), {fabric: '2.5.16', fabricCA: '1.5.17'});
 });
 
-test('metadata builder emits the DES-20 smoke shape and canonical identifiers', () => {
+test('metadata builder emits the smoke shape and canonical identifiers', () => {
     const sourceTruth = readSourceTruth(repoRoot);
     const context = {
         repositoryCommit: 'a'.repeat(40),

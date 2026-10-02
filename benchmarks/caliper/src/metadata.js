@@ -32,7 +32,7 @@ function buildMetadata(context, observations) {
         endedAt: observations.endedAt,
         host: context.host,
         environment: context.environment,
-        notes: 'Smoke diagnóstico EVAL-1: una ronda ReadUnit; no corresponde a una corrida experimental final.',
+        notes: 'Smoke diagnóstico: una ronda ReadUnit; no corresponde a una corrida experimental final.',
     };
     if (observations.discardReason) {
         document.discarded = {reason: observations.discardReason};
@@ -66,7 +66,7 @@ function buildRoundMetadata(context, summary) {
         endedAt: context.endedAt,
         host: context.host,
         environment: context.environment,
-        notes: 'Ronda individual EVAL-2. La orquestación estadística y los resultados finales pertenecen a EVAL-6/EVAL-7.',
+        notes: 'Ronda individual de Fabric. La orquestación estadística y los resultados finales permanecen fuera de este runner.',
     };
     if (profile.mix) document.rate.mix = profile.mix;
     if (profile.rejectionFamily) document.rejectionFamily = profile.rejectionFamily;

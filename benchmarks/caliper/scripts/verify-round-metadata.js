@@ -55,7 +55,7 @@ try {
     });
     if (result.error) throw result.error;
     if (result.status !== 0) throw new Error((result.stderr || result.stdout).trim());
-    process.stdout.write('All EVAL-2 metadata variants satisfy DES-20.\n');
+    process.stdout.write('All round metadata variants satisfy the metadata contract.\n');
 } finally {
     fs.rmSync(directory, {recursive: true, force: true});
 }

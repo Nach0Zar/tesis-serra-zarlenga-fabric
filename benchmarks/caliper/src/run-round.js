@@ -138,7 +138,7 @@ function buildBenchmarkConfig(repoRoot, profile, paths) {
     const controllerTransactionsPerSecond = profile.rate * profile.transactionsPerOperation;
     return {
         test: {
-            name: `EVAL-2 ${profile.scenario}`,
+            name: `SNT Fabric ${profile.scenario}`,
             description: 'Ronda individual conforme a docs/measurement-protocol.md',
             workers: {type: 'local', number: profile.workers},
             rounds: [{
@@ -236,12 +236,12 @@ async function main() {
         throw new Error('Caliper report omits the canonical contract version or packageID');
     }
     if (aggregated.summary.discardReason) throw new Error(aggregated.summary.discardReason);
-    process.stdout.write(`EVAL-2 round completed: ${runDirectory}\n`);
+    process.stdout.write(`Fabric round completed: ${runDirectory}\n`);
 }
 
 if (require.main === module) {
     main().catch((error) => {
-        process.stderr.write(`EVAL-2 round failed: ${error.message}\n`);
+        process.stderr.write(`Fabric round failed: ${error.message}\n`);
         process.exitCode = 1;
     });
 }

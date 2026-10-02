@@ -73,7 +73,7 @@ jobs:
         working-directory: benchmarks/caliper
         run: npm test
 
-      - name: Validate DES-20 metadata contract
+      - name: Validate run metadata contract
         working-directory: benchmarks/caliper
         run: npm run test:metadata
 

@@ -23,7 +23,7 @@ class SmokeReadUnitWorkload extends WorkloadModuleBase {
             sutContext,
         );
         if (totalWorkers !== 1 || workerIndex !== 0) {
-            throw new Error('EVAL-1 smoke requires exactly one worker');
+            throw new Error('Caliper smoke requires exactly one worker');
         }
         for (const field of ['gtin', 'serialNumber', 'runContextPath', 'metadataPath']) {
             if (typeof roundArguments[field] !== 'string' || roundArguments[field] === '') {
@@ -55,7 +55,7 @@ class SmokeReadUnitWorkload extends WorkloadModuleBase {
         const completed = this.successfulTransactions === context.expectedTransactions;
         const discardReason = completed
             ? undefined
-            : `EVAL-1 smoke completed ${this.successfulTransactions} of ${context.expectedTransactions} ReadUnit requests`;
+            : `Smoke completed ${this.successfulTransactions} of ${context.expectedTransactions} ReadUnit requests`;
         const metadata = buildMetadata(context, {
             startedAt: this.startedAt,
             endedAt,
