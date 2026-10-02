@@ -1,6 +1,10 @@
 # Benchmarks
 
-Este directorio contiene el contrato de metadatos de las corridas experimentales y, más adelante, los workloads de Hyperledger Caliper y los resultados de la comparación entre el prototipo Fabric y la baseline centralizada, conforme [`docs/measurement-protocol.md`](../docs/measurement-protocol.md).
+Este directorio contiene el contrato de metadatos de las corridas
+experimentales y los workloads de Hyperledger Caliper para Fabric. Los
+resultados finales de la comparación con la baseline se incorporarán en las
+issues de ejecución y procesamiento, conforme a
+[`docs/measurement-protocol.md`](../docs/measurement-protocol.md).
 
 Puntos fijados por el protocolo:
 
@@ -69,6 +73,7 @@ Las reglas puramente estructurales están en el schema, de modo que un workload 
 | Issue | Uso del contrato |
 |---|---|
 | EVAL-1 · Setup de Caliper (#41) | El workload de Fabric emite `metadata.json` conforme al contrato al cerrar cada ronda, tomando `contractVersion` de `docs/api-contract.md` y `packageID` de `network/chaincode-package.lock`. |
+| EVAL-2 · Workload modules de Fabric (#42) | Cada ronda individual produce crudos por operación, un resumen procesable, el reporte Caliper y metadata validada. |
 | EVAL-3 · Mediciones equivalentes sobre la baseline (#43) | El runner de la baseline emite el mismo documento con `sut: baseline`, `baselineCommit` y `baselineImage`, y con el mismo `dataset.sha256` que la corrida de Fabric con la que se compara. |
 | EVAL-6 · Corridas finales Fabric (#46) | Ninguna corrida se considera definitiva si su `metadata.json` no valida. `repetition` distingue el warm-up descartado de las cinco mediciones y de la serie extendida. |
 | EVAL-7 · Corridas finales baseline y procesamiento (#47) | El procesamiento agrupa por `scenario`, `phase` y `repetition`, y usa `rate.targetOperationsPerSecond` frente a `rate.targetTransactionsPerSecond` para no comparar pares de transferencia contra transacciones sueltas. |
@@ -77,13 +82,19 @@ Las reglas puramente estructurales están en el schema, de modo que un workload 
 
 La paridad entre ambos SUT es verificable de forma automática: dos corridas comparables deben coincidir en `scenario`, `dataset.sha256`, `workers`, `durationSeconds` y el bloque `rate` completo, y diferir únicamente en `sut` y `environment`.
 
-## Smoke local de Caliper (EVAL-1)
+## Caliper local (EVAL-1 y EVAL-2)
 
 El proyecto aislado [`caliper/`](caliper/) instala Caliper 0.7.1 con el binding
 `fabric:fabric-gateway` y ejecuta una única ronda diagnóstica de `ReadUnit`:
 1 worker, 30 consultas y tasa fija de 1 TPS. Consume una red ya desplegada y el
 bundle determinístico de 50.000 unidades; no crea canales, no instala
-chaincode y no sustituye las corridas experimentales de EVAL-2.
+chaincode y no sustituye las rondas EVAL-2.
+
+EVAL-2 reutiliza ese proyecto para las cinco operaciones core, la mezcla
+determinística y las rondas separadas de rechazo. Las salidas procesables son
+`raw.json`, `summary.json` y `metadata.json`; el HTML de Caliper es
+complementario. El runner ejecuta una sola ronda y no adelanta la orquestación
+de repeticiones ni el análisis estadístico final de EVAL-6/EVAL-7.
 
 La configuración efectiva, el reporte HTML, el contexto y `metadata.json` se
 guardan bajo `build/benchmarks/caliper/`, que está ignorado por Git. Los

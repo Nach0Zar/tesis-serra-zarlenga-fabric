@@ -1,4 +1,4 @@
-# Smoke de Hyperledger Caliper (EVAL-1)
+# Workloads de Hyperledger Caliper (EVAL-1 y EVAL-2)
 
 Este módulo fija Hyperledger Caliper `0.7.1` y el binding
 `fabric:fabric-gateway`. El binding usa Fabric Gateway y es compatible con la
@@ -14,8 +14,10 @@ La ronda de EVAL-1 es deliberadamente mínima y diagnóstica:
 - una unidad tomada del primer `RegisterUnit` de `LabMSP` del dataset
   compartido, registrada fuera de la ronda sólo si aún no existe.
 
-Los cinco workloads core, la carga completa del dataset, las repeticiones y el
-procesamiento estadístico permanecen fuera de este setup.
+EVAL-2 agrega una ronda individual por operación core, la carga mixta y los
+rechazos esperados. La carga completa del snapshot, la serie de repeticiones y
+el procesamiento comparativo continúan fuera de este módulo y pertenecen a
+EVAL-6/EVAL-7.
 
 ## Requisitos
 
@@ -82,3 +84,84 @@ Para elegir un identificador explícito y repetible del directorio de salida se
 puede definir `SNT_CALIPER_RUN_TOKEN` con letras, números, punto, guion o guion
 bajo. Para usar otro bundle generado, se puede definir
 `SNT_CALIPER_DATASET_DIR` con su ruta absoluta o relativa a la raíz.
+
+## Rondas EVAL-2
+
+El runner `npm run round` consume exclusivamente recetas del bundle CLI-3/CLI-5
+con seed `20260727`. Prepara fuera de la ventana medida sólo los prefijos de
+receta requeridos por la ronda: conserva el orden dentro de cada receta y
+procesa con concurrencia acotada unidades disjuntas. Nunca crea el canal, instala chaincode
+ni reinicia la red. Cada ronda debe comenzar sobre el estado limpio que
+corresponda al protocolo; encontrar una unidad objetivo ya mutada se considera
+contaminación experimental y la operación falla.
+
+La interfaz es:
+
+```text
+npm run round -- \
+  --scenario <write-register|write-transfer|write-dispense|read-unit|read-history|mixed|expected-rejections> \
+  --phase <warmup|measurement> \
+  --repetition <0..8> \
+  --rate <tasa DES-7> \
+  [--family <UNAUTHORIZED_TRANSFER|DUPLICATE_IDENTITY|BLOCKING_STATE>] \
+  [--operation <transfer|dispense>] \
+  [--dataset-dir <ruta>] \
+  [--run-token <identificador>]
+```
+
+`warmup` exige repetición `0`; `measurement`, una repetición entre `1` y `8`.
+Las tasas admitidas son las únicas fijadas por DES-7:
+
+| Escenario | Workers | Operaciones/s | Duración |
+|---|---:|---:|---:|
+| `write-register`, `write-transfer`, `write-dispense` | 2 | 5, 10 o 20 | 120 s |
+| `read-unit`, `read-history` | 4 | 10, 25 o 50 | 120 s |
+| `mixed` | 2 | 20 | 120 s |
+| `expected-rejections` | 2 | 5 | 60 s |
+
+La transferencia se agenda en pares/s: cada operación conceptual ejecuta
+`DispatchTransfer` y luego `ReceiveTransfer`, registra ambas transacciones y la
+latencia end-to-end. El controlador Caliper se configura con la tasa de
+transacciones equivalente (dos por par; 1,55 por operación mixta) para conservar
+la tasa conceptual DES-7. Antes de recibir, una barrera de lectura espera que
+todos los peers que deben endosar observen el despacho confirmado; no reenvía la
+transacción y su tiempo forma parte de la latencia end-to-end. Sólo se reintenta
+una recepción cuyo error contractual sea
+`INTERNAL_ERROR` con `reintentable: true` y causa
+`PRIVATE_DATA_NOT_DISSEMINATED`; cada intento queda contabilizado. En la carga
+mixta, el ciclo determinístico contiene 2 registros, 11 transferencias, 2
+dispensaciones y 5 `ReadUnit` por cada 20 operaciones.
+
+Los rechazos usan las familias y códigos esperados del dataset. Se ejecutan en
+rondas separadas: `UNAUTHORIZED_TRANSFER`, `DUPLICATE_IDENTITY` y
+`BLOCKING_STATE`; esta última admite una ronda `transfer` y otra `dispense`.
+Un rechazo con otro código, o un éxito inesperado, descarta la ronda.
+
+Ejemplos:
+
+```bash
+npm run round -- --scenario write-transfer --phase warmup --repetition 0 --rate 5
+npm run round -- --scenario mixed --phase measurement --repetition 1 --rate 20
+npm run round -- --scenario expected-rejections --phase measurement --repetition 1 \
+  --rate 5 --family BLOCKING_STATE --operation dispense
+```
+
+Además de `network-config.json`, `benchmark-config.json`, `report.html` y
+`metadata.json`, EVAL-2 conserva:
+
+| Archivo | Contenido |
+|---|---|
+| `work-plan.json` | Secuencia determinística, particionada por worker, y preparaciones fuera de medición. |
+| `raw.json` | Una entrada por operación conceptual, con las transacciones, timestamps, latencias, reintentos y códigos de rechazo. |
+| `summary.json` | Conteos, tasas y latencias por función en JSON procesable. |
+| `raw-worker-*.jsonl` | Partes append-only producidas por cada proceso worker. |
+
+Los percentiles del resumen usan nearest-rank sobre las observaciones de la
+ronda. El HTML de Caliper es complementario: `raw.json`, `summary.json` y
+`metadata.json` son la evidencia procesable. El runner conserva los crudos,
+marca `discarded.reason` y termina con error si la ronda es incompleta o
+inconsistente. Los crudos y resúmenes no contienen transient data ni material
+PEM; las configuraciones efectivas sólo referencian rutas locales.
+`work-plan.json` sí contiene las recetas transient sintéticas provenientes del
+dataset para que los workers puedan ejecutarlas, por lo que permanece bajo el
+directorio `build/` ignorado por Git y no debe publicarse como resultado.
