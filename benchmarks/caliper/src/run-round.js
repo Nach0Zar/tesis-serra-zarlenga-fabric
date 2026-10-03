@@ -210,7 +210,10 @@ async function main() {
         writeJSONAtomic(path.join(runDirectory, 'summary.json'), aggregated.summary);
     }
     const metadata = buildRoundMetadata({
-        profile, repositoryCommit, startedAt, endedAt,
+        profile,
+        repositoryCommit,
+        startedAt: aggregated.summary.startedAt ?? startedAt,
+        endedAt: aggregated.summary.endedAt ?? endedAt,
         dataset: {
             seed: bundle.manifest.seed,
             sha256: bundle.manifest.dataset.sha256,
