@@ -14,6 +14,12 @@ on:
       - "benchmarks/caliper/**"
       - "benchmarks/schema/**"
       - "benchmarks/README.md"
+      - "client/cmd/runmeta/**"
+      - "client/internal/runmeta/**"
+      - "client/go.mod"
+      - "client/go.sum"
+      - "domain/go.mod"
+      - "domain/go.sum"
       - "docs/api-contract.md"
       - "network/chaincode-package.lock"
       - "network/compose.yaml"
@@ -47,6 +53,14 @@ jobs:
       - name: Set up pinned npm
         run: npm install --global npm@11.6.2
 
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: client/go.mod
+          cache-dependency-path: |
+            client/go.sum
+            domain/go.sum
+
       - name: Install locked dependencies
         working-directory: benchmarks/caliper
         run: npm ci
@@ -58,6 +72,10 @@ jobs:
       - name: Test
         working-directory: benchmarks/caliper
         run: npm test
+
+      - name: Validate run metadata contract
+        working-directory: benchmarks/caliper
+        run: npm run test:metadata
 
       - name: Verify Caliper version
         working-directory: benchmarks/caliper

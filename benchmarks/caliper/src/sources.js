@@ -6,6 +6,9 @@ const path = require('node:path');
 
 const EXPECTED_DATASET_SEED = 20260727;
 const MINIMUM_DATASET_UNITS = 50000;
+const DATASET_SCHEMA_ID = 'urn:pfi-snt:synthetic-dataset:schema:2.0.0';
+const MANIFEST_SCHEMA_ID = 'urn:pfi-snt:synthetic-dataset-manifest:schema:2.0.0';
+const DATASET_VERSION = '2.0.0';
 
 function readJSON(filePath) {
     let document;
@@ -67,6 +70,14 @@ function loadDatasetBundle(datasetDirectory) {
     const manifest = readJSON(manifestPath);
     const dataset = readJSON(datasetPath);
 
+    if (manifest.$schema !== MANIFEST_SCHEMA_ID || manifest.schemaVersion !== DATASET_VERSION
+        || dataset.$schema !== DATASET_SCHEMA_ID || dataset.schemaVersion !== DATASET_VERSION) {
+        throw new Error(`dataset and manifest must use schema version ${DATASET_VERSION}`);
+    }
+    if (manifest.generator?.name !== 'cli-3-dataset-generator'
+        || manifest.generator?.version !== DATASET_VERSION) {
+        throw new Error(`dataset must be produced by cli-3-dataset-generator ${DATASET_VERSION}`);
+    }
     if (manifest.seed !== EXPECTED_DATASET_SEED) {
         throw new Error(`dataset seed must be ${EXPECTED_DATASET_SEED}`);
     }
@@ -106,6 +117,9 @@ function readSourceTruth(repoRoot) {
 
 module.exports = {
     EXPECTED_DATASET_SEED,
+    DATASET_SCHEMA_ID,
+    DATASET_VERSION,
+    MANIFEST_SCHEMA_ID,
     MINIMUM_DATASET_UNITS,
     loadDatasetBundle,
     parseChaincodeLock,

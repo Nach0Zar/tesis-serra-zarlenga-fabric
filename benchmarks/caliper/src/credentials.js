@@ -22,37 +22,47 @@ function requireRegularFile(filePath) {
     return filePath;
 }
 
-function resolveLabCredentials(repoRoot) {
+function resolveOrganizationCredentials(repoRoot, requestedMspIds) {
     const manifest = readJSON(path.join(repoRoot, 'network', 'organizations-manifest.json'));
-    const organization = manifest.organizations?.find((entry) => entry.mspId === 'LabMSP');
-    if (!organization || organization.slug !== 'lab' || !organization.active || !organization.peerHostname) {
-        throw new Error('active LabMSP entry is missing or incomplete in organizations-manifest.json');
+    if (!Array.isArray(manifest.organizations)) {
+        throw new Error('organizations-manifest.json must contain an organizations array');
     }
+    const requested = requestedMspIds === undefined
+        ? manifest.organizations.filter((entry) => entry.active).map((entry) => entry.mspId)
+        : [...new Set(requestedMspIds)];
 
-    const organizationRoot = path.join(repoRoot, 'network', 'organizations', organization.slug);
-    const userMSP = path.join(
-        organizationRoot,
-        'users',
-        `User1@${organization.slug}.snt.local`,
-        'msp',
-    );
-    const certificatePath = onlyRegularFile(path.join(userMSP, 'signcerts'));
-    const privateKeyPath = onlyRegularFile(path.join(userMSP, 'keystore'));
-    const tlsCACertPath = requireRegularFile(path.join(
-        organizationRoot,
-        'peers',
-        organization.peerHostname,
-        'tls',
-        'ca.crt',
-    ));
+    return requested.map((mspId) => {
+        const organization = manifest.organizations.find((entry) => entry.mspId === mspId);
+        if (!organization || !organization.slug || !organization.active || !organization.peerHostname) {
+            throw new Error(`active ${mspId} entry is missing or incomplete in organizations-manifest.json`);
+        }
+        const organizationRoot = path.join(repoRoot, 'network', 'organizations', organization.slug);
+        const userMSP = path.join(
+            organizationRoot,
+            'users',
+            `User1@${organization.slug}.snt.local`,
+            'msp',
+        );
 
-    return {
-        mspId: organization.mspId,
-        peerHostname: organization.peerHostname,
-        certificatePath,
-        privateKeyPath,
-        tlsCACertPath,
-    };
+        return {
+            mspId: organization.mspId,
+            slug: organization.slug,
+            peerHostname: organization.peerHostname,
+            certificatePath: onlyRegularFile(path.join(userMSP, 'signcerts')),
+            privateKeyPath: onlyRegularFile(path.join(userMSP, 'keystore')),
+            tlsCACertPath: requireRegularFile(path.join(
+                organizationRoot,
+                'peers',
+                organization.peerHostname,
+                'tls',
+                'ca.crt',
+            )),
+        };
+    });
 }
 
-module.exports = {onlyRegularFile, resolveLabCredentials};
+function resolveLabCredentials(repoRoot) {
+    return resolveOrganizationCredentials(repoRoot, ['LabMSP'])[0];
+}
+
+module.exports = {onlyRegularFile, resolveLabCredentials, resolveOrganizationCredentials};

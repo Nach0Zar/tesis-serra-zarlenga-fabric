@@ -7,10 +7,15 @@ const path = require('node:path');
 const test = require('node:test');
 
 const {selectLabRegistration} = require('../src/dataset');
-const {onlyRegularFile, resolveLabCredentials} = require('../src/credentials');
-const {buildNetworkConfig, normalizePublishedEndpoint, resolveComposeVersions} = require('../src/network-config');
+const {onlyRegularFile, resolveLabCredentials, resolveOrganizationCredentials} = require('../src/credentials');
+const {
+    buildMultiOrganizationNetworkConfig,
+    buildNetworkConfig,
+    normalizePublishedEndpoint,
+    resolveComposeVersions,
+} = require('../src/network-config');
 const {buildMetadata} = require('../src/metadata');
-const {parseChaincodeLock, parseContractVersion, readSourceTruth} = require('../src/sources');
+const {loadDatasetBundle, parseChaincodeLock, parseContractVersion, readSourceTruth} = require('../src/sources');
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
@@ -26,6 +31,15 @@ test('canonical contract and package sources are parsed', () => {
 test('source parsers reject ambiguous or inconsistent content', () => {
     assert.throws(() => parseContractVersion('- **Versión del contrato**: `2.11.2`\n- **Versión del contrato**: `2.11.3`'));
     assert.throws(() => parseChaincodeLock('label=snt_1.0\nversion=1.0\npackage_id=snt_1.0:bad\nsha256=bad\n'));
+});
+
+test('dataset bundle preflight rejects unversioned CLI-3 artifacts', (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-dataset-version-'));
+    t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+    fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify({seed: 20260727}));
+    fs.writeFileSync(path.join(directory, 'dataset.json'), JSON.stringify({units: []}));
+    fs.writeFileSync(path.join(directory, 'dataset.sha256'), `${'0'.repeat(64)}\n`);
+    assert.throws(() => loadDatasetBundle(directory), /schema version 2\.0\.0/u);
 });
 
 test('LabMSP registration is selected from preparation recipes only', () => {
@@ -97,6 +111,42 @@ test('effective network config targets the own peer, channel and chaincode', () 
     assert.doesNotMatch(JSON.stringify(config), /BEGIN (?:PRIVATE KEY|CERTIFICATE)/u);
 });
 
+test('multi-organization credentials and config keep only generated file paths', (t) => {
+    const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-caliper-multi-'));
+    t.after(() => fs.rmSync(temporaryRoot, {recursive: true, force: true}));
+    const organizations = [
+        {mspId: 'LabMSP', slug: 'lab', peerHostname: 'peer0.lab.snt.local'},
+        {mspId: 'FarmaciaMSP', slug: 'farmacia', peerHostname: 'peer0.farmacia.snt.local'},
+    ];
+    for (const organization of organizations) {
+        const root = path.join(temporaryRoot, 'network', 'organizations', organization.slug);
+        const msp = path.join(root, 'users', `User1@${organization.slug}.snt.local`, 'msp');
+        fs.mkdirSync(path.join(msp, 'signcerts'), {recursive: true});
+        fs.mkdirSync(path.join(msp, 'keystore'), {recursive: true});
+        fs.mkdirSync(path.join(root, 'peers', organization.peerHostname, 'tls'), {recursive: true});
+        fs.writeFileSync(path.join(msp, 'signcerts', 'cert.pem'), 'CERTIFICATE-CONTENT');
+        fs.writeFileSync(path.join(msp, 'keystore', 'key.pem'), 'PRIVATE-KEY-CONTENT');
+        fs.writeFileSync(path.join(root, 'peers', organization.peerHostname, 'tls', 'ca.crt'), 'CA-CONTENT');
+    }
+    fs.writeFileSync(path.join(temporaryRoot, 'network', 'organizations-manifest.json'), JSON.stringify({
+        organizations: organizations.map((organization) => ({...organization, active: true})),
+    }));
+    const credentials = resolveOrganizationCredentials(temporaryRoot, ['LabMSP', 'FarmaciaMSP']);
+    const sourceTruth = readSourceTruth(repoRoot);
+    const config = buildMultiOrganizationNetworkConfig({
+        organizations: credentials,
+        endpoints: {LabMSP: 'localhost:8051', FarmaciaMSP: 'localhost:11051'},
+        sourceTruth,
+        versions: {fabric: '2.5.16', fabricCA: '1.5.15'},
+        caliperVersion: '0.7.1',
+    });
+    assert.deepEqual(config.organizations.map((entry) => entry.mspid), ['LabMSP', 'FarmaciaMSP']);
+    assert.deepEqual(config.organizations.map((entry) => entry.identities.certificates[0].name), [
+        'lab-user1', 'farmacia-user1',
+    ]);
+    assert.doesNotMatch(JSON.stringify(config), /PRIVATE-KEY-CONTENT|CERTIFICATE-CONTENT/u);
+});
+
 test('Docker Compose port and image versions are normalized', () => {
     assert.equal(normalizePublishedEndpoint('0.0.0.0:8051\n'), 'localhost:8051');
     assert.equal(normalizePublishedEndpoint('127.0.0.1:8051'), 'localhost:8051');
@@ -107,7 +157,7 @@ test('Docker Compose port and image versions are normalized', () => {
     }}), {fabric: '2.5.16', fabricCA: '1.5.17'});
 });
 
-test('metadata builder emits the DES-20 smoke shape and canonical identifiers', () => {
+test('metadata builder emits the smoke shape and canonical identifiers', () => {
     const sourceTruth = readSourceTruth(repoRoot);
     const context = {
         repositoryCommit: 'a'.repeat(40),
