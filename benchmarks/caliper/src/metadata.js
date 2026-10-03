@@ -42,6 +42,10 @@ function buildMetadata(context, observations) {
 
 function buildRoundMetadata(context, summary) {
     const profile = context.profile;
+    const elapsedSeconds = Math.max(
+        (new Date(context.endedAt).getTime() - new Date(context.startedAt).getTime()) / 1000,
+        Number.EPSILON,
+    );
     const document = {
         $schema: 'urn:pfi-snt:run-metadata:schema:1.0.0',
         schemaVersion: '1.0.0',
@@ -59,7 +63,8 @@ function buildRoundMetadata(context, summary) {
             transactionsPerOperation: profile.transactionsPerOperation,
             targetOperationsPerSecond: profile.rate,
             targetTransactionsPerSecond: profile.rate * profile.transactionsPerOperation,
-            effectiveTransactionsPerSecond: summary.transactionCount / profile.durationSeconds,
+            effectiveTransactionsPerSecond: summary.rate?.effectiveTransactionsPerSecond
+                ?? summary.transactionCount / elapsedSeconds,
             rateController: 'fixed-rate',
         },
         startedAt: context.startedAt,
