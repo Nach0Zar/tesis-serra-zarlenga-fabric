@@ -20,11 +20,12 @@ function weightedTransactionsPerOperation(mix) {
     const entries = Object.entries(mix ?? {});
     const total = entries.reduce((sum, [, percentage]) => sum + percentage, 0);
     if (total !== 100) throw new Error('profile mix percentages must sum to 100');
-    return entries.reduce((sum, [operation, percentage]) => {
+    const weightedTransactions = entries.reduce((sum, [operation, percentage]) => {
         const factor = TRANSACTIONS_PER_OPERATION[operation];
         if (factor === undefined) throw new Error(`unsupported mixed operation ${operation}`);
-        return sum + percentage * factor / 100;
+        return sum + percentage * factor;
     }, 0);
+    return weightedTransactions / 100;
 }
 
 function buildProfile(options) {
