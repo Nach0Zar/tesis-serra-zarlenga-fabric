@@ -119,16 +119,21 @@ Las tasas admitidas son las fijadas por el protocolo de medición:
 | `expected-rejections` | 2 | 5 | 60 s |
 
 La transferencia se agenda en pares/s: cada operación conceptual ejecuta
-`DispatchTransfer` y luego `ReceiveTransfer`, registra ambas transacciones y la
-latencia end-to-end. El controlador Caliper se configura con la tasa de
-transacciones equivalente (dos por par; 1,55 por operación mixta) para conservar
-la tasa conceptual del protocolo. Antes de recibir, una barrera de lectura espera que
-todos los peers que deben endosar observen el despacho confirmado; no reenvía la
-transacción y su tiempo forma parte de la latencia end-to-end. Sólo se reintenta
-una recepción cuyo error contractual sea
-`INTERNAL_ERROR` con `reintentable: true` y causa
-`PRIVATE_DATA_NOT_DISSEMINATED`; cada intento queda contabilizado. En la carga
-mixta, el ciclo determinístico contiene 2 registros, 11 transferencias, 2
+`DispatchTransfer` y, apenas se confirma su commit, envía `ReceiveTransfer` sin
+sondeo ni espera de sincronización previa. Registra ambas transacciones, cada
+intento fallido y la latencia end-to-end completa. El controlador Caliper se
+configura con la tasa de transacciones equivalente (dos por par; el factor de la
+mezcla se deriva de sus porcentajes) para conservar la tasa conceptual del
+protocolo.
+
+La recepción correlacionada se reintenta cuando el peer receptor aún no ve los
+datos privados (`INTERNAL_ERROR` reintentable con causa
+`PRIVATE_DATA_NOT_DISSEMINATED`) o todavía observa el estado público anterior
+(`NOT_IN_TRANSIT`). Este último código sólo es transitorio dentro del par,
+inmediatamente después de un despacho confirmado; fuera de esa ruta conserva su
+semántica contractual final. La preparación, que está fuera de la ventana
+medida, sí puede esperar a que los peers observen el estado requerido. En la
+carga mixta, el ciclo determinístico contiene 2 registros, 11 transferencias, 2
 dispensaciones y 5 `ReadUnit` por cada 20 operaciones.
 
 Los rechazos usan las familias y códigos esperados del dataset. Se ejecutan en
@@ -156,10 +161,15 @@ Además de `network-config.json`, `benchmark-config.json`, `report.html` y
 | `raw-worker-*.jsonl` | Partes append-only producidas por cada proceso worker. |
 
 Los percentiles del resumen usan nearest-rank sobre las observaciones de la
-ronda. El HTML de Caliper es complementario: `raw.json`, `summary.json` y
-`metadata.json` son la evidencia procesable. El runner conserva los crudos,
-marca `discarded.reason` y termina con error si la ronda es incompleta o
-inconsistente. Los crudos y resúmenes no contienen transient data ni material
+ronda. Las tasas efectivas dividen los conteos por la ventana observada entre la
+primera operación iniciada y la última finalizada, sin usar una duración nominal
+menor; `summary.json` expone además los pares transferidos, los pares que
+requirieron reintento y su proporción. Producir menos operaciones que el objetivo
+es un resultado de throughput, no por sí solo una causa de descarte. El HTML de
+Caliper es complementario: `raw.json`, `summary.json` y `metadata.json` son
+la evidencia procesable. El runner conserva los crudos, marca
+`discarded.reason` y termina con error ante fallos operativos, resultados
+inesperados o pares incompletos. Los crudos y resúmenes no contienen transient data ni material
 PEM; las configuraciones efectivas sólo referencian rutas locales.
 `work-plan.json` sí contiene las recetas transient sintéticas provenientes del
 dataset para que los workers puedan ejecutarlas, por lo que permanece bajo el
