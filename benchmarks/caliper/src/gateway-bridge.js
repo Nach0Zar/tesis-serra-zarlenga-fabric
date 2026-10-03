@@ -123,7 +123,17 @@ function errorTransactionId(error) {
     return error?.transactionId ?? error?.transactionID ?? error?.transactionIdString ?? '';
 }
 
-async function measuredGatewayInvocation({gatewayPool, sutAdapter, invocation, retryPrivateData = false}) {
+function isRetryableReceiveVisibility(envelope) {
+    return isPrivateDataNotDisseminated(envelope) || envelope?.code === 'NOT_IN_TRANSIT';
+}
+
+async function measuredGatewayInvocation({
+    gatewayPool,
+    sutAdapter,
+    invocation,
+    retryTransientReceive = false,
+    retryDelayMs = 500,
+}) {
     const attempts = [];
     for (let attempt = 1; attempt <= 60; attempt += 1) {
         const status = new TxStatus();
@@ -147,12 +157,15 @@ async function measuredGatewayInvocation({gatewayPool, sutAdapter, invocation, r
             sutAdapter.emit(FINISHED_EVENT, status);
         }
         attempts.push({status, envelope});
-        if (status.GetStatus() === 'success' || !retryPrivateData || !isPrivateDataNotDisseminated(envelope)) {
+        const shouldRetry = retryTransientReceive
+            && invocation.operation === 'ReceiveTransfer'
+            && isRetryableReceiveVisibility(envelope);
+        if (status.GetStatus() === 'success' || !shouldRetry) {
             return {attempts, status, envelope, retryCount: attempts.length - 1};
         }
-        await timers.setTimeout(500);
+        await timers.setTimeout(retryDelayMs);
     }
-    throw new Error('ReceiveTransfer exceeded 60 private-data dissemination attempts');
+    throw new Error('ReceiveTransfer exceeded 60 transient visibility attempts');
 }
 
 async function invokePreparation(gatewayPool, invocation) {
@@ -171,4 +184,10 @@ async function invokePreparation(gatewayPool, invocation) {
     throw new Error('preparation ReceiveTransfer exceeded 60 private-data dissemination attempts');
 }
 
-module.exports = {GatewayPool, invokePreparation, measuredGatewayInvocation, networkOrganizations};
+module.exports = {
+    GatewayPool,
+    invokePreparation,
+    isRetryableReceiveVisibility,
+    measuredGatewayInvocation,
+    networkOrganizations,
+};
