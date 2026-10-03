@@ -14,6 +14,18 @@ const PROFILES = Object.freeze({
 });
 
 const REJECTION_FAMILIES = new Set(['UNAUTHORIZED_TRANSFER', 'DUPLICATE_IDENTITY', 'BLOCKING_STATE']);
+const TRANSACTIONS_PER_OPERATION = Object.freeze({register: 1, transfer: 2, dispense: 1, query: 1});
+
+function weightedTransactionsPerOperation(mix) {
+    const entries = Object.entries(mix ?? {});
+    const total = entries.reduce((sum, [, percentage]) => sum + percentage, 0);
+    if (total !== 100) throw new Error('profile mix percentages must sum to 100');
+    return entries.reduce((sum, [operation, percentage]) => {
+        const factor = TRANSACTIONS_PER_OPERATION[operation];
+        if (factor === undefined) throw new Error(`unsupported mixed operation ${operation}`);
+        return sum + percentage * factor / 100;
+    }, 0);
+}
 
 function buildProfile(options) {
     const base = PROFILES[options.scenario];
@@ -54,7 +66,8 @@ function buildProfile(options) {
         throw new Error('--family and --operation only apply to expected-rejections');
     }
 
-    const transactionsPerOperation = operation === 'transfer' ? 2 : operation === 'mixed' ? 1.55 : 1;
+    const transactionsPerOperation = operation === 'transfer' ? 2
+        : operation === 'mixed' ? weightedTransactionsPerOperation(base.mix) : 1;
     return Object.freeze({
         ...base,
         scenario: options.scenario,
@@ -67,4 +80,4 @@ function buildProfile(options) {
     });
 }
 
-module.exports = {PROFILES, REJECTION_FAMILIES, buildProfile};
+module.exports = {PROFILES, REJECTION_FAMILIES, buildProfile, weightedTransactionsPerOperation};
