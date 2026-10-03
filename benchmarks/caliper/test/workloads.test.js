@@ -9,10 +9,10 @@ const test = require('node:test');
 const {TxStatus} = require('@hyperledger/caliper-core');
 
 const {extractContractError, isPrivateDataNotDisseminated} = require('../src/contract-errors');
-const {invokePreparation} = require('../src/gateway-bridge');
+const {invokePreparation, measuredGatewayInvocation} = require('../src/gateway-bridge');
 const {buildRoundMetadata} = require('../src/metadata');
 const {MIX_PATTERN, buildPlan, candidatePools} = require('../src/planner');
-const {buildProfile} = require('../src/profiles');
+const {buildProfile, weightedTransactionsPerOperation} = require('../src/profiles');
 const {aggregateResults, appendOperation} = require('../src/raw-results');
 const {buildCaliperRequest} = require('../src/requests');
 const {buildBenchmarkConfig, preparePlan} = require('../src/run-round');
@@ -71,6 +71,11 @@ test('measurement profiles accept only their exact rates and phase/repetition pa
     });
     assert.equal(blocking.operation, 'dispense');
     assert.equal(blocking.transactionsPerOperation, 1);
+    assert.equal(weightedTransactionsPerOperation({register: 10, transfer: 55, dispense: 10, query: 25}), 1.55);
+    assert.throws(
+        () => weightedTransactionsPerOperation({register: 10, transfer: 50, dispense: 10, query: 25}),
+        /must sum to 100/u,
+    );
 });
 
 test('Caliper controller converts conceptual rates to transaction rates', () => {
@@ -262,10 +267,53 @@ test('contract error extraction recognizes expected errors and the exact private
     assert.equal(isPrivateDataNotDisseminated({code: 'INTERNAL_ERROR', details: {reintentable: true}}), false);
 });
 
+test('measured receive retries stale receiver state only in the correlated transfer path', async () => {
+    let invocations = 0;
+    const gatewayPool = {
+        invoke: async () => {
+            invocations += 1;
+            if (invocations === 1) {
+                throw new Error('endorsement failed: {"code":"NOT_IN_TRANSIT","message":"receiver is stale"}');
+            }
+            return {transactionId: 'tx-receive', result: Buffer.alloc(0)};
+        },
+    };
+    const sutAdapter = {emit: () => {}};
+    const receive = await measuredGatewayInvocation({
+        gatewayPool,
+        sutAdapter,
+        invocation: invocation('ReceiveTransfer', 'DrogueriaMSP', 1),
+        retryTransientReceive: true,
+        retryDelayMs: 0,
+    });
+    assert.equal(receive.status.GetStatus(), 'success');
+    assert.equal(receive.retryCount, 1);
+    assert.equal(receive.attempts[0].envelope.code, 'NOT_IN_TRANSIT');
+
+    invocations = 0;
+    const uncorrelated = await measuredGatewayInvocation({
+        gatewayPool,
+        sutAdapter,
+        invocation: invocation('ReceiveTransfer', 'DrogueriaMSP', 1),
+        retryDelayMs: 0,
+    });
+    assert.equal(uncorrelated.status.GetStatus(), 'failed');
+    assert.equal(invocations, 1);
+});
+
 test('core operations record transfer pairs, retries and expected rejection codes', async () => {
-    const sutAdapter = {sendRequests: async () => status('success')};
-    const synchronizedStates = [];
-    const gatewayPool = {waitForUnitState: async (...arguments_) => synchronizedStates.push(arguments_)};
+    const calls = [];
+    const sutAdapter = {
+        sendRequests: async (request) => {
+            calls.push(request.contractFunction);
+            return status('success');
+        },
+    };
+    const gatewayPool = {
+        waitForUnitState: async () => {
+            throw new Error('measured transfer must not wait for peer synchronization');
+        },
+    };
     const transfer = {
         workerIndex: 0, ordinal: 0, datasetSequence: 1, type: 'transfer',
         invocations: [
@@ -277,20 +325,24 @@ test('core operations record transfer pairs, retries and expected rejection code
         operation: transfer,
         sutAdapter,
         gatewayPool,
-        measuredInvocation: async () => ({
-            status: status('success', 1020, 1030), envelope: undefined, retryCount: 1,
-            attempts: [
-                {status: status('failed', 1010), envelope: {code: 'INTERNAL_ERROR'}},
-                {status: status('success', 1020, 1030), envelope: undefined},
-            ],
-        }),
+        measuredInvocation: async (options) => {
+            calls.push(options.invocation.operation);
+            assert.equal(options.retryTransientReceive, true);
+            return {
+                status: status('success', 1020, 1030), envelope: undefined, retryCount: 1,
+                attempts: [
+                    {status: status('failed', 1010), envelope: {code: 'INTERNAL_ERROR'}},
+                    {status: status('success', 1020, 1030), envelope: undefined},
+                ],
+            };
+        },
     });
     assert.equal(transferRecord.outcome, 'success');
     assert.deepEqual(transferRecord.transactions.map((entry) => entry.function), [
         'DispatchTransfer', 'ReceiveTransfer', 'ReceiveTransfer',
     ]);
     assert.equal(transferRecord.transactions[2].retry, true);
-    assert.deepEqual(synchronizedStates, [[['LabMSP', 'DrogueriaMSP'], transfer.invocations[1].request, 'EN_TRANSITO']]);
+    assert.deepEqual(calls, ['DispatchTransfer', 'ReceiveTransfer']);
 
     const rejection = {
         workerIndex: 0, ordinal: 0, datasetSequence: 2, type: 'register',
@@ -321,10 +373,14 @@ test('processable results aggregate operations and build valid metadata fields',
         ...buildProfile({scenario: 'write-register', phase: 'measurement', repetition: '1', rate: '5'}),
         durationSeconds: 0.2,
     };
-    const {summary} = aggregateResults(directory, profile);
+    const {summary} = aggregateResults(directory, profile, {
+        startedAt: '2026-10-02T00:00:00.000Z',
+        endedAt: '2026-10-02T00:00:00.400Z',
+    });
     assert.equal(summary.transactionCount, 1);
     assert.equal(summary.operationLatency.p95Ms, 10);
-    assert.equal(summary.rate.effectiveOperationsPerSecond, 5);
+    assert.equal(summary.observedDurationSeconds, 0.4);
+    assert.equal(summary.rate.effectiveOperationsPerSecond, 2.5);
     assert.equal(summary.discardReason, undefined);
     const metadata = buildRoundMetadata({
         profile,
@@ -338,10 +394,11 @@ test('processable results aggregate operations and build valid metadata fields',
         },
     }, summary);
     assert.equal(metadata.rate.targetTransactionsPerSecond, 5);
+    assert.equal(metadata.rate.effectiveTransactionsPerSecond, 2.5);
     assert.equal(metadata.environment.contractVersion, '2.11.2');
 });
 
-test('processable results discard missing operations and count rejection codes', (t) => {
+test('below-target throughput is preserved and rejection codes remain processable', (t) => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-caliper-incomplete-'));
     t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
     appendOperation(path.join(directory, 'raw-worker-0.jsonl'), {
@@ -355,6 +412,39 @@ test('processable results discard missing operations and count rejection codes',
         family: 'DUPLICATE_IDENTITY',
     });
     const {summary} = aggregateResults(directory, profile);
-    assert.match(summary.discardReason, /1 de al menos 300 operaciones/u);
+    assert.equal(summary.discardReason, undefined);
     assert.deepEqual(summary.observedErrorCodes, {UNIT_ALREADY_EXISTS: 1});
+});
+
+test('processable results count transfer pairs and pair-level retries', (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-caliper-transfer-results-'));
+    t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+    appendOperation(path.join(directory, 'raw-worker-0.jsonl'), {
+        workerIndex: 0,
+        ordinal: 0,
+        datasetSequence: 1,
+        type: 'transfer',
+        outcome: 'success',
+        startedAt: '2026-10-02T00:00:00.000Z',
+        endedAt: '2026-10-02T00:00:00.400Z',
+        latencyMs: 400,
+        transactions: [
+            {function: 'DispatchTransfer', latencyMs: 10, status: 'success', retry: false},
+            {function: 'ReceiveTransfer', latencyMs: 10, status: 'failed', retry: false, errorCode: 'NOT_IN_TRANSIT'},
+            {function: 'ReceiveTransfer', latencyMs: 10, status: 'success', retry: true},
+        ],
+    });
+    const profile = {
+        ...buildProfile({scenario: 'write-transfer', phase: 'measurement', repetition: '1', rate: '5'}),
+        durationSeconds: 0.2,
+    };
+    const {summary} = aggregateResults(directory, profile);
+    assert.equal(summary.transferPairs, 1);
+    assert.equal(summary.retriedTransferPairs, 1);
+    assert.equal(summary.retriedTransferPairRate, 1);
+    assert.equal(summary.retryAttempts, 1);
+    assert.equal(summary.observedDurationSeconds, 0.4);
+    assert.equal(summary.rate.effectiveOperationsPerSecond, 2.5);
+    assert.equal(summary.rate.effectiveTransactionsPerSecond, 7.5);
+    assert.equal(summary.discardReason, undefined);
 });
