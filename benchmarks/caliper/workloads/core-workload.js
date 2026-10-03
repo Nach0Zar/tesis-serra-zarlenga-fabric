@@ -55,16 +55,11 @@ async function executeOperation({
         if (dispatch.status.GetStatus() !== 'success') {
             outcome = 'unexpected-failure';
         } else {
-            await gatewayPool.waitForUnitState(
-                operation.invocations[1].targetMspIds,
-                operation.invocations[1].request,
-                'EN_TRANSITO',
-            );
             const receive = await measuredInvocation({
                 gatewayPool,
                 sutAdapter,
                 invocation: operation.invocations[1],
-                retryPrivateData: true,
+                retryTransientReceive: true,
             });
             receive.attempts.forEach((attempt, index) => transactions.push(transactionRecord(
                 attempt.status,
