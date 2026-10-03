@@ -31,6 +31,17 @@ function statistics(values) {
     };
 }
 
+function durationSeconds(operations, configuredDurationSeconds, observedWindow = {}) {
+    const startedAt = observedWindow.startedAt
+        ?? operations.map((operation) => operation.startedAt).sort().at(0);
+    const endedAt = observedWindow.endedAt
+        ?? operations.map((operation) => operation.endedAt).sort().at(-1);
+    const elapsedSeconds = startedAt && endedAt
+        ? Math.max(0, Date.parse(endedAt) - Date.parse(startedAt)) / 1000
+        : 0;
+    return {startedAt, endedAt, seconds: Math.max(configuredDurationSeconds, elapsedSeconds)};
+}
+
 function readParts(runDirectory) {
     const files = fs.readdirSync(runDirectory)
         .filter((name) => /^raw-worker-\d+\.jsonl$/u.test(name))
@@ -44,10 +55,10 @@ function readParts(runDirectory) {
     return operations.sort((left, right) => left.workerIndex - right.workerIndex || left.ordinal - right.ordinal);
 }
 
-function aggregateResults(runDirectory, profile) {
+function aggregateResults(runDirectory, profile, observedWindow = {}) {
     const operations = readParts(runDirectory);
     const transactions = operations.flatMap((operation) => operation.transactions);
-    const minimumOperationCount = profile.durationSeconds * profile.rate;
+    const measuredWindow = durationSeconds(operations, profile.durationSeconds, observedWindow);
     const byFunction = {};
     for (const transaction of transactions) {
         const list = byFunction[transaction.function] ?? [];
@@ -70,9 +81,6 @@ function aggregateResults(runDirectory, profile) {
             || operation.transactions.at(-1)?.function !== 'ReceiveTransfer'));
     let discardReason;
     if (operations.length === 0) discardReason = 'la ronda no produjo operaciones';
-    else if (operations.length < minimumOperationCount) {
-        discardReason = `la ronda produjo ${operations.length} de al menos ${minimumOperationCount} operaciones esperadas`;
-    }
     else if (unexpected.length > 0) discardReason = `${unexpected.length} operaciones tuvieron fallos inesperados`;
     else if (incompletePairs.length > 0) discardReason = `${incompletePairs.length} pares de transferencia quedaron incompletos`;
     else if (profile.scenario === 'expected-rejections' && expectedRejections.length !== operations.length) {
@@ -80,7 +88,10 @@ function aggregateResults(runDirectory, profile) {
     } else if (profile.scenario !== 'expected-rejections' && successful.length !== operations.length) {
         discardReason = 'la ronda de camino feliz incluyó operaciones no exitosas';
     }
-    const endedAt = operations.map((operation) => operation.endedAt).sort().at(-1);
+    const transferPairs = operations.filter((operation) => operation.type === 'transfer');
+    const retriedTransferPairs = transferPairs.filter((operation) => operation.transactions.some(
+        (transaction) => transaction.retry === true,
+    ));
     const summary = {
         scenario: profile.scenario,
         operationCount: operations.length,
@@ -91,19 +102,24 @@ function aggregateResults(runDirectory, profile) {
         successfulTransactions: transactions.filter((transaction) => transaction.status === 'success').length,
         failedTransactions: transactions.filter((transaction) => transaction.status === 'failed').length,
         retryAttempts: transactions.filter((transaction) => transaction.retry === true).length,
+        transferPairs: transferPairs.length,
+        retriedTransferPairs: retriedTransferPairs.length,
+        retriedTransferPairRate: transferPairs.length > 0 ? retriedTransferPairs.length / transferPairs.length : 0,
         observedErrorCodes,
         rate: {
             operation: profile.operation,
             targetOperationsPerSecond: profile.rate,
             targetTransactionsPerSecond: profile.rate * profile.transactionsPerOperation,
-            effectiveOperationsPerSecond: operations.length / profile.durationSeconds,
-            effectiveTransactionsPerSecond: transactions.length / profile.durationSeconds,
+            effectiveOperationsPerSecond: operations.length / measuredWindow.seconds,
+            effectiveTransactionsPerSecond: transactions.length / measuredWindow.seconds,
         },
         operationLatency: statistics(operations.map((operation) => operation.latencyMs)),
         transactionLatencyByFunction: Object.fromEntries(
             Object.entries(byFunction).map(([functionName, values]) => [functionName, statistics(values)]),
         ),
-        endedAt,
+        startedAt: measuredWindow.startedAt,
+        endedAt: measuredWindow.endedAt,
+        observedDurationSeconds: measuredWindow.seconds,
         discardReason,
     };
     writeJSONAtomic(path.join(runDirectory, 'raw.json'), operations);
@@ -111,4 +127,4 @@ function aggregateResults(runDirectory, profile) {
     return {operations, summary};
 }
 
-module.exports = {aggregateResults, appendOperation, percentile, readParts, statistics};
+module.exports = {aggregateResults, appendOperation, durationSeconds, percentile, readParts, statistics};
