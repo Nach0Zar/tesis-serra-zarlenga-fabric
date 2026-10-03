@@ -402,18 +402,20 @@ test('below-target throughput is preserved and rejection codes remain processabl
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-caliper-incomplete-'));
     t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
     appendOperation(path.join(directory, 'raw-worker-0.jsonl'), {
-        workerIndex: 0, ordinal: 0, datasetSequence: 1, type: 'register', outcome: 'expected-rejection',
-        observedErrorCode: 'UNIT_ALREADY_EXISTS',
+        workerIndex: 0, ordinal: 0, datasetSequence: 1, type: 'transfer', outcome: 'expected-rejection',
+        expectedRejection: {family: 'UNAUTHORIZED_TRANSFER', code: 'TRANSFER_NOT_AUTHORIZED'},
+        observedErrorCode: 'TRANSFER_NOT_AUTHORIZED',
         startedAt: '2026-10-02T00:00:00.000Z', endedAt: '2026-10-02T00:00:00.010Z', latencyMs: 10,
-        transactions: [{function: 'RegisterUnit', latencyMs: 10, status: 'failed', retry: false}],
+        transactions: [{function: 'DispatchTransfer', latencyMs: 10, status: 'failed', retry: false}],
     });
     const profile = buildProfile({
         scenario: 'expected-rejections', phase: 'measurement', repetition: '1', rate: '5',
-        family: 'DUPLICATE_IDENTITY',
+        family: 'UNAUTHORIZED_TRANSFER',
     });
     const {summary} = aggregateResults(directory, profile);
     assert.equal(summary.discardReason, undefined);
-    assert.deepEqual(summary.observedErrorCodes, {UNIT_ALREADY_EXISTS: 1});
+    assert.equal(summary.transferPairs, 0);
+    assert.deepEqual(summary.observedErrorCodes, {TRANSFER_NOT_AUTHORIZED: 1});
 });
 
 test('processable results count transfer pairs and pair-level retries', (t) => {

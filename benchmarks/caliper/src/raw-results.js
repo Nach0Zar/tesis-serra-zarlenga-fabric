@@ -88,7 +88,8 @@ function aggregateResults(runDirectory, profile, observedWindow = {}) {
     } else if (profile.scenario !== 'expected-rejections' && successful.length !== operations.length) {
         discardReason = 'la ronda de camino feliz incluyó operaciones no exitosas';
     }
-    const transferPairs = operations.filter((operation) => operation.type === 'transfer');
+    const transferPairs = operations.filter((operation) =>
+        operation.type === 'transfer' && operation.expectedRejection === undefined);
     const retriedTransferPairs = transferPairs.filter((operation) => operation.transactions.some(
         (transaction) => transaction.retry === true,
     ));
