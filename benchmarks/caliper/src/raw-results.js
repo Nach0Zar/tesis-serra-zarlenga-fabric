@@ -55,10 +55,30 @@ function readParts(runDirectory) {
     return operations.sort((left, right) => left.workerIndex - right.workerIndex || left.ordinal - right.ordinal);
 }
 
+function summarizeRetries(transactions) {
+    const byCause = {};
+    let accumulatedTimeMs = 0;
+    for (const transaction of transactions) {
+        if (!transaction.retryCause) continue;
+        const timeMs = Number(transaction.latencyMs ?? 0) + Number(transaction.retryWaitMs ?? 0);
+        const cause = byCause[transaction.retryCause] ?? {attempts: 0, accumulatedTimeMs: 0};
+        cause.attempts += 1;
+        cause.accumulatedTimeMs += timeMs;
+        byCause[transaction.retryCause] = cause;
+        accumulatedTimeMs += timeMs;
+    }
+    return {
+        additionalAttempts: transactions.filter((transaction) => transaction.retry === true).length,
+        accumulatedTimeMs,
+        byCause,
+    };
+}
+
 function aggregateResults(runDirectory, profile, observedWindow = {}) {
     const operations = readParts(runDirectory);
     const transactions = operations.flatMap((operation) => operation.transactions);
     const measuredWindow = durationSeconds(operations, profile.durationSeconds, observedWindow);
+    const retries = summarizeRetries(transactions);
     const byFunction = {};
     for (const transaction of transactions) {
         const list = byFunction[transaction.function] ?? [];
@@ -102,7 +122,9 @@ function aggregateResults(runDirectory, profile, observedWindow = {}) {
         transactionCount: transactions.length,
         successfulTransactions: transactions.filter((transaction) => transaction.status === 'success').length,
         failedTransactions: transactions.filter((transaction) => transaction.status === 'failed').length,
-        retryAttempts: transactions.filter((transaction) => transaction.retry === true).length,
+        retryAttempts: retries.additionalAttempts,
+        retryTimeMs: retries.accumulatedTimeMs,
+        retryByCause: retries.byCause,
         transferPairs: transferPairs.length,
         retriedTransferPairs: retriedTransferPairs.length,
         retriedTransferPairRate: transferPairs.length > 0 ? retriedTransferPairs.length / transferPairs.length : 0,
@@ -111,6 +133,7 @@ function aggregateResults(runDirectory, profile, observedWindow = {}) {
             operation: profile.operation,
             targetOperationsPerSecond: profile.rate,
             targetTransactionsPerSecond: profile.rate * profile.transactionsPerOperation,
+            offeredOperationsPerSecond: operations.length / profile.durationSeconds,
             effectiveOperationsPerSecond: operations.length / measuredWindow.seconds,
             effectiveTransactionsPerSecond: transactions.length / measuredWindow.seconds,
         },
@@ -128,4 +151,12 @@ function aggregateResults(runDirectory, profile, observedWindow = {}) {
     return {operations, summary};
 }
 
-module.exports = {aggregateResults, appendOperation, durationSeconds, percentile, readParts, statistics};
+module.exports = {
+    aggregateResults,
+    appendOperation,
+    durationSeconds,
+    percentile,
+    readParts,
+    statistics,
+    summarizeRetries,
+};

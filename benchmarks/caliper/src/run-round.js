@@ -135,7 +135,10 @@ async function preparePlan(plan, networkConfig, options = {}) {
 }
 
 function buildBenchmarkConfig(repoRoot, profile, paths) {
-    const controllerTransactionsPerSecond = profile.rate * profile.transactionsPerOperation;
+    const nominalTransactionsPerSecond = profile.rate * profile.transactionsPerOperation;
+    const rateController = path.join(
+        repoRoot, 'benchmarks', 'caliper', 'rate-controllers', 'conceptual-fixed-rate.js',
+    );
     return {
         test: {
             name: `SNT Fabric ${profile.scenario}`,
@@ -143,9 +146,9 @@ function buildBenchmarkConfig(repoRoot, profile, paths) {
             workers: {type: 'local', number: profile.workers},
             rounds: [{
                 label: `${profile.scenario}-${profile.rate}`,
-                description: `${profile.rate} operaciones conceptuales por segundo (${controllerTransactionsPerSecond} tx/s) durante ${profile.durationSeconds} s`,
+                description: `${profile.rate} operaciones conceptuales por segundo (${nominalTransactionsPerSecond} tx/s nominales, sin reintentos) durante ${profile.durationSeconds} s`,
                 txDuration: profile.durationSeconds,
-                rateControl: {type: 'fixed-rate', opts: {tps: controllerTransactionsPerSecond}},
+                rateControl: {type: rateController, opts: {operationsPerSecond: profile.rate}},
                 workload: {
                     module: path.join(repoRoot, 'benchmarks', 'caliper', 'workloads', `${profile.module}.js`),
                     arguments: {

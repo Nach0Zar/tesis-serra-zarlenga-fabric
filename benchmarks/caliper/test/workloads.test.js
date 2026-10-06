@@ -8,8 +8,9 @@ const test = require('node:test');
 
 const {TxStatus} = require('@hyperledger/caliper-core');
 
+const {ConceptualFixedRate} = require('../rate-controllers/conceptual-fixed-rate');
 const {extractContractError, isPrivateDataNotDisseminated} = require('../src/contract-errors');
-const {invokePreparation, measuredGatewayInvocation} = require('../src/gateway-bridge');
+const {invokePreparation, measuredGatewayInvocation, receiveRetryCause} = require('../src/gateway-bridge');
 const {buildRoundMetadata} = require('../src/metadata');
 const {MIX_PATTERN, buildPlan, candidatePools} = require('../src/planner');
 const {buildProfile, weightedTransactionsPerOperation} = require('../src/profiles');
@@ -78,15 +79,43 @@ test('measurement profiles accept only their exact rates and phase/repetition pa
     );
 });
 
-test('Caliper controller converts conceptual rates to transaction rates', () => {
+test('benchmark config controls conceptual operations independently from transaction attempts', () => {
     const paths = {
         workPlanPath: '/tmp/work-plan.json', networkConfigPath: '/tmp/network-config.json',
         partPaths: ['/tmp/raw-0.jsonl', '/tmp/raw-1.jsonl'],
     };
     const transfer = buildProfile({scenario: 'write-transfer', phase: 'warmup', repetition: '0', rate: '5'});
     const mixed = buildProfile({scenario: 'mixed', phase: 'warmup', repetition: '0', rate: '20'});
-    assert.equal(buildBenchmarkConfig('/repo', transfer, paths).test.rounds[0].rateControl.opts.tps, 10);
-    assert.equal(buildBenchmarkConfig('/repo', mixed, paths).test.rounds[0].rateControl.opts.tps, 31);
+    const transferControl = buildBenchmarkConfig('/repo', transfer, paths).test.rounds[0].rateControl;
+    const mixedControl = buildBenchmarkConfig('/repo', mixed, paths).test.rounds[0].rateControl;
+    assert.equal(transferControl.type, '/repo/benchmarks/caliper/rate-controllers/conceptual-fixed-rate.js');
+    assert.deepEqual(transferControl.opts, {operationsPerSecond: 5});
+    assert.deepEqual(mixedControl.opts, {operationsPerSecond: 20});
+});
+
+test('conceptual rate controller ignores connector submission events', async () => {
+    let now = 1000;
+    const delays = [];
+    const controller = new ConceptualFixedRate({
+        getRateControlSpec: () => ({opts: {operationsPerSecond: 20}}),
+        getWorkersNumber: () => 2,
+    }, {
+        getRoundStartTime: () => 1000,
+        getTotalSubmittedTx: () => {
+            throw new Error('connector submissions must not control conceptual rate');
+        },
+    }, 0, {
+        now: () => now,
+        sleep: async (delayMs) => {
+            delays.push(delayMs);
+            now += delayMs;
+        },
+    });
+    await controller.applyRateControl();
+    now = 1050;
+    await controller.applyRateControl();
+    assert.deepEqual(delays, [50]);
+    assert.equal(controller.operationCount, 2);
 });
 
 test('planner pairs transfers and excludes every M3 operation', () => {
@@ -289,6 +318,11 @@ test('measured receive retries stale receiver state only in the correlated trans
     assert.equal(receive.status.GetStatus(), 'success');
     assert.equal(receive.retryCount, 1);
     assert.equal(receive.attempts[0].envelope.code, 'NOT_IN_TRANSIT');
+    assert.equal(receive.attempts[0].retryCause, 'NOT_IN_TRANSIT');
+    assert.equal(receive.exhausted, false);
+    assert.equal(receiveRetryCause({
+        code: 'INTERNAL_ERROR', details: {reintentable: true, causa: 'PRIVATE_DATA_NOT_DISSEMINATED'},
+    }), 'PRIVATE_DATA_NOT_DISSEMINATED');
 
     invocations = 0;
     const uncorrelated = await measuredGatewayInvocation({
@@ -298,7 +332,28 @@ test('measured receive retries stale receiver state only in the correlated trans
         retryDelayMs: 0,
     });
     assert.equal(uncorrelated.status.GetStatus(), 'failed');
+    assert.equal(uncorrelated.attempts[0].retryCause, undefined);
     assert.equal(invocations, 1);
+});
+
+test('exhausted receive retries return every attempt instead of throwing', async () => {
+    const measured = await measuredGatewayInvocation({
+        gatewayPool: {
+            invoke: async () => {
+                throw new Error('endorsement failed: {"code":"NOT_IN_TRANSIT","message":"receiver is stale"}');
+            },
+        },
+        sutAdapter: {emit: () => {}},
+        invocation: invocation('ReceiveTransfer', 'DrogueriaMSP', 1),
+        retryTransientReceive: true,
+        retryDelayMs: 0,
+        maxAttempts: 2,
+    });
+    assert.equal(measured.status.GetStatus(), 'failed');
+    assert.equal(measured.exhausted, true);
+    assert.equal(measured.retryCount, 1);
+    assert.equal(measured.attempts.length, 2);
+    assert.equal(measured.attempts.every((attempt) => attempt.retryCause === 'NOT_IN_TRANSIT'), true);
 });
 
 test('core operations record transfer pairs, retries and expected rejection codes', async () => {
@@ -331,9 +386,15 @@ test('core operations record transfer pairs, retries and expected rejection code
             return {
                 status: status('success', 1020, 1030), envelope: undefined, retryCount: 1,
                 attempts: [
-                    {status: status('failed', 1010), envelope: {code: 'INTERNAL_ERROR'}},
+                    {
+                        status: status('failed', 1010),
+                        envelope: {code: 'INTERNAL_ERROR'},
+                        retryCause: 'PRIVATE_DATA_NOT_DISSEMINATED',
+                        retryWaitMs: 500,
+                    },
                     {status: status('success', 1020, 1030), envelope: undefined},
                 ],
+                exhausted: false,
             };
         },
     });
@@ -341,6 +402,8 @@ test('core operations record transfer pairs, retries and expected rejection code
     assert.deepEqual(transferRecord.transactions.map((entry) => entry.function), [
         'DispatchTransfer', 'ReceiveTransfer', 'ReceiveTransfer',
     ]);
+    assert.equal(transferRecord.transactions[1].retryCause, 'PRIVATE_DATA_NOT_DISSEMINATED');
+    assert.equal(transferRecord.transactions[1].retryWaitMs, 500);
     assert.equal(transferRecord.transactions[2].retry, true);
     assert.deepEqual(calls, ['DispatchTransfer', 'ReceiveTransfer']);
 
@@ -359,6 +422,31 @@ test('core operations record transfer pairs, retries and expected rejection code
     });
     assert.equal(rejectionRecord.outcome, 'expected-rejection');
     assert.equal(rejectionRecord.observedErrorCode, 'UNIT_ALREADY_EXISTS');
+
+    const exhaustedRecord = await executeOperation({
+        operation: transfer,
+        sutAdapter,
+        gatewayPool,
+        measuredInvocation: async () => ({
+            status: status('failed'),
+            envelope: {code: 'NOT_IN_TRANSIT'},
+            retryCount: 1,
+            exhausted: true,
+            attempts: [
+                {
+                    status: status('failed'), envelope: {code: 'NOT_IN_TRANSIT'},
+                    retryCause: 'NOT_IN_TRANSIT', retryWaitMs: 500,
+                },
+                {
+                    status: status('failed'), envelope: {code: 'NOT_IN_TRANSIT'},
+                    retryCause: 'NOT_IN_TRANSIT', retryWaitMs: 0,
+                },
+            ],
+        }),
+    });
+    assert.equal(exhaustedRecord.outcome, 'unexpected-failure');
+    assert.equal(exhaustedRecord.retryExhausted, true);
+    assert.equal(exhaustedRecord.transactions.length, 3);
 });
 
 test('processable results aggregate operations and build valid metadata fields', (t) => {
@@ -432,7 +520,10 @@ test('processable results count transfer pairs and pair-level retries', (t) => {
         latencyMs: 400,
         transactions: [
             {function: 'DispatchTransfer', latencyMs: 10, status: 'success', retry: false},
-            {function: 'ReceiveTransfer', latencyMs: 10, status: 'failed', retry: false, errorCode: 'NOT_IN_TRANSIT'},
+            {
+                function: 'ReceiveTransfer', latencyMs: 10, status: 'failed', retry: false,
+                errorCode: 'NOT_IN_TRANSIT', retryCause: 'NOT_IN_TRANSIT', retryWaitMs: 500,
+            },
             {function: 'ReceiveTransfer', latencyMs: 10, status: 'success', retry: true},
         ],
     });
@@ -445,7 +536,10 @@ test('processable results count transfer pairs and pair-level retries', (t) => {
     assert.equal(summary.retriedTransferPairs, 1);
     assert.equal(summary.retriedTransferPairRate, 1);
     assert.equal(summary.retryAttempts, 1);
+    assert.equal(summary.retryTimeMs, 510);
+    assert.deepEqual(summary.retryByCause, {NOT_IN_TRANSIT: {attempts: 1, accumulatedTimeMs: 510}});
     assert.equal(summary.observedDurationSeconds, 0.4);
+    assert.equal(summary.rate.offeredOperationsPerSecond, 5);
     assert.equal(summary.rate.effectiveOperationsPerSecond, 2.5);
     assert.equal(summary.rate.effectiveTransactionsPerSecond, 7.5);
     assert.equal(summary.discardReason, undefined);

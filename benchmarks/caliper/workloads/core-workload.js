@@ -8,10 +8,10 @@ const {GatewayPool, measuredGatewayInvocation} = require('../src/gateway-bridge'
 const {appendOperation} = require('../src/raw-results');
 const {buildCaliperRequest} = require('../src/requests');
 
-function transactionRecord(status, functionName, retry = false, errorCode) {
+function transactionRecord(status, functionName, retry = false, errorCode, retryCause, retryWaitMs) {
     const started = status.GetTimeCreate();
     const ended = status.GetTimeFinal();
-    return {
+    const record = {
         function: functionName,
         transactionId: status.GetID() || undefined,
         startedAt: new Date(started).toISOString(),
@@ -21,6 +21,11 @@ function transactionRecord(status, functionName, retry = false, errorCode) {
         retry,
         errorCode,
     };
+    if (retryCause !== undefined) {
+        record.retryCause = retryCause;
+        record.retryWaitMs = retryWaitMs ?? 0;
+    }
+    return record;
 }
 
 async function standardInvocation(sutAdapter, invocation) {
@@ -40,6 +45,7 @@ async function executeOperation({
     const transactions = [];
     let outcome = 'success';
     let observedErrorCode;
+    let retryExhausted = false;
 
     if (operation.expectedRejection) {
         const invocation = operation.invocations[0];
@@ -66,7 +72,10 @@ async function executeOperation({
                 operation.invocations[1].operation,
                 index > 0,
                 attempt.envelope?.code,
+                attempt.retryCause,
+                attempt.retryWaitMs,
             )));
+            retryExhausted = receive.exhausted === true;
             if (receive.status.GetStatus() !== 'success') outcome = 'unexpected-failure';
         }
     } else {
@@ -85,6 +94,7 @@ async function executeOperation({
         outcome,
         expectedRejection: operation.expectedRejection,
         observedErrorCode,
+        retryExhausted,
         startedAt: new Date(started).toISOString(),
         endedAt: new Date(ended).toISOString(),
         latencyMs: ended - started,

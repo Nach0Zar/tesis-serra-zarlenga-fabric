@@ -123,8 +123,14 @@ function errorTransactionId(error) {
     return error?.transactionId ?? error?.transactionID ?? error?.transactionIdString ?? '';
 }
 
+function receiveRetryCause(envelope) {
+    if (isPrivateDataNotDisseminated(envelope)) return 'PRIVATE_DATA_NOT_DISSEMINATED';
+    if (envelope?.code === 'NOT_IN_TRANSIT') return 'NOT_IN_TRANSIT';
+    return undefined;
+}
+
 function isRetryableReceiveVisibility(envelope) {
-    return isPrivateDataNotDisseminated(envelope) || envelope?.code === 'NOT_IN_TRANSIT';
+    return receiveRetryCause(envelope) !== undefined;
 }
 
 async function measuredGatewayInvocation({
@@ -133,9 +139,13 @@ async function measuredGatewayInvocation({
     invocation,
     retryTransientReceive = false,
     retryDelayMs = 500,
+    maxAttempts = 60,
 }) {
+    if (!Number.isInteger(maxAttempts) || maxAttempts <= 0) {
+        throw new Error('maxAttempts must be a positive integer');
+    }
     const attempts = [];
-    for (let attempt = 1; attempt <= 60; attempt += 1) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         const status = new TxStatus();
         status.SetTimeCreate(Date.now());
         sutAdapter.emit(SUBMITTED_EVENT, 1);
@@ -156,16 +166,21 @@ async function measuredGatewayInvocation({
         } finally {
             sutAdapter.emit(FINISHED_EVENT, status);
         }
-        attempts.push({status, envelope});
-        const shouldRetry = retryTransientReceive
+        const retryCause = retryTransientReceive
             && invocation.operation === 'ReceiveTransfer'
-            && isRetryableReceiveVisibility(envelope);
-        if (status.GetStatus() === 'success' || !shouldRetry) {
-            return {attempts, status, envelope, retryCount: attempts.length - 1};
+            ? receiveRetryCause(envelope) : undefined;
+        const attemptRecord = {status, envelope, retryCause, retryWaitMs: 0};
+        attempts.push(attemptRecord);
+        if (status.GetStatus() === 'success' || retryCause === undefined) {
+            return {attempts, status, envelope, retryCount: attempts.length - 1, exhausted: false};
         }
+        if (attempt === maxAttempts) {
+            return {attempts, status, envelope, retryCount: attempts.length - 1, exhausted: true};
+        }
+        const waitStartedAt = Date.now();
         await timers.setTimeout(retryDelayMs);
+        attemptRecord.retryWaitMs = Math.max(0, Date.now() - waitStartedAt);
     }
-    throw new Error('ReceiveTransfer exceeded 60 transient visibility attempts');
 }
 
 async function invokePreparation(gatewayPool, invocation) {
@@ -190,4 +205,5 @@ module.exports = {
     isRetryableReceiveVisibility,
     measuredGatewayInvocation,
     networkOrganizations,
+    receiveRetryCause,
 };

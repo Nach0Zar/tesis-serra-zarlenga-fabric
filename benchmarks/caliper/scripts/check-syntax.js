@@ -6,7 +6,7 @@ const path = require('node:path');
 const {spawnSync} = require('node:child_process');
 
 const projectRoot = path.resolve(__dirname, '..');
-const roots = ['src', 'workloads', 'scripts', 'test'];
+const roots = ['src', 'workloads', 'rate-controllers', 'scripts', 'test'];
 const files = [];
 
 function visit(directory) {
