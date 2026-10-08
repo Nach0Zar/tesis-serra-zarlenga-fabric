@@ -100,3 +100,18 @@ La configuración efectiva, el reporte HTML, el contexto y `metadata.json` se
 guardan bajo `build/benchmarks/caliper/`, que está ignorado por Git. Los
 prerrequisitos y comandos reproducibles están documentados en
 [`caliper/README.md`](caliper/README.md).
+
+## Carga equivalente sobre la baseline
+
+El proyecto aislado [`baseline/`](baseline/) reutiliza directamente los
+perfiles, el planificador determinístico, la validación del dataset y el
+agregador de Fabric. Construye y restaura un snapshot golden en un proyecto
+Compose dedicado y ejecuta una única ronda REST por invocación. Una
+transferencia conserva despacho, recepción y latencia del par completo; las
+salidas procesables tienen la misma estructura `raw.json`, `summary.json` y
+`metadata.json`.
+
+Las credenciales permanecen sólo en memoria y los resultados se guardan bajo
+`build/benchmarks/baseline/`, ignorado por Git. Los comandos, conteos del
+snapshot, perfiles, rechazos separados y asimetrías metodológicas están
+documentados en [`baseline/README.md`](baseline/README.md).

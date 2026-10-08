@@ -77,7 +77,7 @@ El resultado correcto informa seed, hash, siete organizaciones y al menos
 50.000 unidades. El snapshot ejecuta exclusivamente `RegisterUnit`: cada
 unidad queda en `EN_LABORATORIO`, con el laboratorio como custodio y un único
 evento de secuencia 1. Las recetas de transferencia, rechazo y dispensa quedan
-sin ejecutar para EVAL-3.
+sin ejecutar durante este seed general.
 
 La carga es atómica y exige que las siete tablas de dominio estén vacías. Una
 segunda ejecución falla sin modificar filas. Para usar otro directorio:
@@ -86,6 +86,13 @@ segunda ejecución falla sin modificar filas. Para usar otro directorio:
 make -C baseline generate-dataset DATASET_DIR=/ruta/absoluta
 make -C baseline seed DATASET_DIR=/ruta/absoluta
 ```
+
+El binario `snt-seed` admite además `--selection-file` para el tooling de
+benchmark. El archivo queda ligado al SHA-256 del bundle y enumera secuencias
+ordenadas, únicas y dentro de rango que deben permanecer ausentes. Sin esa
+opción, el comportamiento continúa siendo la carga completa de 50.000
+unidades. La construcción reproducible y el contrato de ese archivo están en
+[`benchmarks/baseline/README.md`](../benchmarks/baseline/README.md).
 
 Una comprobación rápida del snapshot puede hacerse con:
 
@@ -248,8 +255,8 @@ la plataforma Fabric:
 
 Permanecen fuera de alcance:
 
-- ejecución de workloads, benchmarks y análisis de disponibilidad de EVAL-2 a
-  EVAL-5;
+- orquestación de repeticiones finales, procesamiento estadístico y análisis
+  de disponibilidad;
 - retiro por lote (#114), listeners (#64) y E2E/políticas de red (#33, #97);
 - carga del snapshot de Fabric, emulación de MSP/PKI, políticas de endoso,
   canales o Private Data Collections;
