@@ -182,7 +182,7 @@ function main() {
     };
     const benchmarkConfig = {
         test: {
-            name: 'EVAL-1 Caliper smoke',
+            name: 'SNT Caliper smoke',
             description: 'ReadUnit diagnóstico sobre la red Fabric local',
             workers: {type: 'local', number: 1},
             rounds: [{
@@ -232,12 +232,12 @@ function main() {
     if (metadata.rate.effectiveTransactionsPerSecond <= 0) {
         throw new Error('smoke reported zero throughput');
     }
-    process.stdout.write(`EVAL-1 smoke completed: ${runDirectory}\n`);
+    process.stdout.write(`Caliper smoke completed: ${runDirectory}\n`);
 }
 
 try {
     main();
 } catch (error) {
-    process.stderr.write(`EVAL-1 smoke failed: ${error.message}\n`);
+    process.stderr.write(`Caliper smoke failed: ${error.message}\n`);
     process.exitCode = 1;
 }

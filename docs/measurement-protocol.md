@@ -76,6 +76,8 @@ Los rechazos esperados por reglas regulatorias o de dominio no se mezclan con el
 
 Los reintentos operativos transitorios tampoco son rechazos de negocio. Se registran por separado con su causa, cantidad de intentos y tiempo acumulado, pero el trabajo necesario hasta confirmar la operación permanece dentro de la latencia y del throughput observados del camino feliz correspondiente.
 
+La tasa objetivo regula operaciones conceptuales ofrecidas por el cliente, no intentos de transaccion. Un reintento agrega trabajo observado y puede reducir el throughput exitoso o aumentar la latencia, pero no consume el presupuesto con el que se programan nuevas operaciones conceptuales. La evidencia debe distinguir la tasa ofrecida de operaciones, la tasa efectiva completada y los intentos de transaccion adicionales.
+
 ### 3.3 Disponibilidad
 
 **Disponibilidad experimental**: proporcion de operaciones que completan correctamente durante una ventana de falla controlada.
@@ -100,7 +102,9 @@ Conforme ADR-004, la transferencia de custodia se implementa como dos transaccio
 - En los perfiles de carga, "1 operacion de transferencia" = 1 par completo despacho+recepcion = 2 transacciones write. Las tasas objetivo de transferencia se expresan en pares por segundo y la tasa efectiva de transacciones es el doble.
 - La baseline debe exponer y medir los mismos dos pasos con la misma semantica (BASE-2); de lo contrario la comparacion no mide los mismos procesos.
 - Con `requiredPeerCount: 1` (ADR-006), el peer receptor puede no disponer todavía del registro privado cuando se intenta `ReceiveTransfer`. El cliente aplica un reintento controlado hasta que el *pull* o la reconciliación permitan leerlo, o hasta el timeout de la operación. Este caso es un **reintento operativo transitorio**, no T05 ni un rechazo esperado de negocio.
+- Aunque el despacho ya este confirmado en el peer del emisor, el peer receptor puede endosar antes de observar el bloque que deja la unidad en transito y responder `NOT_IN_TRANSIT`. Inmediatamente despues de un despacho confirmado y dentro del mismo par correlacionado, este caso tambien es un **reintento operativo transitorio**. Fuera de ese contexto conserva su semantica de rechazo definitivo.
 - La latencia end-to-end del par incluye el primer intento fallido, la espera entre intentos y todos los reintentos hasta la confirmación de commit de la recepción. Se reportan además la cantidad y tasa de pares que necesitaron reintento. Excluir ese tiempo ocultaría un costo real del diseño Fabric frente a la baseline.
+- El controlador de carga programa pares completos a la tasa conceptual objetivo y no usa los intentos internos de recepcion para decidir cuando ofrecer el siguiente par. Los intentos adicionales siguen contabilizados como transacciones observadas y no alteran la carga conceptual ofrecida a la baseline.
 - Los rechazos en recepcion (transicion T05) pertenecen a las rondas de rechazo esperado (seccion 6.5), no al camino feliz.
 
 ### 3.5 Costo de los marcadores de participación (ADR-007)
@@ -179,7 +183,7 @@ R5: Fabric -> baseline
 
 ## 6. Perfiles de carga
 
-Los perfiles usan `fixed-rate` como controlador base. En Caliper esto corresponde a una tasa objetivo acumulada entre todos los workers.
+Los perfiles usan una estrategia `fixed-rate` sobre operaciones conceptuales, con una tasa objetivo acumulada entre todos los workers. Cuando una operacion puede emitir mas de una transaccion o reintentos internos, el controlador cuenta invocaciones del workload y no eventos de transaccion del conector; de otro modo los reintentos reducirian la carga conceptual ofrecida y romperian la paridad con la baseline.
 
 ### 6.1 Smoke
 
@@ -427,13 +431,15 @@ El escenario y la operacion medida deben coincidir: `write-transfer` exige `rate
 | `operation` | Operacion conceptual medida: `register`, `transfer`, `dispense`, `query-unit`, `query-history` o `mixed`. |
 | `transactionsPerOperation` | Transacciones efectivas por operacion conceptual: `2` para transferencia, `1` para el resto, y el promedio ponderado por la mezcla en `mixed`. |
 | `targetOperationsPerSecond` | Tasa objetivo en operaciones conceptuales por segundo. Para transferencia son pares despacho+recepcion por segundo. |
-| `targetTransactionsPerSecond` | Tasa objetivo en transacciones efectivas por segundo. Debe ser igual a `targetOperationsPerSecond` por `transactionsPerOperation`. |
-| `effectiveTransactionsPerSecond` | Tasa efectiva observada durante la ronda. |
+| `targetTransactionsPerSecond` | Tasa nominal en transacciones del camino sin reintentos. Debe ser igual a `targetOperationsPerSecond` por `transactionsPerOperation`; los intentos adicionales no reducen `targetOperationsPerSecond`. |
+| `effectiveTransactionsPerSecond` | Tasa efectiva de todos los intentos de transaccion observados durante la ronda, incluidos los reintentos transitorios. |
 | `mix` | Obligatoria y exclusiva de `operation: mixed`: porcentajes de la seccion 6.4 sobre operaciones conceptuales, que deben sumar 100. |
 
 La equivalencia de dos transacciones por transferencia rige en el camino feliz. En una ronda de rechazo esperado no: el dataset compartido invoca `DispatchTransfer` y el rechazo se resuelve ahi, de modo que el par nunca se completa y la operacion vale **una** transaccion. Exigir dos obligaria a declarar una recepcion que no se envio, que es la misma ambiguedad que `targetTps` producia.
 
 El validador comprueba la aritmetica, que JSON Schema no puede expresar: que la tasa de transacciones derive de la de operaciones, que la mezcla sume 100 y que su promedio ponderado coincida con `transactionsPerOperation`. Tambien verifica que la ventana entre `startedAt` y `endedAt` no sea mas corta que la duracion que la corrida dice haber medido.
+
+La evidencia procesable complementaria debe registrar la tasa ofrecida de operaciones conceptuales y desglosar los reintentos por causa, cantidad y tiempo acumulado. Asi una tasa efectiva de transacciones mayor que la nominal representa costo adicional real y no una carga conceptual distinta.
 
 ### 9.4 Rondas de rechazo esperado
 
