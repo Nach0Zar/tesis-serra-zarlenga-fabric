@@ -1,0 +1,25 @@
+{
+  "name": "snt-caliper-benchmark",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Setup reproducible y workloads Fabric de Hyperledger Caliper",
+  "engines": {
+    "node": ">=22 <23",
+    "npm": ">=11.5.1 <12"
+  },
+  "packageManager": "npm@11.6.2",
+  "scripts": {
+    "bind:fabric": "caliper bind --caliper-bind-sut fabric:fabric-gateway --caliper-bind-args=\"--save-dev --save-exact\"",
+    "check": "node scripts/check-syntax.js && node scripts/verify-setup.js",
+    "test": "node --test test/*.test.js",
+    "test:metadata": "node scripts/verify-round-metadata.js",
+    "smoke": "node src/run-smoke.js",
+    "round": "node src/run-round.js"
+  },
+  "devDependencies": {
+    "@grpc/grpc-js": "1.13.1",
+    "@hyperledger/caliper-cli": "0.7.1",
+    "@hyperledger/caliper-core": "0.7.1",
+    "@hyperledger/fabric-gateway": "1.7.1"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "$schema": "./organizations-manifest.schema.json",
+  "schemaVersion": "1.0.0",
+  "organizations": [
+    {
+      "mspId": "AnmatMSP",
+      "slug": "anmat",
+      "id": "ANMAT",
+      "idType": "REG",
+      "agentType": "REGULATOR",
+      "active": true,
+      "clientRole": "regulatory-admin",
+      "peerHostname": "peer0.anmat.snt.local",
+      "ordererHostname": "orderer.anmat.snt.local"
+    },
+    {
+      "mspId": "LabMSP",
+      "slug": "lab",
+      "id": "7791234500017",
+      "idType": "GLN",
+      "agentType": "LABORATORY",
+      "active": true,
+      "clientRole": "operator",
+      "peerHostname": "peer0.lab.snt.local",
+      "ordererHostname": "orderer.lab.snt.local"
+    },
+    {
+      "mspId": "DrogueriaMSP",
+      "slug": "drogueria",
+      "id": "7791234500024",
+      "idType": "GLN",
+      "agentType": "DRUGSTORE",
+      "active": true,
+      "clientRole": "operator",
+      "peerHostname": "peer0.drogueria.snt.local",
+      "ordererHostname": "orderer.drogueria.snt.local"
+    },
+    {
+      "mspId": "DistribuidorMSP",
+      "slug": "distribuidor",
+      "id": "7791234500031",
+      "idType": "GLN",
+      "agentType": "DISTRIBUTOR",
+      "active": true,
+      "clientRole": "operator",
+      "peerHostname": "peer0.distribuidor.snt.local"
+    },
+    {
+      "mspId": "FarmaciaMSP",
+      "slug": "farmacia",
+      "id": "7791234500048",
+      "idType": "GLN",
+      "agentType": "PHARMACY",
+      "active": true,
+      "clientRole": "operator",
+      "peerHostname": "peer0.farmacia.snt.local"
+    },
+    {
+      "mspId": "CentroMedicoMSP",
+      "slug": "centromedico",
+      "id": "7791234500055",
+      "idType": "GLN",
+      "agentType": "HEALTHCARE_FACILITY",
+      "active": true,
+      "clientRole": "operator",
+      "peerHostname": "peer0.centromedico.snt.local"
+    },
+    {
+      "mspId": "FinanciadorMSP",
+      "slug": "financiador",
+      "id": "INSSJP-PAMI",
+      "idType": "REG",
+      "agentType": "FINANCIER",
+      "active": true,
+      "clientRole": "financier-auditor",
+      "peerHostname": "peer0.financiador.snt.local"
+    }
+  ]
+}
