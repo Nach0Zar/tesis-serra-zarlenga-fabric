@@ -71,7 +71,9 @@ function buildRoundMetadata(context, summary) {
         endedAt: context.endedAt,
         host: context.host,
         environment: context.environment,
-        notes: 'Ronda individual de Fabric. La orquestación estadística y los resultados finales permanecen fuera de este runner.',
+        notes: context.snapshotId
+            ? `Ronda individual de Fabric sobre el snapshot ${context.snapshotId}, restaurado y verificado antes de la ventana medida.`
+            : 'Ronda individual de Fabric. La orquestación estadística y los resultados finales permanecen fuera de este runner.',
     };
     if (profile.mix) document.rate.mix = profile.mix;
     if (profile.rejectionFamily) document.rejectionFamily = profile.rejectionFamily;

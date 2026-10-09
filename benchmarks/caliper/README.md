@@ -87,12 +87,14 @@ bajo. Para usar otro bundle generado, se puede definir
 ## Rondas medibles
 
 El runner `npm run round` consume exclusivamente recetas del bundle compartido
-con seed `20260727`. Prepara fuera de la ventana medida sólo los prefijos de
-receta requeridos por la ronda: conserva el orden dentro de cada receta y
-procesa con concurrencia acotada unidades disjuntas. Nunca crea el canal, instala chaincode
-ni reinicia la red. Cada ronda debe comenzar sobre el estado limpio que
-corresponda al protocolo; encontrar una unidad objetivo ya mutada se considera
-contaminación experimental y la operación falla.
+con seed `20260727`. Con `--snapshot-dir` la ronda parte del snapshot inicial
+(ver [Snapshot inicial](#snapshot-inicial)): no prepara nada y, antes de abrir la
+ventana medida, verifica contra `preconditions.json` el estado previo de cada
+unidad que va a usar; una sola unidad contaminada hace fallar la ronda. Sin
+`--snapshot-dir` se conserva el modo de desarrollo: prepara fuera de la ventana
+medida sólo los prefijos de receta requeridos por la ronda, sobre un ledger
+casi vacío que no es comparable con la baseline. En ningún modo crea el canal,
+instala chaincode ni reinicia la red.
 
 La interfaz es:
 
@@ -103,6 +105,7 @@ npm run round -- \
   --repetition <0..8> \
   --rate <tasa permitida> \
   [--family <UNAUTHORIZED_TRANSFER|DUPLICATE_IDENTITY|BLOCKING_STATE>] \
+  [--snapshot-dir <build/benchmarks/fabric-snapshots/<token>>] \
   [--operation <transfer|dispense>] \
   [--dataset-dir <ruta>] \
   [--run-token <identificador>]
@@ -182,3 +185,83 @@ PEM; las configuraciones efectivas sólo referencian rutas locales.
 `work-plan.json` sí contiene las recetas transient sintéticas provenientes del
 dataset para que los workers puedan ejecutarlas, por lo que permanece bajo el
 directorio `build/` ignorado por Git y no debe publicarse como resultado.
+
+## Snapshot inicial
+
+La serie citable no prepara estado por ronda: restaura antes de cada ronda un
+snapshot del ledger con las 50.000 unidades del bundle en su estado previo
+(sección 4 del protocolo y decisiones D1–D5 de #138). El plan del snapshot es la
+unión determinística de las 20 combinaciones de la sección 6 y coincide byte a
+byte con el de la baseline:
+
+| Grupo | Unidades |
+|---|---:|
+| Ausentes, cuya alta es la operación medida | 3.080 |
+| Presentes en el estado previo de su escenario | 22.103 |
+| Presentes como relleno (incluye la unidad del smoke) | 24.817 |
+| Total | 50.000 |
+
+Construirlo cuesta 129.878 transacciones, una sola vez por artefacto, sobre una
+red recién desplegada:
+
+```bash
+npm run snapshot:build -- --snapshot-token golden-local --concurrency 128
+```
+
+El constructor ejecuta las recetas con concurrencia configurable porque las
+unidades son disjuntas y la construcción está fuera de toda medición. Es
+reanudable: ante cualquier error consulta el historial de la unidad, que tiene
+exactamente una escritura por paso confirmado, y sigue desde ahí; nunca reenvía
+un paso sin saber si el anterior quedó. `progress.jsonl` registra las recetas
+completas, de modo que una nueva invocación con el mismo token retoma donde
+quedó. `BatchTimeout` y el resto de la configuración del SUT no se tocan.
+
+Al terminar, y antes de guardar nada:
+
+1. verifica las 50.000 unidades contra el estado derivado de la máquina de
+   estados (no contra lo que devolvió el ledger) y deja `verification.json`;
+2. recorre los bloques confirmados durante la construcción y exige que las
+   transacciones válidas por función coincidan exactamente con las recetas;
+3. cuenta los marcadores de participación como escrituras con hash en las
+   colecciones implícitas y exige 46.924: 46.920 altas y 4 eventos iniciados
+   por ANMAT (sección 3.5);
+4. emite el `metadata.json` de `dataset-preparation` con
+   `participationMarkers` (sección 9.6) y lo valida con `runmeta`;
+5. detiene la red, guarda los diez volúmenes del ledger como archivos tar y
+   escribe el manifiesto con sus SHA-256.
+
+El manifiesto ata el snapshot al contrato, al `packageID`, a las versiones de
+Fabric y Fabric CA, al hash del dataset, a los archivos de red que fijan canal,
+políticas y colecciones, y a la huella de las identidades generadas en
+`network/organizations`. La restauración se niega si cualquiera difiere.
+
+```bash
+npm run snapshot:restore -- --snapshot-dir build/benchmarks/fabric-snapshots/golden-local
+```
+
+La restauración verifica el SHA-256 de cada volumen, elimina los volúmenes y
+los contenedores de chaincode, extrae los archivos con la red detenida, levanta
+la red y evalúa una lectura contra cada uno de los siete peers para que ningún
+contenedor de chaincode arranque en frío dentro de la ventana medida.
+
+Con `SNT_CALIPER_SNAPSHOT_DIR` definido, `npm run smoke` es de solo lectura:
+usa la unidad de relleno reservada por el manifiesto y falla si no existe, en
+lugar de registrarla.
+
+## Serie de Fabric
+
+`npm run series` ejecuta cada escenario de la sección 6 con un warm-up y cinco
+repeticiones, y extiende a ocho si el coeficiente de variación de throughput o
+p95 supera 15 %. Con `--snapshot-dir`, antes de cada ronda restaura el snapshot,
+corre `network.sh verify`, mide recursos y ejecuta el smoke de solo lectura; la
+ronda verifica sus unidades antes de medir. El id del snapshot queda en
+`series.json`, en cada entrada de `index.jsonl` y en las notas del
+`metadata.json` de cada ronda.
+
+```bash
+npm run series -- --snapshot-dir build/benchmarks/fabric-snapshots/golden-local
+```
+
+Un warm-up que no valida en `--max-attempts` intentos marca el escenario como
+`not-executed` con su motivo y no se miden sus repeticiones (sección 7).
+

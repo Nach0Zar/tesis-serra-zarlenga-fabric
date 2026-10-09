@@ -137,6 +137,9 @@ Parametros obligatorios:
 Reglas de uso:
 
 - Fabric y baseline deben iniciar cada repeticion desde el mismo snapshot logico del dataset.
+- El snapshot logico contiene **las 50.000 unidades del bundle en su estado previo a la ronda**: un unico estado sirve para las 20 combinaciones de la seccion 6, porque las bandas del planificador son disjuntas. Las 3.080 unidades cuya alta es la operacion medida (`write-register` y el componente de registro de `mixed`) quedan ausentes y se registran dentro de la ronda; 22.103 quedan en el estado previo que pide su escenario y 24.817 quedan dadas de alta como relleno de estado. Una unidad del relleno, fuera de toda banda, se reserva para el smoke de solo lectura.
+- El estado previo de cada unidad se deriva de su receta y de la maquina de estados (ADR-001, ADR-004: el custodio solo cambia en la recepcion), no de lo que devuelve el SUT. Ambos SUT emiten un `preconditions.json` con una entrada por unidad en el mismo formato, de modo que la igualdad del snapshot logico entre Fabric y baseline es comparable byte a byte.
+- El snapshot se construye una vez por artefacto. Su construccion es la fase `dataset-preparation` de la seccion 9.6 y queda ligada al contrato, al `packageID`, a la version de Fabric, al hash del dataset y a la configuracion e identidades de la red; si cambia cualquiera de ellos, se reconstruye.
 - Una unidad no debe reutilizarse dentro de la misma repeticion para dos escrituras incompatibles de estado.
 - Las operaciones de transferencia validas deben derivar de la matriz regulatoria aprobada para pares origen-destino.
 - Las operaciones invalidas deben separarse en rondas especificas de rechazo esperado.
@@ -166,10 +169,11 @@ Antes de cada repeticion medida:
 
 1. detener cualquier corrida anterior;
 2. limpiar estado temporal no versionado;
-3. reiniciar el SUT correspondiente;
-4. cargar el dataset inicial;
-5. verificar conectividad con una corrida smoke;
-6. registrar metadatos de entorno.
+3. restaurar el snapshot logico de la seccion 4 sobre el SUT detenido, verificando el SHA-256 de cada archivo del snapshot contra su manifiesto;
+4. reiniciar el SUT correspondiente y, en Fabric, evaluar una lectura contra cada uno de los siete peers para que ningun contenedor de chaincode arranque en frio dentro de la ventana medida;
+5. verificar conectividad con una corrida smoke de solo lectura sobre la unidad reservada;
+6. inmediatamente antes de abrir la ventana medida, verificar contra `preconditions.json` el estado previo de todas las unidades que la ronda va a usar, y descartar la ronda si alguna esta contaminada;
+7. registrar metadatos de entorno y el identificador del snapshot.
 
 Para reducir sesgo por orden de ejecucion, las repeticiones deben alternar el SUT inicial:
 
@@ -264,7 +268,7 @@ La indisponibilidad temporal del registro privado en el peer receptor (ADR-006, 
 
 Para cada escenario medido:
 
-1. ejecutar 1 warm-up descartado;
+1. ejecutar 1 warm-up descartado, sobre su propia restauracion del snapshot. Calienta el host, los binarios de cliente y el camino de la ronda, y valida el escenario antes de medir. Si el warm-up no valida, se reintenta; si vuelve a fallar, el escenario se marca como no ejecutado con su motivo y no se miden sus repeticiones;
 2. ejecutar 5 repeticiones medidas;
 3. calcular media, desvio estandar, p50, p95 y p99 por repeticion;
 4. calcular media y desvio estandar entre repeticiones;

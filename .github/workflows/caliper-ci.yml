@@ -69,6 +69,10 @@ jobs:
         working-directory: benchmarks/caliper
         run: npm run check
 
+      - name: Generate the canonical dataset
+        working-directory: client
+        run: go run ./cmd/datasetgen --units 50000 --output-dir ../build/dataset
+
       - name: Test
         working-directory: benchmarks/caliper
         run: npm test

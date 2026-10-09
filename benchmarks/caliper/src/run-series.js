@@ -19,6 +19,8 @@ const REJECTION_SPECS = Object.freeze([
     {family: 'BLOCKING_STATE', operation: 'transfer'},
     {family: 'BLOCKING_STATE', operation: 'dispense'},
 ]);
+// Reinicio sin snapshot: ledger vacio y preparacion por prefijos en la ronda.
+// Solo para desarrollo; la serie citable restaura el snapshot (#138, D1).
 const RESET_STEPS = Object.freeze([
     ['down', 'docker', ['compose', '-f', 'network/compose.yaml', 'down', '--volumes']],
     ['cleanup', 'bash', ['-c', 'ids=$(docker ps -aq --filter name=^dev-peer); [ -z "$ids" ] || docker rm -f $ids >/dev/null']],
@@ -27,6 +29,14 @@ const RESET_STEPS = Object.freeze([
     ['deployCC', './network/network.sh', ['deployCC']],
     ['verify', './network/network.sh', ['verify']],
 ]);
+
+function snapshotResetSteps(snapshotDirectory, restoreRecordPath) {
+    return [
+        ['restore', 'npm', ['--prefix', 'benchmarks/caliper', 'run', 'snapshot:restore', '--',
+            '--snapshot-dir', snapshotDirectory, '--output', restoreRecordPath]],
+        ['verify', './network/network.sh', ['verify']],
+    ];
+}
 
 function scenarioKey(spec) {
     return [spec.scenario, spec.rate, spec.family, spec.operation].filter((part) => part !== undefined).join('-');
@@ -75,6 +85,7 @@ function parseArguments(arguments_) {
         else if (name === '--max-attempts') options.maxAttempts = Number(value);
         else if (name === '--series-token') options.seriesToken = value;
         else if (name === '--dataset-dir') options.datasetDirectory = value;
+        else if (name === '--snapshot-dir') options.snapshotDirectory = path.resolve(value);
         else throw new Error(`unsupported argument ${name}`);
     }
     if (!Number.isInteger(options.repetitions) || options.repetitions < 1 || options.repetitions > BASE_REPETITIONS) {
@@ -162,7 +173,11 @@ class Series {
 
     async reset(attemptDirectory, timings) {
         const logFile = path.join(attemptDirectory, 'reset.log');
-        for (const [name, command, args] of RESET_STEPS) {
+        const restoreRecordPath = path.join(attemptDirectory, 'restore.json');
+        const steps = this.options.snapshotDirectory
+            ? snapshotResetSteps(this.options.snapshotDirectory, restoreRecordPath)
+            : RESET_STEPS;
+        for (const [name, command, args] of steps) {
             fs.appendFileSync(logFile, `=== ${name}\n`);
             const result = await this.exec(command, args, logFile);
             timings[name] = result.seconds;
@@ -180,6 +195,7 @@ class Series {
         const record = {
             scenario: spec.scenario, rate: spec.rate, family: spec.family, operation: spec.operation,
             phase, repetition, attempt: attemptNumber, runToken, startedAt: new Date().toISOString(), timings: {},
+            snapshotId: this.report.snapshot?.id,
             directory: path.relative(this.repoRoot, attemptDirectory),
         };
         const finish = (fields) => {
@@ -189,7 +205,7 @@ class Series {
             return record;
         };
 
-        this.log(`${key} ${label}: reinicio con ledger limpio`);
+        this.log(`${key} ${label}: ${this.options.snapshotDirectory ? 'restauracion del snapshot' : 'reinicio con ledger limpio'}`);
         const resetFailure = await this.reset(attemptDirectory, record.timings);
         if (resetFailure) return finish({status: 'discarded', reason: resetFailure});
 
@@ -201,8 +217,10 @@ class Series {
         }
 
         this.log(`${key} ${label}: smoke`);
+        const smokeEnv = {SNT_CALIPER_RUN_TOKEN: `${runToken}-smoke`};
+        if (this.options.snapshotDirectory) smokeEnv.SNT_CALIPER_SNAPSHOT_DIR = this.options.snapshotDirectory;
         const smoke = await this.exec('npm', ['run', 'smoke'], path.join(attemptDirectory, 'smoke.log'), {
-            cwd: this.caliperDirectory, env: {SNT_CALIPER_RUN_TOKEN: `${runToken}-smoke`},
+            cwd: this.caliperDirectory, env: smokeEnv,
         });
         record.timings.smoke = smoke.seconds;
         if (smoke.status !== 0) return finish({status: 'smoke-failed', reason: `smoke falló: ${smoke.lastLine}`});
@@ -213,6 +231,7 @@ class Series {
         if (spec.family) roundArgs.push('--family', spec.family);
         if (spec.operation) roundArgs.push('--operation', spec.operation);
         if (this.options.datasetDirectory) roundArgs.push('--dataset-dir', this.options.datasetDirectory);
+        if (this.options.snapshotDirectory) roundArgs.push('--snapshot-dir', this.options.snapshotDirectory);
         const round = await this.exec('npm', roundArgs, path.join(attemptDirectory, 'round.log'), {
             cwd: this.caliperDirectory, marker: /\[caliper\]/u,
         });
@@ -275,6 +294,16 @@ class Series {
         this.report.scenarios.push(entry);
         const warmup = await this.repetition(spec, 'warmup', 0);
         entry.warmup = warmup ? 'valid' : 'discarded';
+        // D4 de #138: un warm-up que no valida tras sus intentos bloquea las
+        // repeticiones medidas de ese escenario.
+        if (!warmup) {
+            entry.status = 'not-executed';
+            entry.reason = `warm-up descartado en ${this.options.maxAttempts} intentos`;
+            this.log(`${key}: ${entry.reason}; no se miden repeticiones`);
+            this.writeReport();
+            return;
+        }
+        entry.status = 'executed';
         let target = this.options.repetitions;
         for (let repetition = 1; repetition <= target; repetition += 1) {
             const record = await this.repetition(spec, 'measurement', repetition);
@@ -303,6 +332,11 @@ class Series {
     async run() {
         this.log(`serie ${this.token}: ${this.options.specs.length} escenarios, ${this.options.repetitions} repeticiones base`);
         this.report.repositoryCommit = (await this.capture('git', ['rev-parse', 'HEAD'])).trim();
+        if (this.options.snapshotDirectory) {
+            const manifest = JSON.parse(fs.readFileSync(path.join(this.options.snapshotDirectory, 'manifest.json'), 'utf8'));
+            this.report.snapshot = {id: manifest.snapshotId, directory: path.relative(this.repoRoot, this.options.snapshotDirectory)};
+            this.log(`serie sobre el snapshot ${manifest.snapshotId}`);
+        }
         this.runmeta = path.join(this.directory, 'runmeta');
         const build = await this.exec('go', ['build', '-o', this.runmeta, './cmd/runmeta'],
             path.join(this.directory, 'runmeta-build.log'), {cwd: path.join(this.repoRoot, 'client')});
@@ -350,6 +384,7 @@ if (require.main === module) {
 
 module.exports = {
     CV_THRESHOLD,
+    Series,
     coefficientOfVariation,
     defaultPlan,
     needsExtension,

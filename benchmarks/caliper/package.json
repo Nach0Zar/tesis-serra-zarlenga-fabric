@@ -15,6 +15,8 @@
     "test:metadata": "node scripts/verify-round-metadata.js",
     "smoke": "node src/run-smoke.js",
     "round": "node src/run-round.js",
+    "snapshot:build": "node src/build-snapshot.js",
+    "snapshot:restore": "node src/restore-snapshot.js",
     "series": "node src/run-series.js"
   },
   "devDependencies": {
