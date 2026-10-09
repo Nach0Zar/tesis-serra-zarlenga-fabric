@@ -265,3 +265,20 @@ npm run series -- --snapshot-dir build/benchmarks/fabric-snapshots/golden-local
 Un warm-up que no valida en `--max-attempts` intentos marca el escenario como
 `not-executed` con su motivo y no se miden sus repeticiones (sección 7).
 
+### Costos medidos
+
+Ensayo no citable sobre el host del protocolo (WSL2, 6 CPU, 8 GB), Fabric
+2.5.16, contrato `2.11.2`:
+
+| Fase | Costo |
+|---|---:|
+| Construcción del snapshot, concurrencia 128 | 55 min (39 tx/s) |
+| Guardado de los diez volúmenes | 175 s |
+| Espacio en disco del snapshot | 8,3 GB |
+| Restauración: hashes, extracción, arranque y calentamiento | ~185 s |
+| Ronda completa: restauración, verify, recursos, smoke, verificación de unidades y 120 s medidos | ~385 s |
+| Serie de 120 rondas sin extensiones | ~12,8 h |
+
+La extracción está limitada por el disco de Docker sobre WSL: paralelizarla
+redujo la restauración de 200 s a 187 s.
+
