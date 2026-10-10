@@ -39,6 +39,14 @@ for (const dependency of ['@hyperledger/fabric-gateway', '@grpc/grpc-js']) {
         throw new Error(`${dependency} does not match its locked version`);
     }
 }
+for (const [dependency, expected] of Object.entries({
+    '@hyperledger/fabric-protos': '0.3.7',
+    ajv: '8.17.1',
+})) {
+    if (packageDocument.devDependencies?.[dependency] !== expected || installedVersion(dependency) !== expected) {
+        throw new Error(`${dependency} must be pinned exactly to ${expected}`);
+    }
+}
 if (installedVersion('@hyperledger/caliper-fabric') !== '0.7.1') {
     throw new Error('@hyperledger/caliper-fabric 0.7.1 must be present in the locked Caliper dependency tree');
 }

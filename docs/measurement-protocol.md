@@ -128,7 +128,7 @@ Parametros obligatorios:
 | Parametro | Valor |
 |---|---|
 | Seed | `20260727` |
-| Unidades minimas | 50.000 |
+| Unidades logicas | 50.000 exactas |
 | Identificacion | GTIN + numero de serie |
 | Metadatos minimos | lote, vencimiento, custodio inicial, estado inicial |
 | Cadenas validas | Deben cubrir registro, transferencia y dispensacion |
@@ -143,7 +143,21 @@ Reglas de uso:
 - Si 50.000 unidades no alcanzan para todas las rondas sin reutilizacion indebida, el generador debe producir `max(50000, unidades_requeridas * 1.2)`.
 - El dataset o su receta de generacion debe registrar seed, parametros, version del generador y hash del archivo producido.
 
-La construcción del snapshot lógico inicial se realiza mediante al menos 50.000 altas `RegisterUnit` exitosas en cada SUT. En Fabric, cada alta agrega un marcador en la colección implícita del laboratorio, por lo que el mínimo implica 50.000 escrituras privadas adicionales y sus hashes. La preparación del dataset debe reportar por separado duración, throughput efectivo y cantidad de marcadores; esas cifras no se mezclan con las rondas medidas. Si una repetición restaura un snapshot en vez de repetir las altas, debe verificarse que conserva el estado público, los datos privados y los marcadores equivalentes.
+El plan logico canonico conserva las 50.000 secuencias del bundle. De ellas,
+25.183 participan en al menos una de las 20 combinaciones de escenario y tasa:
+3.080 permanecen ausentes porque su alta se mide, y 22.103 se preparan en el
+estado previo que exige su receta. Las otras 24.817 son unidades de relleno.
+Por lo tanto, el snapshot contiene exactamente 46.920 unidades registradas y
+3.080 identidades inexistentes; no se reemplaza esta politica por 50.000 altas.
+
+Fabric construye ese estado una sola vez y lo exporta como snapshot golden. La
+construccion es reanudable e idempotente, ejecuta los pasos de cada receta en
+orden, usa concurrencia 64 por defecto y reconcilia los timeouts ambiguos con el
+ledger antes de reintentar. La preparacion reporta por separado duracion,
+transacciones write exitosas y marcadores de participacion; esas cifras no se
+mezclan con las rondas medidas. La baseline debe consumir el mismo
+`logical-plan.json` y producir el mismo estado logico, aunque su mecanismo de
+persistencia sea distinto.
 
 ## 5. Condiciones identicas entre Fabric y baseline
 
@@ -165,11 +179,12 @@ Cada medicion comparativa debe cumplir:
 Antes de cada repeticion medida:
 
 1. detener cualquier corrida anterior;
-2. limpiar estado temporal no versionado;
+2. restaurar el snapshot golden del SUT y verificar sus hashes y precondiciones;
 3. reiniciar el SUT correspondiente;
-4. cargar el dataset inicial;
-5. verificar conectividad con una corrida smoke;
-6. registrar metadatos de entorno.
+4. verificar el estado logico que usara la ronda;
+5. calentar el chaincode o servicio contra todos los nodos que correspondan;
+6. ejecutar el smoke de solo lectura;
+7. registrar metadatos de entorno y recursos.
 
 Para reducir sesgo por orden de ejecucion, las repeticiones deben alternar el SUT inicial:
 
@@ -188,6 +203,10 @@ Los perfiles usan una estrategia `fixed-rate` sobre operaciones conceptuales, co
 ### 6.1 Smoke
 
 Objetivo: verificar conectividad, contrato minimo y disponibilidad del SUT antes de medir.
+
+El smoke es estrictamente de solo lectura. Usa una unidad de relleno registrada
+y reservada por el plan, fuera de todas las bandas de escenarios; nunca invoca
+`RegisterUnit` ni altera el snapshot restaurado.
 
 | Parametro | Valor |
 |---|---|
@@ -264,7 +283,7 @@ La indisponibilidad temporal del registro privado en el peer receptor (ADR-006, 
 
 Para cada escenario medido:
 
-1. ejecutar 1 warm-up descartado;
+1. restaurar el snapshot, verificarlo y ejecutar 1 warm-up descartado;
 2. ejecutar 5 repeticiones medidas;
 3. calcular media, desvio estandar, p50, p95 y p99 por repeticion;
 4. calcular media y desvio estandar entre repeticiones;
@@ -276,7 +295,18 @@ Si el coeficiente de variacion de throughput o p95 supera 15%, ejecutar 3 repeti
 - serie extendida de 8 repeticiones;
 - posible causa observada de variabilidad.
 
-No se deben eliminar outliers sin justificacion documentada. Si una corrida se invalida por una falla operacional externa al escenario, debe conservarse el registro crudo y marcarse como corrida descartada con motivo.
+En Fabric, el warm-up evalua `ReadUnit` sobre la unidad reservada dirigiendose
+individualmente a cada uno de los siete peers. Cualquier peer que no responda o
+devuelva otro estado invalida el warm-up. Se permite exactamente un segundo
+intento despues de restaurar nuevamente el snapshot; si tambien falla, el
+escenario queda bloqueado y no se ejecutan sus mediciones.
+
+Cada repeticion medida obtiene su propia restauracion, verificacion, warm-up de
+peers, medicion de recursos y smoke. No se deben eliminar outliers sin
+justificacion documentada. Si una corrida se invalida por una falla operacional
+externa al escenario, debe conservarse el registro crudo y marcarse como corrida
+descartada con motivo; no se reemplaza silenciosamente y no participa del
+calculo del CV.
 
 ## 8. Disponibilidad
 
@@ -472,7 +502,7 @@ Reejecutar un mismo caso dentro de una ronda es valido: un rechazo no muta estad
 
 La construccion del snapshot inicial de la seccion 4 es su propia fase y no se mezcla con las rondas medidas: se declara con `scenario: dataset-preparation` y `phase: preparation`, y ambos se exigen mutuamente.
 
-`participationMarkers` registra las escrituras de marcador de ADR-007 punto 6 que la seccion 3.5 pide atribuir. Solo Fabric las produce, asi que la baseline tiene prohibido el bloque. Es obligatorio en la preparacion de Fabric, donde las 50.000 altas implican 50.000 escrituras privadas adicionales, y opcional en el resto de los escenarios de Fabric.
+`participationMarkers` registra las escrituras de marcador de ADR-007 punto 6 que la seccion 3.5 pide atribuir. Solo Fabric las produce, asi que la baseline tiene prohibido el bloque. Es obligatorio en la preparacion de Fabric. Su valor esperado deriva del plan: una escritura por cada una de las 46.920 altas y una por cada evento regulatorio incluido en las recetas; no se fija artificialmente en 50.000. Es opcional en el resto de los escenarios de Fabric.
 
 El bloque cubre los tres reportes que pide la seccion 3.5 y son obligatorios juntos:
 
@@ -488,6 +518,22 @@ El bloque cubre los tres reportes que pide la seccion 3.5 y son obligatorios jun
 La comparacion entre `expected` y `observed` es la que detecta marcadores omitidos o duplicados. La tasa y la proporcion son las que atribuyen el volumen de trabajo adicional sin restarlo de la latencia ni presentar una ejecucion sin marcadores como resultado comparable, conforme la seccion 3.5.
 
 El validador recalcula la tasa y la proporcion con una tolerancia mas laxa que la de las tasas objetivo, porque son cifras informadas y redondeadas para el reporte; alcanza igual para detectar un denominador equivocado.
+
+El snapshot Fabric incluye el plan logico, las precondiciones de las 50.000
+secuencias, la verificacion semantica, el metadata de preparacion, el journal y
+los archivos de los diez volumenes permitidos (tres orderers y siete peers).
+`manifest.json` valida con JSON Schema Draft 2020-12 y liga seed y hash del
+dataset, commit y digest de fuentes, contrato y package ID, Fabric 2.5.16,
+configuracion de red, archivos y volumenes. Cada volumen registra SHA-256 del
+archivo y un digest logico ordenado de su arbol. `snapshotId` se deriva de esos
+identificadores y hashes, nunca de la hora de creacion.
+
+La restauracion detiene la red, acepta solamente el proyecto Compose y los diez
+volumenes enumerados, valida los archivos antes de importar y el arbol despues,
+inicia la red y confirma canal, lifecycle, package ID, contrato y dataset. No se
+admiten limpiezas globales de Docker. Antes de cada ronda se vuelven a comprobar
+las unidades objetivo; cualquier contaminacion o incompatibilidad del manifiesto
+descarta el intento antes de iniciar Caliper.
 
 ## 10. Procesamiento de resultados
 
@@ -527,6 +573,8 @@ Antes de medir:
 - [ ] El generador produce el dataset con seed `20260727`.
 - [ ] Fabric y baseline implementan los mismos procesos core.
 - [ ] El dataset fue cargado en ambos SUT desde el mismo snapshot logico.
+- [ ] El snapshot y sus diez volumenes pasaron la verificacion de hashes y estado.
+- [ ] El warm-up alcanzo todos los peers o nodos requeridos.
 - [ ] Smoke pasa en Fabric.
 - [ ] Smoke pasa en baseline.
 - [ ] Se registro metadata de entorno.

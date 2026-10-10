@@ -79,6 +79,47 @@ function buildRoundMetadata(context, summary) {
     return document;
 }
 
+function buildPreparationMetadata(context, observations) {
+    const durationSeconds = Math.max(observations.durationSeconds, Number.EPSILON);
+    const markerCount = observations.markers.observed;
+    const successfulWrites = observations.successfulWriteTransactions;
+    const effectiveRate = successfulWrites / durationSeconds;
+    return {
+        $schema: 'urn:pfi-snt:run-metadata:schema:1.0.0',
+        schemaVersion: '1.0.0',
+        protocol: 'measurement-protocol',
+        repositoryCommit: context.repositoryCommit,
+        sut: 'fabric',
+        scenario: 'dataset-preparation',
+        phase: 'preparation',
+        repetition: 1,
+        dataset: context.dataset,
+        workers: context.concurrency,
+        durationSeconds,
+        rate: {
+            operation: 'register',
+            transactionsPerOperation: 1,
+            targetOperationsPerSecond: effectiveRate,
+            targetTransactionsPerSecond: effectiveRate,
+            effectiveTransactionsPerSecond: effectiveRate,
+        },
+        participationMarkers: {
+            expected: observations.markers.expected,
+            observed: markerCount,
+            fromRegistrations: observations.markers.fromRegistrations,
+            fromRegulatoryEvents: observations.markers.fromRegulatoryEvents,
+            successfulWriteTransactions: successfulWrites,
+            perSecond: markerCount / durationSeconds,
+            shareOfSuccessfulWrites: markerCount / successfulWrites,
+        },
+        startedAt: observations.startedAt,
+        endedAt: observations.endedAt,
+        host: context.host,
+        environment: context.environment,
+        notes: 'Construcción única del snapshot golden Fabric; no forma parte de las rondas medidas.',
+    };
+}
+
 function writeJSONAtomic(filePath, value) {
     fs.mkdirSync(path.dirname(filePath), {recursive: true});
     const temporaryPath = `${filePath}.tmp-${process.pid}`;
@@ -86,4 +127,4 @@ function writeJSONAtomic(filePath, value) {
     fs.renameSync(temporaryPath, filePath);
 }
 
-module.exports = {buildMetadata, buildRoundMetadata, writeJSONAtomic};
+module.exports = {buildMetadata, buildPreparationMetadata, buildRoundMetadata, writeJSONAtomic};

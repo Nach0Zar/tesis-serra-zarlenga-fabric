@@ -13,6 +13,8 @@ const {contractArguments, transientMap} = require('./requests');
 
 const SUBMITTED_EVENT = Constants.Events.Connector.TxsSubmitted;
 const FINISHED_EVENT = Constants.Events.Connector.TxsFinished;
+const DEFAULT_GATEWAY_TIMEOUT_MS = 30_000;
+const PREPARATION_GATEWAY_TIMEOUT_MS = 300_000;
 
 function networkOrganizations(networkConfig) {
     const values = new Map();
@@ -56,9 +58,8 @@ class GatewayPool {
         return value;
     }
 
-    async invoke(invocation) {
-        const {contract} = this.connection(invocation.invokerMspId);
-        const deadline = Date.now() + 30_000;
+    proposal(invocation, mspId = invocation.invokerMspId) {
+        const {contract} = this.connection(mspId);
         const options = {arguments: contractArguments(invocation)};
         const transient = transientMap(invocation);
         if (transient) {
@@ -67,17 +68,50 @@ class GatewayPool {
             );
         }
         if (invocation.targetMspIds?.length) options.endorsingOrganizations = invocation.targetMspIds;
-        const proposal = contract.newProposal(invocation.operation, options);
+        return contract.newProposal(invocation.operation, options);
+    }
+
+    async evaluate(invocation, options = {}) {
+        const proposal = this.proposal(invocation, options.mspId);
+        const bytes = await proposal.evaluate({deadline: Date.now() + (options.timeoutMs ?? 30_000)});
+        return Buffer.from(bytes);
+    }
+
+    async readUnit(mspId, request, options = {}) {
+        const bytes = await this.evaluate({operation: 'ReadUnit', invokerMspId: mspId, request}, options);
+        return JSON.parse(bytes.toString('utf8'));
+    }
+
+    async getUnitHistory(mspId, request, options = {}) {
+        const bytes = await this.evaluate({operation: 'GetUnitHistory', invokerMspId: mspId, request}, options);
+        const history = JSON.parse(bytes.toString('utf8'));
+        if (!Array.isArray(history)) throw new Error('GetUnitHistory did not return an array');
+        return history;
+    }
+
+    async invoke(invocation, hooks = {}, options = {}) {
+        const proposal = this.proposal(invocation);
         const transactionId = proposal.getTransactionId();
-        const transaction = await proposal.endorse({deadline});
-        const submitted = await transaction.submit({deadline});
-        const status = await submitted.getStatus({deadline});
-        if (!status.successful) {
-            const error = new Error(`transaction ${transactionId} committed with status ${status.code}`);
+        const timeoutMs = Number(options.timeoutMs ?? DEFAULT_GATEWAY_TIMEOUT_MS);
+        if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('gateway timeout must be positive');
+        try {
+            await hooks.onTransactionId?.(transactionId);
+            const transaction = await proposal.endorse({deadline: Date.now() + timeoutMs});
+            const transactionBytes = Buffer.from(transaction.getBytes());
+            await hooks.onEndorsed?.({transactionId, transactionBytes});
+            const submitted = await transaction.submit({deadline: Date.now() + timeoutMs});
+            const status = await submitted.getStatus({deadline: Date.now() + timeoutMs});
+            if (!status.successful) {
+                const error = new Error(`transaction ${transactionId} committed with status ${status.code}`);
+                error.transactionId = transactionId;
+                error.validationCode = status.code;
+                throw error;
+            }
+            return {transactionId, transactionBytes, result: submitted.getResult()};
+        } catch (error) {
             error.transactionId = transactionId;
             throw error;
         }
-        return {transactionId, result: submitted.getResult()};
     }
 
     async waitForUnitState(mspIds, request, expectedState, timeoutMs = 30_000) {
@@ -183,13 +217,18 @@ async function measuredGatewayInvocation({
     }
 }
 
-async function invokePreparation(gatewayPool, invocation) {
+async function invokePreparation(gatewayPool, invocation, hooks = {}) {
     if (invocation.operation === 'ReceiveTransfer') {
-        await gatewayPool.waitForUnitState(invocation.targetMspIds, invocation.request, 'EN_TRANSITO');
+        await gatewayPool.waitForUnitState(
+            invocation.targetMspIds,
+            invocation.request,
+            'EN_TRANSITO',
+            PREPARATION_GATEWAY_TIMEOUT_MS,
+        );
     }
     for (let attempt = 1; attempt <= 60; attempt += 1) {
         try {
-            return await gatewayPool.invoke(invocation);
+            return await gatewayPool.invoke(invocation, hooks, {timeoutMs: PREPARATION_GATEWAY_TIMEOUT_MS});
         } catch (error) {
             const envelope = extractContractError(error);
             if (!isPrivateDataNotDisseminated(envelope) || invocation.operation !== 'ReceiveTransfer') throw error;
@@ -200,7 +239,9 @@ async function invokePreparation(gatewayPool, invocation) {
 }
 
 module.exports = {
+    DEFAULT_GATEWAY_TIMEOUT_MS,
     GatewayPool,
+    PREPARATION_GATEWAY_TIMEOUT_MS,
     invokePreparation,
     isRetryableReceiveVisibility,
     measuredGatewayInvocation,

@@ -2,17 +2,20 @@
 'use strict';
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
 
 const {resolveOrganizationCredentials} = require('./credentials');
 const {GatewayPool, invokePreparation} = require('./gateway-bridge');
+const {buildHostMetadata} = require('./host');
 const {buildRoundMetadata, writeJSONAtomic} = require('./metadata');
 const {buildMultiOrganizationNetworkConfig, inspectOrganizationRuntime} = require('./network-config');
 const {buildPlan} = require('./planner');
 const {buildProfile} = require('./profiles');
 const {aggregateResults} = require('./raw-results');
+const {assertSnapshotCompatibility} = require('./snapshot');
+const {readSnapshot, sha256File} = require('./artifacts');
+const {readPreconditions, sequencesForPlan, verifyPlanPreconditions} = require('./snapshot-preconditions');
 const {loadDatasetBundle, readSourceTruth} = require('./sources');
 
 const CALIPER_VERSION = require('../package.json').devDependencies['@hyperledger/caliper-cli'];
@@ -44,13 +47,20 @@ function parseArguments(arguments_) {
         if (values[key] !== undefined) throw new Error(`duplicate argument --${key}`);
         values[key] = value;
     }
-    const supported = new Set(['scenario', 'phase', 'repetition', 'rate', 'family', 'operation', 'dataset-dir', 'run-token']);
+    const supported = new Set([
+        'scenario', 'phase', 'repetition', 'rate', 'family', 'operation', 'dataset-dir', 'run-token',
+        'state-mode', 'snapshot-dir', 'output-root',
+    ]);
     for (const key of Object.keys(values)) {
         if (!supported.has(key)) throw new Error(`unsupported argument --${key}`);
     }
     for (const required of ['scenario', 'phase', 'repetition', 'rate']) {
         if (!values[required]) throw new Error(`--${required} is required`);
     }
+    const stateMode = values['state-mode'] ?? 'prepare';
+    if (!['prepare', 'snapshot'].includes(stateMode)) throw new Error('--state-mode must be prepare or snapshot');
+    if (stateMode === 'snapshot' && !values['snapshot-dir']) throw new Error('--snapshot-dir is required in snapshot mode');
+    if (stateMode === 'prepare' && values['snapshot-dir']) throw new Error('--snapshot-dir is only valid in snapshot mode');
     return {
         scenario: values.scenario,
         phase: values.phase,
@@ -60,37 +70,26 @@ function parseArguments(arguments_) {
         operation: values.operation,
         datasetDirectory: values['dataset-dir'],
         runToken: values['run-token'],
+        stateMode,
+        snapshotDirectory: values['snapshot-dir'],
+        outputRoot: values['output-root'],
     };
 }
 
-function createRunDirectory(repoRoot, explicitToken) {
+function createRunDirectory(repoRoot, explicitToken, explicitOutputRoot) {
     const token = explicitToken ?? new Date().toISOString().replace(/[:.]/gu, '-');
     if (!/^[A-Za-z0-9._-]{1,100}$/u.test(token)) throw new Error('--run-token contains unsupported characters');
-    const runDirectory = path.join(repoRoot, 'build', 'benchmarks', 'caliper', token);
+    const defaultRoot = path.join(repoRoot, 'build', 'benchmarks', 'caliper');
+    const outputRoot = path.resolve(repoRoot, explicitOutputRoot ?? defaultRoot);
+    const buildRoot = path.join(repoRoot, 'build');
+    const relative = path.relative(buildRoot, outputRoot);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new Error('--output-root must resolve inside the repository build directory');
+    }
+    const runDirectory = path.join(outputRoot, token);
     fs.mkdirSync(path.dirname(runDirectory), {recursive: true});
     fs.mkdirSync(runDirectory, {recursive: false});
     return runDirectory;
-}
-
-function readOSName() {
-    try {
-        const contents = fs.readFileSync('/etc/os-release', 'utf8');
-        return contents.match(/^PRETTY_NAME=(?:"([^"]+)"|(.*))$/mu)?.slice(1).find(Boolean) ?? os.type();
-    } catch {
-        return os.type();
-    }
-}
-
-function buildHostMetadata() {
-    const cpu = os.cpus()[0];
-    if (!cpu) throw new Error('cannot identify benchmark host CPU');
-    const host = {
-        cpu: cpu.model.trim(), cpuCores: os.cpus().length,
-        memoryGB: Number((os.totalmem() / (1024 ** 3)).toFixed(3)),
-        os: readOSName(), kernel: os.release(),
-    };
-    if (/microsoft/iu.test(os.release())) host.wsl = process.env.WSL_DISTRO_NAME ? `WSL2 ${process.env.WSL_DISTRO_NAME}` : 'WSL2';
-    return host;
 }
 
 async function preparePlan(plan, networkConfig, options = {}) {
@@ -171,7 +170,7 @@ async function main() {
     const sourceTruth = readSourceTruth(repoRoot);
     const bundle = loadDatasetBundle(datasetDirectory);
     const plan = buildPlan(bundle.dataset, profile, bundle.manifest.seed);
-    const credentials = resolveOrganizationCredentials(repoRoot, plan.requiredMspIds);
+    const credentials = resolveOrganizationCredentials(repoRoot, [...new Set([...plan.requiredMspIds, 'LabMSP'])]);
     const runtime = inspectOrganizationRuntime(repoRoot, credentials);
     const networkConfig = buildMultiOrganizationNetworkConfig({
         organizations: credentials,
@@ -180,7 +179,7 @@ async function main() {
         versions: runtime,
         caliperVersion: CALIPER_VERSION,
     });
-    const runDirectory = createRunDirectory(repoRoot, options.runToken);
+    const runDirectory = createRunDirectory(repoRoot, options.runToken, options.outputRoot);
     const paths = {
         networkConfigPath: path.join(runDirectory, 'network-config.json'),
         benchmarkConfigPath: path.join(runDirectory, 'benchmark-config.json'),
@@ -194,7 +193,32 @@ async function main() {
     writeJSONAtomic(paths.workPlanPath, plan);
     writeJSONAtomic(paths.benchmarkConfigPath, benchmarkConfig);
 
-    await preparePlan(plan, networkConfig);
+    if (options.stateMode === 'prepare') {
+        await preparePlan(plan, networkConfig);
+    } else {
+        const snapshot = readSnapshot(repoRoot, options.snapshotDirectory);
+        assertSnapshotCompatibility(repoRoot, snapshot);
+        if (snapshot.manifest.dataset.sha256 !== bundle.manifest.dataset.sha256) {
+            throw new Error('snapshot and round dataset hashes differ');
+        }
+        const preconditions = readPreconditions(snapshot);
+        const pool = new GatewayPool(networkConfig);
+        try {
+            const verified = await verifyPlanPreconditions(
+                pool,
+                bundle.dataset,
+                preconditions,
+                sequencesForPlan(plan, snapshot.manifest.smokeSequence),
+            );
+            writeJSONAtomic(path.join(runDirectory, 'snapshot-context.json'), {
+                snapshotId: snapshot.manifest.snapshotId,
+                manifestSHA256: sha256File(snapshot.manifestPath),
+                verifiedPreconditions: verified,
+            });
+        } finally {
+            pool.close();
+        }
+    }
     const repositoryCommit = run('git', ['rev-parse', 'HEAD'], {cwd: repoRoot}).stdout.trim();
     const startedAt = new Date().toISOString();
     const caliper = path.join(__dirname, '..', 'node_modules', '.bin', 'caliper');

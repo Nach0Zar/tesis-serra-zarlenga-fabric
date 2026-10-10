@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pfi-snt:fabric-series-index:schema:1.0.0",
+  "title": "Índice de serie experimental Fabric",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "seriesToken", "plan", "citable", "snapshot", "startedAt", "status", "scenarios"],
+  "properties": {
+    "$schema": {"const": "urn:pfi-snt:fabric-series-index:schema:1.0.0"},
+    "schemaVersion": {"const": "1.0.0"},
+    "seriesToken": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,100}$"},
+    "plan": {"enum": ["full", "trial"]},
+    "citable": {"type": "boolean"},
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "directory", "manifestSHA256"],
+      "properties": {
+        "id": {"$ref": "#/$defs/sha256"},
+        "directory": {"type": "string", "minLength": 1},
+        "manifestSHA256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "startedAt": {"type": "string", "minLength": 20},
+    "endedAt": {"type": "string", "minLength": 20},
+    "status": {"enum": ["running", "completed", "incomplete", "failed"]},
+    "scenarios": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/scenario"}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "scenario", "rate", "status", "extended", "attempts"],
+      "properties": {
+        "key": {"type": "string", "minLength": 1},
+        "scenario": {"type": "string", "minLength": 1},
+        "rate": {"type": "number", "exclusiveMinimum": 0},
+        "family": {"type": "string", "minLength": 1},
+        "operation": {"type": "string", "minLength": 1},
+        "status": {"enum": ["pending", "running", "completed", "blocked", "incomplete"]},
+        "extended": {"type": "boolean"},
+        "throughputCV": {"type": "number", "minimum": 0},
+        "p95CV": {"type": "number", "minimum": 0},
+        "reason": {"type": "string", "minLength": 1},
+        "attempts": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/attempt"}
+        }
+      }
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "repetition", "try", "status", "startedAt", "endedAt", "directory"],
+      "properties": {
+        "kind": {"enum": ["warmup", "measurement"]},
+        "repetition": {"type": "integer", "minimum": 0, "maximum": 8},
+        "try": {"type": "integer", "minimum": 1, "maximum": 2},
+        "status": {"enum": ["completed", "discarded", "failed"]},
+        "startedAt": {"type": "string", "minLength": 20},
+        "endedAt": {"type": "string", "minLength": 20},
+        "directory": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1},
+        "resources": {"type": "string", "minLength": 1},
+        "summary": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "warmup"}}, "required": ["kind"]},
+          "then": {"properties": {"repetition": {"type": "integer", "const": 0}}},
+          "else": {"properties": {"repetition": {"type": "integer", "minimum": 1}}}
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"plan": {"const": "trial"}}, "required": ["plan"]},
+      "then": {"properties": {"citable": {"const": false}}}
+    },
+    {
+      "if": {"properties": {"plan": {"const": "full"}}, "required": ["plan"]},
+      "then": {"properties": {"citable": {"const": true}}}
+    },
+    {
+      "if": {
+        "properties": {"status": {"enum": ["completed", "incomplete", "failed"]}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {"endedAt": {"type": "string", "minLength": 20}},
+        "required": ["endedAt"]
+      }
+    }
+  ]
+}
