@@ -10,7 +10,9 @@ const {TxStatus} = require('@hyperledger/caliper-core');
 
 const {ConceptualFixedRate} = require('../rate-controllers/conceptual-fixed-rate');
 const {extractContractError, isPrivateDataNotDisseminated} = require('../src/contract-errors');
-const {invokePreparation, measuredGatewayInvocation, receiveRetryCause} = require('../src/gateway-bridge');
+const {
+    GatewayPool, PREPARATION_GATEWAY_TIMEOUT_MS, invokePreparation, measuredGatewayInvocation, receiveRetryCause,
+} = require('../src/gateway-bridge');
 const {buildRoundMetadata} = require('../src/metadata');
 const {MIX_PATTERN, buildPlan, candidatePools} = require('../src/planner');
 const {buildProfile, weightedTransactionsPerOperation} = require('../src/profiles');
@@ -268,12 +270,15 @@ test('receive preparation waits for all endorsers to observe transit without ret
     };
     const pool = {
         waitForUnitState: async (...arguments_) => calls.push(['wait', ...arguments_]),
-        invoke: async (entry) => calls.push(['invoke', entry.operation]),
+        invoke: async (entry, _hooks, options) => calls.push(['invoke', entry.operation, options.timeoutMs]),
     };
     await invokePreparation(pool, receive);
     assert.deepEqual(calls, [
-        ['wait', ['LabMSP', 'DrogueriaMSP'], receive.request, 'EN_TRANSITO'],
-        ['invoke', 'ReceiveTransfer'],
+        [
+            'wait', ['LabMSP', 'DrogueriaMSP'], receive.request, 'EN_TRANSITO',
+            PREPARATION_GATEWAY_TIMEOUT_MS,
+        ],
+        ['invoke', 'ReceiveTransfer', PREPARATION_GATEWAY_TIMEOUT_MS],
     ]);
 });
 
@@ -294,6 +299,44 @@ test('contract error extraction recognizes expected errors and the exact private
     assert.equal(envelope.code, 'INTERNAL_ERROR');
     assert.equal(isPrivateDataNotDisseminated(envelope), true);
     assert.equal(isPrivateDataNotDisseminated({code: 'INTERNAL_ERROR', details: {reintentable: true}}), false);
+});
+
+test('gateway assigns a fresh deadline after each durable lifecycle hook', async () => {
+    const deadlines = [];
+    const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
+    const submitted = {
+        getStatus: async ({deadline}) => {
+            deadlines.push(deadline);
+            return {successful: true, code: 0};
+        },
+        getResult: () => Buffer.from('{}'),
+    };
+    const transaction = {
+        getBytes: () => Buffer.from('transaction'),
+        submit: async ({deadline}) => {
+            deadlines.push(deadline);
+            await wait();
+            return submitted;
+        },
+    };
+    const proposal = {
+        getTransactionId: () => 'tx-deadlines',
+        endorse: async ({deadline}) => {
+            deadlines.push(deadline);
+            await wait();
+            return transaction;
+        },
+    };
+    const pool = Object.create(GatewayPool.prototype);
+    pool.proposal = () => proposal;
+    const result = await pool.invoke({}, {
+        onTransactionId: wait,
+        onEndorsed: wait,
+    });
+    assert.equal(result.transactionId, 'tx-deadlines');
+    assert.equal(deadlines.length, 3);
+    assert.ok(deadlines[1] > deadlines[0]);
+    assert.ok(deadlines[2] > deadlines[1]);
 });
 
 test('measured receive retries stale receiver state only in the correlated transfer path', async () => {

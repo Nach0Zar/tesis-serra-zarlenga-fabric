@@ -6,17 +6,18 @@ red Fabric `2.5.16` del repositorio. Caliper se ejecuta en modo
 `--caliper-flow-only-test`: la creación del canal y el lifecycle del chaincode
 siguen perteneciendo a los scripts de `network/`.
 
-La ronda de smoke es deliberadamente mínima y diagnóstica:
+La ronda de smoke es deliberadamente mínima, diagnóstica y de solo lectura:
 
 - canal `snt-channel`, chaincode `snt` e identidad `User1` de `LabMSP`;
 - una sola operación `ReadUnit`;
 - 1 worker, controlador `fixed-rate`, 1 TPS y 30 consultas;
-- una unidad tomada del primer `RegisterUnit` de `LabMSP` del dataset
-  compartido, registrada fuera de la ronda sólo si aún no existe.
+- una unidad de relleno reservada por el plan lógico, ya existente en el
+  snapshot y fuera de las bandas de todos los escenarios.
 
 El runner medible agrega una ronda individual por operación core, la carga
-mixta y los rechazos esperados. La carga completa del snapshot, la serie de
-repeticiones y el procesamiento comparativo continúan fuera de este módulo.
+mixta y los rechazos esperados. Este módulo también construye, verifica y
+restaura el snapshot golden de Fabric y orquesta las series completa y de
+ensayo. El procesamiento comparativo continúa fuera de este módulo.
 
 ## Requisitos
 
@@ -42,7 +43,6 @@ cd ../benchmarks/caliper
 npm ci
 npm run check
 npm test
-npm run smoke
 ```
 
 La documentación de Caliper 0.7.1 enumera Node.js 20 y 22, pero los paquetes
@@ -84,15 +84,44 @@ puede definir `SNT_CALIPER_RUN_TOKEN` con letras, números, punto, guion o guion
 bajo. Para usar otro bundle generado, se puede definir
 `SNT_CALIPER_DATASET_DIR` con su ruta absoluta o relativa a la raíz.
 
+## Snapshot golden
+
+El plan canónico contiene 50.000 secuencias: 46.920 registradas —22.103
+preparadas para escenarios y 24.817 de relleno— y 3.080 ausentes porque su alta
+se mide. `logical-plan.json` es independiente del SUT y es el contrato que debe
+consumir la baseline. La construcción ejecuta pasos seriales por receta con
+concurrencia entre unidades, 64 por defecto; registra un journal durable y
+reconcilia un timeout ambiguo con `ReadUnit` e historial antes de decidir si
+continúa o reintenta.
+
+Desde `benchmarks/caliper`:
+
+```bash
+npm run snapshot:build -- --concurrency 64 --max-attempts 5
+# Después de una interrupción, usando el directorio .building-* informado:
+npm run snapshot:build -- --resume --snapshot-dir <ruta> --concurrency 64
+
+npm run snapshot:restore -- --snapshot-dir <ruta-del-snapshot>
+npm run snapshot:verify -- --snapshot-dir <ruta-del-snapshot> --concurrency 64
+npm run warm:peers -- --snapshot-dir <ruta-del-snapshot>
+npm run smoke -- --snapshot-dir <ruta-del-snapshot>
+```
+
+El snapshot terminado se guarda en
+`build/benchmarks/fabric/snapshots/<snapshot-id>/`. Su manifiesto estricto liga
+el dataset, fuentes, contrato, package ID, red, verificación semántica y los
+diez volúmenes de tres orderers y siete peers. La restauración acepta únicamente
+esa allowlist y verifica tanto el SHA-256 del tar como el digest ordenado del
+árbol restaurado. No usa `docker prune` ni borrados globales.
+
 ## Rondas medibles
 
 El runner `npm run round` consume exclusivamente recetas del bundle compartido
-con seed `20260727`. Prepara fuera de la ventana medida sólo los prefijos de
-receta requeridos por la ronda: conserva el orden dentro de cada receta y
-procesa con concurrencia acotada unidades disjuntas. Nunca crea el canal, instala chaincode
-ni reinicia la red. Cada ronda debe comenzar sobre el estado limpio que
-corresponda al protocolo; encontrar una unidad objetivo ya mutada se considera
-contaminación experimental y la operación falla.
+con seed `20260727`. Mantiene `--state-mode prepare` como valor predeterminado
+compatible: prepara fuera de la ventana medida sólo los prefijos requeridos.
+Con `--state-mode snapshot`, exige `--snapshot-dir`, valida el manifiesto y las
+precondiciones de todas las unidades de la ronda y no ejecuta preparación.
+Encontrar contaminación experimental hace fallar la ronda antes de Caliper.
 
 La interfaz es:
 
@@ -104,6 +133,8 @@ npm run round -- \
   --rate <tasa permitida> \
   [--family <UNAUTHORIZED_TRANSFER|DUPLICATE_IDENTITY|BLOCKING_STATE>] \
   [--operation <transfer|dispense>] \
+  [--state-mode <prepare|snapshot>] \
+  [--snapshot-dir <ruta>] \
   [--dataset-dir <ruta>] \
   [--run-token <identificador>]
 ```
@@ -146,6 +177,27 @@ Los rechazos usan las familias y códigos esperados del dataset. Se ejecutan en
 rondas separadas: `UNAUTHORIZED_TRANSFER`, `DUPLICATE_IDENTITY` y
 `BLOCKING_STATE`; esta última admite una ronda `transfer` y otra `dispense`.
 Un rechazo con otro código, o un éxito inesperado, descarta la ronda.
+
+## Series reproducibles
+
+`npm run series` restaura el snapshot antes de cada intento y luego ejecuta la
+verificación, el calentamiento dirigido a los siete peers, la medición de
+recursos, el smoke y la ronda. Un warm-up fallido se repite exactamente una vez
+sobre una nueva restauración; un segundo fallo bloquea ese escenario. Los
+intentos fallidos o descartados conservan crudos, logs y motivo y no participan
+del CV.
+
+```bash
+npm run series -- --plan full --snapshot-dir <ruta-del-snapshot>
+npm run series -- --plan trial --snapshot-dir <ruta-del-snapshot>
+```
+
+`full` recorre las 20 combinaciones, ejecuta cinco mediciones y agrega las
+repeticiones 6–8 cuando el CV poblacional del throughput efectivo o de p95
+supera 15 %. `trial` ejecuta `read-unit` a 50 TPS, `write-transfer` a 20
+pares/s y `mixed` a 20 TPS, con dos mediciones cada uno; queda marcado como no
+citable. El índice estricto se guarda en
+`build/benchmarks/fabric/series/<token>/series-index.json`.
 
 Ejemplos:
 

@@ -8,7 +8,7 @@ issues de ejecución y procesamiento, conforme a
 
 Puntos fijados por el protocolo:
 
-- dataset sintético compartido, generado con seed `20260727`, mínimo 50.000 unidades;
+- dataset sintético compartido, generado con seed `20260727`, exactamente 50.000 unidades lógicas;
 - estructura de evidencia cruda y resultados definida en la sección 9 del protocolo.
 
 ## Contrato de metadatos
@@ -85,16 +85,17 @@ La paridad entre ambos SUT es verificable de forma automática: dos corridas com
 ## Caliper local
 
 El proyecto aislado [`caliper/`](caliper/) instala Caliper 0.7.1 con el binding
-`fabric:fabric-gateway` y ejecuta una única ronda diagnóstica de `ReadUnit`:
-1 worker, 30 consultas y tasa fija de 1 TPS. Consume una red ya desplegada y el
-bundle determinístico de 50.000 unidades; no crea canales, no instala
-chaincode y no sustituye las rondas medibles.
+`fabric:fabric-gateway`. Construye y restaura el snapshot golden de 46.920
+unidades presentes y 3.080 ausentes, ejecuta un smoke de `ReadUnit` de solo
+lectura y ofrece el runner de rondas y series reproducibles.
 
 El mismo proyecto se reutiliza para las cinco operaciones core, la mezcla
 determinística y las rondas separadas de rechazo. Las salidas procesables son
 `raw.json`, `summary.json` y `metadata.json`; el HTML de Caliper es
-complementario. El runner ejecuta una sola ronda y no adelanta la orquestación
-de repeticiones ni el análisis estadístico final.
+complementario. El orquestador ejecuta la matriz de 20 combinaciones, la
+política de warm-up y la extensión 5+3 por CV, además de un ensayo no citable
+de tres escenarios. El análisis estadístico comparativo entre SUT permanece
+fuera de alcance.
 
 La configuración efectiva, el reporte HTML, el contexto y `metadata.json` se
 guardan bajo `build/benchmarks/caliper/`, que está ignorado por Git. Los

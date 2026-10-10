@@ -13,13 +13,20 @@
     "check": "node scripts/check-syntax.js && node scripts/verify-setup.js",
     "test": "node --test test/*.test.js",
     "test:metadata": "node scripts/verify-round-metadata.js",
+    "snapshot:build": "node src/build-snapshot.js",
+    "snapshot:verify": "node src/verify-snapshot.js",
+    "snapshot:restore": "node src/restore-snapshot.js",
     "smoke": "node src/run-smoke.js",
-    "round": "node src/run-round.js"
+    "warm:peers": "node src/warm-peers.js",
+    "round": "node src/run-round.js",
+    "series": "node src/run-series.js"
   },
   "devDependencies": {
     "@grpc/grpc-js": "1.13.1",
     "@hyperledger/caliper-cli": "0.7.1",
     "@hyperledger/caliper-core": "0.7.1",
-    "@hyperledger/fabric-gateway": "1.7.1"
+    "@hyperledger/fabric-gateway": "1.7.1",
+    "@hyperledger/fabric-protos": "0.3.7",
+    "ajv": "8.17.1"
   }
 }

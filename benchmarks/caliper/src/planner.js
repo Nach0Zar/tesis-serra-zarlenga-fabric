@@ -138,6 +138,21 @@ function copyCandidate(candidate, ordinal) {
     };
 }
 
+function candidateKey(candidate) {
+    return [
+        candidate.datasetSequence,
+        candidate.expectedRejection?.family ?? '',
+        candidate.invocations[0]?.operation ?? '',
+    ].join('|');
+}
+
+function indexCandidatePools(pools) {
+    return Object.fromEntries(Object.entries(pools).map(([name, entries]) => [
+        name,
+        new Map(entries.map((entry) => [candidateKey(entry), entry])),
+    ]));
+}
+
 function scenarioBand(pool, scenario) {
     const bandIndex = SCENARIO_BANDS[scenario];
     if (bandIndex === undefined) {
@@ -163,11 +178,12 @@ function requiredOrganizations(preparations, workers) {
     return [...values].sort();
 }
 
-function buildPlan(dataset, profile, seed = 20260727) {
+function buildPlan(dataset, profile, seed = 20260727, options = {}) {
     if (seed !== 20260727) {
         throw new Error('workload seed must be 20260727');
     }
-    const pools = candidatePools(dataset);
+    const pools = options.pools ?? candidatePools(dataset);
+    const poolIndexes = indexCandidatePools(pools);
     const count = plannedCalls(profile);
     const workers = Array.from({length: profile.workers}, (_, workerIndex) => ({workerIndex, operations: []}));
 
@@ -216,11 +232,9 @@ function buildPlan(dataset, profile, seed = 20260727) {
     const preparationBySequence = new Map();
     for (const worker of workers) {
         for (const operation of worker.operations) {
-            const poolsForType = operation.expectedRejection ? pools.rejection : pools[operation.type];
-            const candidate = poolsForType.find((entry) => entry.datasetSequence === operation.datasetSequence
-                && (!operation.expectedRejection
-                    || (entry.expectedRejection.family === operation.expectedRejection.family
-                        && entry.invocations[0].operation === operation.invocations[0].operation)));
+            const candidate = poolIndexes[operation.expectedRejection ? 'rejection' : operation.type].get(
+                candidateKey(operation),
+            );
             if (candidate?.preparation.length) {
                 preparationBySequence.set(candidate.datasetSequence, {
                     datasetSequence: candidate.datasetSequence,
@@ -240,4 +254,13 @@ function buildPlan(dataset, profile, seed = 20260727) {
     };
 }
 
-module.exports = {MIX_PATTERN, SCENARIO_BANDS, buildPlan, candidatePools, normalizeSteps, plannedCalls};
+module.exports = {
+    MIX_PATTERN,
+    SCENARIO_BANDS,
+    buildPlan,
+    candidateKey,
+    candidatePools,
+    indexCandidatePools,
+    normalizeSteps,
+    plannedCalls,
+};
