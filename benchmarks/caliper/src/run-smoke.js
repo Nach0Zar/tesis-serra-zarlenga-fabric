@@ -60,7 +60,26 @@ function buildHostMetadata() {
     return host;
 }
 
-function ensurePreparedUnit(repoRoot, recipe) {
+// Con un snapshot restaurado el smoke es de solo lectura (D3 de #138): usa la
+// unidad de relleno reservada y nunca registra.
+function snapshotSmokeRecipe(repoRoot, dataset) {
+    const snapshotDirectory = path.resolve(repoRoot, process.env.SNT_CALIPER_SNAPSHOT_DIR);
+    const manifest = JSON.parse(fs.readFileSync(path.join(snapshotDirectory, 'manifest.json'), 'utf8'));
+    const unit = dataset.units.find((entry) => entry.sequence === manifest.smokeSequence);
+    const registration = unit?.preparation?.[0];
+    if (registration?.operation !== 'RegisterUnit') {
+        throw new Error(`snapshot smoke sequence ${manifest.smokeSequence} has no registration recipe`);
+    }
+    return {
+        sequence: unit.sequence,
+        operation: registration.operation,
+        invokerMspId: registration.invokerMspId,
+        request: registration.request,
+        snapshotId: manifest.snapshotId,
+    };
+}
+
+function ensurePreparedUnit(repoRoot, recipe, readOnly = false) {
     const baseArgs = [
         'run', './cmd/snt-client',
         'read-unit',
@@ -78,6 +97,9 @@ function ensurePreparedUnit(repoRoot, recipe) {
     const readFailure = `${readResult.stdout ?? ''}\n${readResult.stderr ?? ''}`;
     if (!readFailure.includes('UNIT_NOT_FOUND')) {
         throw new Error(`cannot determine whether the smoke unit exists: ${readFailure.trim()}`);
+    }
+    if (readOnly) {
+        throw new Error(`snapshot smoke unit ${recipe.sequence} is missing; the restored ledger is not the snapshot`);
     }
 
     run('go', [
@@ -139,10 +161,13 @@ function main() {
     );
     const sourceTruth = readSourceTruth(repoRoot);
     const datasetBundle = loadDatasetBundle(datasetDirectory);
-    const recipe = selectLabRegistration(datasetBundle.dataset);
+    const snapshotMode = Boolean(process.env.SNT_CALIPER_SNAPSHOT_DIR);
+    const recipe = snapshotMode
+        ? snapshotSmokeRecipe(repoRoot, datasetBundle.dataset)
+        : selectLabRegistration(datasetBundle.dataset);
     const credentials = resolveLabCredentials(repoRoot);
     const runtime = inspectRuntime(repoRoot, credentials.peerHostname);
-    const preparation = ensurePreparedUnit(repoRoot, recipe);
+    const preparation = ensurePreparedUnit(repoRoot, recipe, snapshotMode);
     const runDirectory = createRunDirectory(repoRoot);
     const metadataPath = path.join(runDirectory, 'metadata.json');
     const contextPath = path.join(runDirectory, 'run-context.json');
@@ -179,6 +204,7 @@ function main() {
         },
         preparation,
         datasetSequence: recipe.sequence,
+        snapshotId: recipe.snapshotId,
     };
     const benchmarkConfig = {
         test: {

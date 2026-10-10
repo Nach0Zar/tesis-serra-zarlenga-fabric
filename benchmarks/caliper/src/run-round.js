@@ -7,16 +7,19 @@ const path = require('node:path');
 const {spawnSync} = require('node:child_process');
 
 const {resolveOrganizationCredentials} = require('./credentials');
+const {connectAllOrganizations, readSnapshot} = require('./fabric-snapshot');
 const {GatewayPool, invokePreparation} = require('./gateway-bridge');
 const {buildRoundMetadata, writeJSONAtomic} = require('./metadata');
 const {buildMultiOrganizationNetworkConfig, inspectOrganizationRuntime} = require('./network-config');
 const {buildPlan} = require('./planner');
 const {buildProfile} = require('./profiles');
 const {aggregateResults} = require('./raw-results');
-const {loadDatasetBundle, readSourceTruth} = require('./sources');
+const {verifyPreconditions} = require('./snapshot-builder');
+const {loadDatasetBundle, readJSON, readSourceTruth} = require('./sources');
 
 const CALIPER_VERSION = require('../package.json').devDependencies['@hyperledger/caliper-cli'];
 const PREPARATION_CONCURRENCY = 8;
+const VERIFICATION_CONCURRENCY = 32;
 
 function run(command, args, options = {}) {
     const result = spawnSync(command, args, {
@@ -44,7 +47,9 @@ function parseArguments(arguments_) {
         if (values[key] !== undefined) throw new Error(`duplicate argument --${key}`);
         values[key] = value;
     }
-    const supported = new Set(['scenario', 'phase', 'repetition', 'rate', 'family', 'operation', 'dataset-dir', 'run-token']);
+    const supported = new Set([
+        'scenario', 'phase', 'repetition', 'rate', 'family', 'operation', 'dataset-dir', 'run-token', 'snapshot-dir',
+    ]);
     for (const key of Object.keys(values)) {
         if (!supported.has(key)) throw new Error(`unsupported argument --${key}`);
     }
@@ -60,6 +65,7 @@ function parseArguments(arguments_) {
         operation: values.operation,
         datasetDirectory: values['dataset-dir'],
         runToken: values['run-token'],
+        snapshotDirectory: values['snapshot-dir'],
     };
 }
 
@@ -134,6 +140,32 @@ async function preparePlan(plan, networkConfig, options = {}) {
     }
 }
 
+// Unidades que la ronda toca, mas la del smoke: todas deben estar en el estado
+// que fija el snapshot antes de abrir la ventana medida (D2 de #138).
+function sequencesForPlan(plan, smokeSequence) {
+    const sequences = new Set([smokeSequence]);
+    for (const preparation of plan.preparations) sequences.add(preparation.datasetSequence);
+    for (const worker of plan.workers) {
+        for (const operation of worker.operations) sequences.add(operation.datasetSequence);
+    }
+    return [...sequences].sort((left, right) => left - right);
+}
+
+async function verifySnapshotState({repoRoot, snapshotDirectory, plan, dataset, sourceTruth}) {
+    const snapshot = readSnapshot(snapshotDirectory);
+    const preconditions = readJSON(path.join(snapshot.directory, snapshot.manifest.files.preconditions.name));
+    const session = connectAllOrganizations(repoRoot, sourceTruth, CALIPER_VERSION);
+    try {
+        const verification = await verifyPreconditions({
+            pool: session.pool, dataset, preconditions, concurrency: VERIFICATION_CONCURRENCY,
+            sequences: sequencesForPlan(plan, snapshot.manifest.smokeSequence),
+        });
+        return {snapshot, verification};
+    } finally {
+        session.pool.close();
+    }
+}
+
 function buildBenchmarkConfig(repoRoot, profile, paths) {
     const nominalTransactionsPerSecond = profile.rate * profile.transactionsPerOperation;
     const rateController = path.join(
@@ -194,7 +226,27 @@ async function main() {
     writeJSONAtomic(paths.workPlanPath, plan);
     writeJSONAtomic(paths.benchmarkConfigPath, benchmarkConfig);
 
-    await preparePlan(plan, networkConfig);
+    let snapshotId;
+    if (options.snapshotDirectory) {
+        const {snapshot, verification} = await verifySnapshotState({
+            repoRoot, snapshotDirectory: path.resolve(repoRoot, options.snapshotDirectory), plan,
+            dataset: bundle.dataset, sourceTruth,
+        });
+        if (snapshot.manifest.dataset.sha256 !== bundle.manifest.dataset.sha256) {
+            throw new Error('dataset does not match the snapshot');
+        }
+        snapshotId = snapshot.manifest.snapshotId;
+        writeJSONAtomic(path.join(runDirectory, 'snapshot-context.json'), {
+            snapshotId, snapshotDirectory: path.relative(repoRoot, snapshot.directory),
+            checked: verification.checked, present: verification.present, absent: verification.absent,
+            mismatches: verification.mismatches,
+        });
+        if (verification.mismatches.length > 0) {
+            throw new Error(`${verification.mismatches.length} unidades de la ronda no coinciden con el snapshot`);
+        }
+    } else {
+        await preparePlan(plan, networkConfig);
+    }
     const repositoryCommit = run('git', ['rev-parse', 'HEAD'], {cwd: repoRoot}).stdout.trim();
     const startedAt = new Date().toISOString();
     const caliper = path.join(__dirname, '..', 'node_modules', '.bin', 'caliper');
@@ -214,6 +266,7 @@ async function main() {
     }
     const metadata = buildRoundMetadata({
         profile,
+        snapshotId,
         repositoryCommit,
         startedAt: aggregated.summary.startedAt ?? startedAt,
         endedAt: aggregated.summary.endedAt ?? endedAt,
@@ -259,4 +312,5 @@ module.exports = {
     createRunDirectory,
     parseArguments,
     preparePlan,
+    sequencesForPlan,
 };
