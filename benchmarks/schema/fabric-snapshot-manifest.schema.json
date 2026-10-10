@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pfi-snt:fabric-snapshot-manifest:schema:1.0.0",
+  "title": "Manifiesto de snapshot golden de Fabric",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "snapshotId",
+    "createdAt",
+    "dataset",
+    "counts",
+    "preparation",
+    "artifacts",
+    "smokeSequence",
+    "files",
+    "volumes"
+  ],
+  "properties": {
+    "$schema": {"const": "urn:pfi-snt:fabric-snapshot-manifest:schema:1.0.0"},
+    "schemaVersion": {"const": "1.0.0"},
+    "snapshotId": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "createdAt": {"type": "string", "minLength": 20},
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed", "sha256", "manifestSHA256", "units"],
+      "properties": {
+        "seed": {"const": 20260727},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "manifestSHA256": {"$ref": "#/$defs/sha256"},
+        "units": {"const": 50000}
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "participating", "unregistered", "prepared", "filler", "registered"],
+      "properties": {
+        "total": {"const": 50000},
+        "participating": {"const": 25183},
+        "unregistered": {"const": 3080},
+        "prepared": {"const": 22103},
+        "filler": {"const": 24817},
+        "registered": {"const": 46920}
+      }
+    },
+    "preparation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["durationSeconds", "successfulWriteTransactions", "concurrency", "markers"],
+      "properties": {
+        "durationSeconds": {"type": "number", "exclusiveMinimum": 0},
+        "successfulWriteTransactions": {"type": "integer", "minimum": 46920},
+        "concurrency": {"type": "integer", "minimum": 1},
+        "markers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["expected", "observed", "fromRegistrations", "fromRegulatoryEvents"],
+          "properties": {
+            "expected": {"type": "integer", "minimum": 0},
+            "observed": {"type": "integer", "minimum": 0},
+            "fromRegistrations": {"type": "integer", "minimum": 0},
+            "fromRegulatoryEvents": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositoryCommit",
+        "contractVersion",
+        "packageID",
+        "fabric",
+        "fabricCA",
+        "docker",
+        "dockerCompose",
+        "composeProject",
+        "networkConfigSHA256",
+        "sourceSHA256"
+      ],
+      "properties": {
+        "repositoryCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "contractVersion": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "packageID": {"type": "string", "pattern": "^[^:]+:[0-9a-f]{64}$"},
+        "fabric": {"const": "2.5.16"},
+        "fabricCA": {"type": "string", "minLength": 1},
+        "docker": {"type": "string", "minLength": 1},
+        "dockerCompose": {"type": "string", "minLength": 1},
+        "composeProject": {"const": "snt-fabric"},
+        "networkConfigSHA256": {"$ref": "#/$defs/sha256"},
+        "sourceSHA256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "smokeSequence": {"type": "integer", "minimum": 1, "maximum": 50000},
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logicalPlan", "preconditions", "semanticVerification", "preparationMetadata", "journal"],
+      "properties": {
+        "logicalPlan": {"$ref": "#/$defs/file"},
+        "preconditions": {"$ref": "#/$defs/file"},
+        "semanticVerification": {"$ref": "#/$defs/file"},
+        "preparationMetadata": {"$ref": "#/$defs/file"},
+        "journal": {"$ref": "#/$defs/file"}
+      }
+    },
+    "volumes": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "service", "containerPath", "archive", "sha256", "treeSHA256", "bytes", "fileCount"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^(orderer|peer)-[a-z]+-data$"},
+          "service": {"type": "string", "pattern": "^(orderer|peer0)\\.[a-z]+\\.snt\\.local$"},
+          "containerPath": {"type": "string", "pattern": "^/var/hyperledger/production"},
+          "archive": {"type": "string", "pattern": "^volumes/[A-Za-z0-9._-]+\\.tar$"},
+          "sha256": {"$ref": "#/$defs/sha256"},
+          "treeSHA256": {"$ref": "#/$defs/sha256"},
+          "bytes": {"type": "integer", "minimum": 1},
+          "fileCount": {"type": "integer", "minimum": 1}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256", "bytes"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9._/-]+$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

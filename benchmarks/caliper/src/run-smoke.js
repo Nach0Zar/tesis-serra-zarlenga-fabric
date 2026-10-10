@@ -2,13 +2,16 @@
 'use strict';
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
 
 const {resolveLabCredentials} = require('./credentials');
-const {selectLabRegistration} = require('./dataset');
+const {buildHostMetadata} = require('./host');
 const {buildNetworkConfig, inspectRuntime} = require('./network-config');
+const {readSnapshot, sha256File} = require('./artifacts');
+const {assertSnapshotCompatibility} = require('./snapshot');
+const {readPreconditions} = require('./snapshot-preconditions');
+const {registrationForUnit} = require('./snapshot-plan');
 const {loadDatasetBundle, readSourceTruth} = require('./sources');
 
 const EXPECTED_TRANSACTIONS = 30;
@@ -30,37 +33,7 @@ function run(command, args, options = {}) {
     return result;
 }
 
-function readOSName() {
-    try {
-        const contents = fs.readFileSync('/etc/os-release', 'utf8');
-        const match = contents.match(/^PRETTY_NAME=(?:"([^"]+)"|(.*))$/mu);
-        return match?.[1] ?? match?.[2] ?? os.type();
-    } catch {
-        return os.type();
-    }
-}
-
-function buildHostMetadata() {
-    const cpu = os.cpus()[0];
-    if (!cpu) {
-        throw new Error('cannot identify the benchmark host CPU');
-    }
-    const host = {
-        cpu: cpu.model.trim(),
-        cpuCores: os.cpus().length,
-        memoryGB: Number((os.totalmem() / (1024 ** 3)).toFixed(3)),
-        os: readOSName(),
-        kernel: os.release(),
-    };
-    if (/microsoft/iu.test(os.release())) {
-        host.wsl = process.env.WSL_DISTRO_NAME
-            ? `WSL2 ${process.env.WSL_DISTRO_NAME}`
-            : 'WSL2';
-    }
-    return host;
-}
-
-function ensurePreparedUnit(repoRoot, recipe) {
+function verifyExistingUnit(repoRoot, recipe, runCommand = run) {
     const baseArgs = [
         'run', './cmd/snt-client',
         'read-unit',
@@ -70,36 +43,26 @@ function ensurePreparedUnit(repoRoot, recipe) {
         '--serial', recipe.request.numeroSerie,
     ];
     const clientDirectory = path.join(repoRoot, 'client');
-    const readResult = run('go', baseArgs, {cwd: clientDirectory, allowFailure: true});
-    if (readResult.status === 0) {
-        return 'already-present';
+    const readResult = runCommand('go', baseArgs, {cwd: clientDirectory, allowFailure: true});
+    if (readResult.status !== 0) {
+        const failure = `${readResult.stdout ?? ''}\n${readResult.stderr ?? ''}`.trim();
+        throw new Error(`read-only smoke unit is not available: ${failure}`);
     }
-
-    const readFailure = `${readResult.stdout ?? ''}\n${readResult.stderr ?? ''}`;
-    if (!readFailure.includes('UNIT_NOT_FOUND')) {
-        throw new Error(`cannot determine whether the smoke unit exists: ${readFailure.trim()}`);
-    }
-
-    run('go', [
-        'run', './cmd/snt-client',
-        'register-unit',
-        '--repo-root', repoRoot,
-        '--org', 'lab',
-        '--gtin', recipe.request.gtin,
-        '--serial', recipe.request.numeroSerie,
-        '--lot', recipe.request.lote,
-        '--expiry', recipe.request.fechaVencimiento,
-    ], {cwd: clientDirectory, inherit: true});
-    return 'registered';
+    return 'read-only-existing';
 }
 
-function createRunDirectory(repoRoot) {
-    const defaultToken = new Date().toISOString().replace(/[:.]/gu, '-');
-    const token = process.env.SNT_CALIPER_RUN_TOKEN ?? defaultToken;
+function createRunDirectory(repoRoot, options = {}) {
+    const token = options.runToken ?? process.env.SNT_CALIPER_RUN_TOKEN
+        ?? new Date().toISOString().replace(/[:.]/gu, '-');
     if (!/^[A-Za-z0-9._-]{1,100}$/u.test(token)) {
         throw new Error('SNT_CALIPER_RUN_TOKEN contains unsupported characters');
     }
-    const runDirectory = path.join(repoRoot, 'build', 'benchmarks', 'caliper', token);
+    const outputRoot = path.resolve(repoRoot, options.outputRoot ?? path.join('build', 'benchmarks', 'caliper'));
+    const relative = path.relative(path.join(repoRoot, 'build'), outputRoot);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new Error('--output-root must resolve inside the repository build directory');
+    }
+    const runDirectory = path.join(outputRoot, token);
     fs.mkdirSync(path.dirname(runDirectory), {recursive: true});
     fs.mkdirSync(runDirectory, {recursive: false});
     return runDirectory;
@@ -131,19 +94,67 @@ function verifyReport(reportPath, sourceTruth) {
     }
 }
 
-function main() {
+function parseArguments(arguments_) {
+    const values = {};
+    for (let index = 0; index < arguments_.length; index += 2) {
+        const name = arguments_[index];
+        const value = arguments_[index + 1];
+        if (!name?.startsWith('--') || value === undefined || value.startsWith('--')) {
+            throw new Error('arguments must be supplied as --name value pairs');
+        }
+        const key = name.slice(2);
+        if (values[key] !== undefined) throw new Error(`duplicate argument --${key}`);
+        values[key] = value;
+    }
+    const supported = new Set(['snapshot-dir', 'sequence', 'dataset-dir', 'run-token', 'output-root']);
+    for (const key of Object.keys(values)) if (!supported.has(key)) throw new Error(`unsupported argument --${key}`);
+    if (!values['snapshot-dir'] && !values.sequence) {
+        throw new Error('read-only smoke requires --snapshot-dir or an explicit existing --sequence');
+    }
+    return {
+        snapshotDirectory: values['snapshot-dir'],
+        sequence: values.sequence === undefined ? undefined : Number(values.sequence),
+        datasetDirectory: values['dataset-dir'],
+        runToken: values['run-token'],
+        outputRoot: values['output-root'],
+    };
+}
+
+function smokeRegistration(dataset, sequence) {
+    if (!Number.isInteger(sequence) || sequence < 1) throw new Error('smoke sequence must be a positive integer');
+    const unit = dataset.units.find((entry) => entry.sequence === sequence);
+    if (!unit) throw new Error(`smoke sequence ${sequence} is absent from the dataset`);
+    const registration = registrationForUnit(unit);
+    if (registration.invokerMspId !== 'LabMSP') throw new Error('smoke sequence must be readable through LabMSP');
+    return {...registration, sequence};
+}
+
+function main(arguments_ = process.argv.slice(2)) {
+    const options = parseArguments(arguments_);
     const repoRoot = path.resolve(__dirname, '..', '..', '..');
     const datasetDirectory = path.resolve(
         repoRoot,
-        process.env.SNT_CALIPER_DATASET_DIR ?? path.join('build', 'dataset'),
+        options.datasetDirectory ?? process.env.SNT_CALIPER_DATASET_DIR ?? path.join('build', 'dataset'),
     );
     const sourceTruth = readSourceTruth(repoRoot);
     const datasetBundle = loadDatasetBundle(datasetDirectory);
-    const recipe = selectLabRegistration(datasetBundle.dataset);
+    let snapshot;
+    let sequence = options.sequence;
+    if (options.snapshotDirectory) {
+        snapshot = readSnapshot(repoRoot, options.snapshotDirectory);
+        assertSnapshotCompatibility(repoRoot, snapshot);
+        if (snapshot.manifest.dataset.sha256 !== datasetBundle.manifest.dataset.sha256) {
+            throw new Error('snapshot and smoke dataset hashes differ');
+        }
+        sequence = snapshot.manifest.smokeSequence;
+        const expected = readPreconditions(snapshot).get(sequence);
+        if (!expected || expected.unit === null) throw new Error('snapshot smoke sequence is not a registered filler unit');
+    }
+    const recipe = smokeRegistration(datasetBundle.dataset, sequence);
     const credentials = resolveLabCredentials(repoRoot);
     const runtime = inspectRuntime(repoRoot, credentials.peerHostname);
-    const preparation = ensurePreparedUnit(repoRoot, recipe);
-    const runDirectory = createRunDirectory(repoRoot);
+    const preparation = verifyExistingUnit(repoRoot, recipe);
+    const runDirectory = createRunDirectory(repoRoot, options);
     const metadataPath = path.join(runDirectory, 'metadata.json');
     const contextPath = path.join(runDirectory, 'run-context.json');
     const networkConfigPath = path.join(runDirectory, 'network-config.json');
@@ -180,6 +191,12 @@ function main() {
         preparation,
         datasetSequence: recipe.sequence,
     };
+    if (snapshot) {
+        context.snapshot = {
+            id: snapshot.manifest.snapshotId,
+            manifestSHA256: sha256File(snapshot.manifestPath),
+        };
+    }
     const benchmarkConfig = {
         test: {
             name: 'SNT Caliper smoke',
@@ -235,9 +252,13 @@ function main() {
     process.stdout.write(`Caliper smoke completed: ${runDirectory}\n`);
 }
 
-try {
-    main();
-} catch (error) {
-    process.stderr.write(`Caliper smoke failed: ${error.message}\n`);
-    process.exitCode = 1;
+if (require.main === module) {
+    try {
+        main();
+    } catch (error) {
+        process.stderr.write(`Caliper smoke failed: ${error.message}\n`);
+        process.exitCode = 1;
+    }
 }
+
+module.exports = {createRunDirectory, main, parseArguments, smokeRegistration, verifyExistingUnit, verifyReport};
