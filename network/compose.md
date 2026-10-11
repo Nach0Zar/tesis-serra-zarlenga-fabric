@@ -97,6 +97,14 @@ El modo de medición también exige que los archivos que gobiernan la corrida
 estén versionados y sin cambios staged o unstaged. Así, el commit informado
 identifica efectivamente la configuración ejecutada en ambos hosts.
 
+Los siete peers fijan `CORE_PEER_KEEPALIVE_MININTERVAL=30s`. El cliente gRPC
+del shim de chaincode envía pings cada 60 s; el mínimo anterior de 60 s en el
+servidor produjo cierres `GOAWAY ENHANCE_YOUR_CALM: too_many_pings` durante la
+construcción prolongada del snapshot de #137. Este ajuste, autorizado para
+reconstruir el snapshot canónico, cambia la configuración de transporte del
+SUT y debe quedar identificado por el commit del artefacto. No cambia
+`BatchTimeout`, recursos, topología ni lógica de negocio.
+
 `up --wait` falla si alguno de los once contenedores no alcanza `healthy`.
 Los peers y orderers consultan `/healthz` en sus endpoints de operaciones.
 Fabric CA ejecuta `getcainfo` para las siete CA lógicas configuradas. El script

@@ -15,6 +15,8 @@ x-peer-environment: &peer-environment
   CORE_PEER_TLS_ROOTCERT_FILE: /etc/hyperledger/fabric/tls/ca.crt
   CORE_PEER_MSPCONFIGPATH: /etc/hyperledger/fabric/msp
   CORE_PEER_PROFILE_ENABLED: "false"
+  # Accept the chaincode shim's 60s gRPC keepalive without a timing-edge GOAWAY.
+  CORE_PEER_KEEPALIVE_MININTERVAL: 30s
   CORE_PEER_LISTENADDRESS: 0.0.0.0:7051
   CORE_PEER_CHAINCODELISTENADDRESS: 0.0.0.0:7052
   CORE_OPERATIONS_LISTENADDRESS: 0.0.0.0:9443
