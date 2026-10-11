@@ -116,3 +116,12 @@ Las credenciales permanecen sólo en memoria y los resultados se guardan bajo
 `build/benchmarks/baseline/`, ignorado por Git. Los comandos, conteos del
 snapshot, perfiles, rechazos separados y asimetrías metodológicas están
 documentados en [`baseline/README.md`](baseline/README.md).
+
+## Procesamiento comparativo
+
+El proyecto [`analysis/`](analysis/) procesa los crudos de ambos SUT y produce
+las tablas por repetición y agregadas, la comparación Fabric frente a baseline,
+las figuras de throughput, latencia y disponibilidad, y un reporte con los
+artefactos medidos, las rondas excluidas y las asimetrías declaradas (sección
+10 del protocolo, EVAL-7). Valida cada `metadata.json` contra el contrato antes
+de procesar y sólo compara combinaciones que cumplen la paridad de la sección 9.

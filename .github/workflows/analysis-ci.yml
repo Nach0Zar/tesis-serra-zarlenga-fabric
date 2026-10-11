@@ -1,0 +1,45 @@
+name: Analysis CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+    paths:
+      - "benchmarks/analysis/**"
+      - ".github/workflows/analysis-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: analysis-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Validate result processing
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Check sources
+        working-directory: benchmarks/analysis
+        run: npm run check
+
+      - name: Test
+        working-directory: benchmarks/analysis
+        run: npm test
