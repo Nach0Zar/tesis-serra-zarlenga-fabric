@@ -94,6 +94,29 @@ concurrencia entre unidades, 64 por defecto; registra un journal durable y
 reconcilia un timeout ambiguo con `ReadUnit` e historial antes de decidir si
 continúa o reintenta.
 
+Un `ABORTED` sólo es transitorio en la fase de endoso y si todos sus detalles
+son timeouts o errores de transporte reconocidos. Códigos sin detalles,
+errores contractuales, respuestas incompatibles y detalles mixtos abortan.
+Se comprueban estado e historial contra el prefijo durable antes del reintento,
+con un máximo de cinco intentos por paso. Si ya hubo endoso, una ausencia
+temporal del historial **no** permite reenviar: la construcción se detiene
+si no puede confirmar el commit, y conserva esa guarda también en `--resume`.
+Los eventos `failed`/`retrying` del journal y `failure.json` conservan fase,
+código, transaction ID y códigos de los endpoints, sin argumentos ni propuestas.
+La diseminación privada y el timeout interno de endoso de 30 s no cambian.
+
+El diagnóstico del gate de #137 separa dos fallos: cierres gRPC por pings y
+un timeout de endoso coincidente con una escritura de estado de Lab de ~31 s.
+La causa física de esa pausa sigue pendiente de evidencia; no se atribuye a
+CPU, memoria o almacenamiento sin muestras. El controlador persistente del
+gate se guarda bajo su directorio ignorado en `build/benchmarks/fabric/`,
+captura logs permitidos antes de limpiar contenedores y registra recursos
+(CPU, memoria, I/O y throttling) cada 15 s **sólo durante la construcción**.
+Antes de las rondas medidas se detiene ese muestreo adicional.
+No contiene hooks de apagado: tanto éxito como fallo dejan la PC encendida.
+La prueba de transporte requiere 15 minutos sin consultas de chaincode entre
+dos lecturas contra los siete peers; véase [configuración](../../network/compose.md).
+
 Desde `benchmarks/caliper`:
 
 ```bash

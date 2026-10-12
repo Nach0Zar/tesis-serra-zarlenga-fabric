@@ -94,12 +94,17 @@ class GatewayPool {
         const transactionId = proposal.getTransactionId();
         const timeoutMs = Number(options.timeoutMs ?? DEFAULT_GATEWAY_TIMEOUT_MS);
         if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('gateway timeout must be positive');
+        let phase = 'journal';
         try {
             await hooks.onTransactionId?.(transactionId);
+            phase = 'endorsement';
             const transaction = await proposal.endorse({deadline: Date.now() + timeoutMs});
             const transactionBytes = Buffer.from(transaction.getBytes());
+            phase = 'journal';
             await hooks.onEndorsed?.({transactionId, transactionBytes});
+            phase = 'submit';
             const submitted = await transaction.submit({deadline: Date.now() + timeoutMs});
+            phase = 'commit-status';
             const status = await submitted.getStatus({deadline: Date.now() + timeoutMs});
             if (!status.successful) {
                 const error = new Error(`transaction ${transactionId} committed with status ${status.code}`);
@@ -110,6 +115,7 @@ class GatewayPool {
             return {transactionId, transactionBytes, result: submitted.getResult()};
         } catch (error) {
             error.transactionId = transactionId;
+            error.phase = phase;
             throw error;
         }
     }

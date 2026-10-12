@@ -15,8 +15,10 @@ x-peer-environment: &peer-environment
   CORE_PEER_TLS_ROOTCERT_FILE: /etc/hyperledger/fabric/tls/ca.crt
   CORE_PEER_MSPCONFIGPATH: /etc/hyperledger/fabric/msp
   CORE_PEER_PROFILE_ENABLED: "false"
-  # Accept the chaincode shim's 60s gRPC keepalive without a timing-edge GOAWAY.
+  # Main peer server only; Fabric 2.5.16 fixes the chaincode server minimum at 60s.
   CORE_PEER_KEEPALIVE_MININTERVAL: 30s
+  # Application KEEPALIVE messages keep the peer/chaincode stream active.
+  CORE_CHAINCODE_KEEPALIVE: "30"
   CORE_PEER_LISTENADDRESS: 0.0.0.0:7051
   CORE_PEER_CHAINCODELISTENADDRESS: 0.0.0.0:7052
   CORE_OPERATIONS_LISTENADDRESS: 0.0.0.0:9443
@@ -61,6 +63,8 @@ x-orderer-environment: &orderer-environment
   FABRIC_LOGGING_SPEC: INFO
   ORDERER_GENERAL_LISTENADDRESS: 0.0.0.0
   ORDERER_GENERAL_LISTENPORT: "7050"
+  # Give Fabric clients' 60s transport pings margin at the orderer server.
+  ORDERER_GENERAL_KEEPALIVE_SERVERMININTERVAL: 30s
   ORDERER_GENERAL_BOOTSTRAPMETHOD: none
   ORDERER_CHANNELPARTICIPATION_ENABLED: "true"
   ORDERER_GENERAL_TLS_ENABLED: "true"

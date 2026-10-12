@@ -32,6 +32,7 @@ const {
     buildPreconditions,
     journalStatistics,
     parallel,
+    preparationErrorDiagnostics,
     prepareRecipe,
     verifySnapshotState,
 } = require('./snapshot-state');
@@ -409,7 +410,11 @@ async function buildSnapshot(repoRoot, options = {}) {
         }
     } catch (error) {
         buildTimer.checkpoint();
-        fs.appendFileSync(path.join(snapshotDirectory, 'failure.log'), `${new Date().toISOString()} ${error.message}\n`, {mode: 0o600});
+        fs.appendFileSync(path.join(snapshotDirectory, 'failure.log'), `${new Date().toISOString()} ${JSON.stringify(preparationErrorDiagnostics(error))}\n`, {mode: 0o600});
+        writeJSONAtomic(path.join(snapshotDirectory, 'failure.json'), {
+            recordedAt: new Date().toISOString(),
+            ...preparationErrorDiagnostics(error),
+        });
         throw error;
     } finally {
         for (const [signal, handler] of signalHandlers) process.removeListener(signal, handler);

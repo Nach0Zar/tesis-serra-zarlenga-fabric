@@ -23,7 +23,7 @@ const {
     EXPECTED_COUNTS, buildGoldenSnapshotPlan, profileMatrix,
 } = require('../src/snapshot-plan');
 const {
-    PreparationJournal, journalStatistics, prepareRecipe, progressReaderMspId,
+    PreparationJournal, isTransientGrpcError, journalStatistics, prepareRecipe, progressReaderMspId,
 } = require('../src/snapshot-state');
 const {
     CHAINCODE_CONTAINER, VOLUMES, assertVolumeManifest, treeDigest,
@@ -31,6 +31,7 @@ const {
 const {decodeTransactionRWSet, summarizeCollections, summarizePrivateWrites} = require('../src/rwset');
 const {loadDatasetBundle} = require('../src/sources');
 const {warmConfiguredPeers} = require('../src/warm-peers');
+const {GatewayPool} = require('../src/gateway-bridge');
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
@@ -179,6 +180,165 @@ function fakeLedger() {
         history,
     };
 }
+
+function abortedEndorsement(messages) {
+    return Object.assign(new Error('10 ABORTED: failed to collect enough transaction endorsements'), {
+        code: grpc.status.ABORTED, phase: 'endorsement',
+        details: messages.map((message) => ({address: 'peer0.lab.snt.local:7051', mspId: 'LabMSP', message})),
+    });
+}
+
+test('only exclusively transient endorsement details make ABORTED recoverable', () => {
+    const deadline = 'rpc error: code = DeadlineExceeded desc = context deadline exceeded';
+    const unavailable = 'rpc error: code = Unavailable desc = transport is closing';
+    assert.equal(isTransientGrpcError(abortedEndorsement([deadline])), true);
+    assert.equal(isTransientGrpcError(abortedEndorsement([unavailable])), true);
+    for (const details of [
+        [], ['rpc error: code = PermissionDenied desc = denied'],
+        [deadline, 'chaincode response 500: NOT_IN_TRANSIT'],
+        ['proposal responses do not match: DEADLINE_EXCEEDED'],
+        ['rpc error: code = Unavailable desc = contract validation failed'],
+    ]) assert.equal(isTransientGrpcError(abortedEndorsement(details)), false);
+    assert.equal(isTransientGrpcError({...abortedEndorsement([deadline]), phase: 'submit'}), false);
+    assert.equal(isTransientGrpcError({...abortedEndorsement([deadline]), details: undefined}), false);
+    assert.equal(isTransientGrpcError({code: grpc.status.INVALID_ARGUMENT, message: 'UNAVAILABLE'}), false);
+    assert.equal(isTransientGrpcError({code: grpc.status.UNAVAILABLE, phase: 'journal'}), false);
+});
+
+test('gateway preserves SDK errors and identifies the exact failing phase', async () => {
+    for (const phase of ['endorsement', 'submit', 'commit-status', 'journal']) {
+        const sdkError = Object.assign(new Error('transport is closing'), {
+            code: grpc.status.UNAVAILABLE,
+            details: [{address: 'peer0.lab.snt.local:7051', mspId: 'LabMSP', message: 'transport is closing'}],
+        });
+        const submitted = {getStatus: async () => {
+            if (phase === 'commit-status') throw sdkError;
+            return {successful: true};
+        }, getResult: () => Buffer.from('{}')};
+        const transaction = {getBytes: () => Buffer.from('endorsed'), submit: async () => {
+            if (phase === 'submit') throw sdkError;
+            return submitted;
+        }};
+        const pool = new GatewayPool({organizations: []});
+        pool.proposal = () => ({getTransactionId: () => 'tx-phase', endorse: async () => {
+            if (phase === 'endorsement') throw sdkError;
+            return transaction;
+        }});
+        await assert.rejects(() => pool.invoke(registration(), {
+            onEndorsed: async () => {if (phase === 'journal') throw sdkError;},
+        }), (error) => {
+            assert.equal(error, sdkError);
+            assert.equal(error.phase, phase);
+            assert.equal(error.transactionId, 'tx-phase');
+            assert.equal(error.details[0].mspId, 'LabMSP');
+            return true;
+        });
+    }
+});
+
+test('wrapped endorsement timeout retries after reconciliation and exhausts exactly five attempts', async (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-endorsement-'));
+    t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+    for (const succeeds of [true, false]) {
+        const journal = new PreparationJournal(path.join(directory, `journal-${succeeds}.jsonl`));
+        const ledger = fakeLedger();
+        let calls = 0;
+        const prepare = () => prepareRecipe({
+            gatewayPool: ledger.gateway, journal, unit: unit(),
+            recipe: {datasetSequence: 1, invocations: [registration()]},
+            retryDelayMs: 0, sleep: async () => {},
+            invoke: async (_pool, _invocation, hooks) => {
+                calls += 1;
+                await hooks.onTransactionId(`tx-${calls}`);
+                if (!succeeds || calls === 1) throw abortedEndorsement([
+                    'rpc error: code = DeadlineExceeded desc = context deadline exceeded',
+                ]);
+                await hooks.onEndorsed({transactionId: `tx-${calls}`, transactionBytes: Buffer.from('endorsed')});
+                ledger.commit(`tx-${calls}`);
+                return {transactionId: `tx-${calls}`, transactionBytes: Buffer.from('endorsed'), result: Buffer.from('{}')};
+            },
+            summarize: () => ({collections: [], markerWrites: 1, pairPrivateWrites: 0}),
+        });
+        if (succeeds) {
+            await prepare();
+            assert.equal(calls, 2);
+            assert.equal(ledger.history.length, 1);
+            assert.equal(journal.committed().length, 1);
+        } else {
+            await assert.rejects(prepare, /exceeded 5 transient attempts/u);
+            assert.equal(calls, 5);
+        }
+        const failures = journal.events.filter((event) => event.status === 'failed');
+        assert.equal(failures[0].phase, 'endorsement');
+        assert.equal(failures[0].details[0].transportCode, 'DeadlineExceeded');
+        assert.equal(JSON.stringify(failures).includes('request'), false);
+    }
+});
+
+test('permanent or mixed ABORTED aborts without a retry', async (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-permanent-'));
+    t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+    const journal = new PreparationJournal(path.join(directory, 'journal.jsonl'));
+    let calls = 0;
+    await assert.rejects(() => prepareRecipe({
+        gatewayPool: fakeLedger().gateway, journal, unit: unit(),
+        recipe: {datasetSequence: 1, invocations: [registration()]},
+        invoke: async () => {
+            calls += 1;
+            throw abortedEndorsement([
+                'rpc error: code = DeadlineExceeded desc = context deadline exceeded',
+                'rpc error: code = PermissionDenied desc = denied',
+            ]);
+        },
+    }), /ABORTED/u);
+    assert.equal(calls, 1);
+});
+
+test('a changed prefix during endorsement reconciliation aborts without resubmitting', async (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-prefix-'));
+    t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+    const journal = new PreparationJournal(path.join(directory, 'journal.jsonl'));
+    const ledger = fakeLedger();
+    let calls = 0;
+    await assert.rejects(() => prepareRecipe({
+        gatewayPool: ledger.gateway, journal, unit: unit(),
+        recipe: {datasetSequence: 1, invocations: [registration()]},
+        invoke: async (_pool, _invocation, hooks) => {
+            calls += 1;
+            await hooks.onTransactionId('tx-timeout');
+            ledger.commit('tx-unexpected');
+            throw abortedEndorsement(['rpc error: code = DeadlineExceeded desc = context deadline exceeded']);
+        },
+    }), /changed unexpectedly/u);
+    assert.equal(calls, 1);
+});
+
+test('absent ambiguous submit stops and remains nonduplicating on resume', async (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-ambiguous-'));
+    t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+    const journal = new PreparationJournal(path.join(directory, 'journal.jsonl'));
+    const ledger = fakeLedger();
+    let calls = 0;
+    const prepare = () => prepareRecipe({
+        gatewayPool: ledger.gateway, journal, unit: unit(),
+        recipe: {datasetSequence: 1, invocations: [registration()]},
+        visibilityTimeoutMs: 0, visibilityPollMs: 0,
+        invoke: async (_pool, _invocation, hooks) => {
+            calls += 1;
+            await hooks.onTransactionId('tx-unknown');
+            await hooks.onEndorsed({transactionId: 'tx-unknown', transactionBytes: Buffer.from('endorsed')});
+            throw Object.assign(new Error('UNAVAILABLE after submit'), {code: grpc.status.UNAVAILABLE, phase: 'submit'});
+        },
+        summarize: () => ({collections: [], markerWrites: 1, pairPrivateWrites: 0}),
+    });
+    await assert.rejects(prepare, /visibility deadline/u);
+    await assert.rejects(prepare, /visibility deadline/u);
+    assert.equal(calls, 1);
+    ledger.commit('tx-unknown');
+    await prepare();
+    assert.equal(calls, 1);
+    assert.equal(journal.committed()[0].status, 'recovered');
+});
 
 test('profile matrix and canonical constants encode the consolidated golden decision', () => {
     assert.equal(profileMatrix().length, 20);
