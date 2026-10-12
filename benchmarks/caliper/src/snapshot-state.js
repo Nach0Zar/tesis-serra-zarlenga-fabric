@@ -62,7 +62,8 @@ function progressReaderMspId(gatewayPool, unit) {
 }
 
 function isTransientGrpcError(error) {
-    if (error?.phase === 'journal' || extractContractError(error)) return false;
+    if (error?.phase === 'journal' || error?.operatorCancelled === true
+        || error?.name === 'AbortError' || extractContractError(error)) return false;
     if (error?.code === grpc.status.ABORTED) {
         return error.phase === 'endorsement' && Array.isArray(error.details)
             && error.details.length > 0 && error.details.every((detail) =>
@@ -78,8 +79,8 @@ function transientDetailCode(detail) {
     const match = /^rpc error: code = (Canceled|Cancelled|DeadlineExceeded|Unavailable) desc = (.+)$/u.exec(detail?.message ?? '');
     if (!match || extractContractError({message: detail.message})) return null;
     const descriptions = {
-        Canceled: /^context canceled$/u,
-        Cancelled: /^context canceled$/u,
+        Canceled: /^(?:context canceled|grpc: the client connection is closing)$/u,
+        Cancelled: /^(?:context canceled|grpc: the client connection is closing)$/u,
         DeadlineExceeded: /^context deadline exceeded$/u,
         Unavailable: /^(?:transport is closing|connection (?:error|closed|refused)|error reading from server|failed to (?:connect|create new connection)|all SubConns are in TransientFailure|keepalive ping failed|EOF)/u,
     };

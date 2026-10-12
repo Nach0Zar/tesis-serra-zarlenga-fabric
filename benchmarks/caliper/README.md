@@ -114,6 +114,24 @@ código, transaction ID, códigos de los endpoints e indicador de fallo de
 diseminación, sin argumentos ni propuestas.
 La diseminación privada y el timeout interno de endoso de 30 s no cambian.
 
+Las altas del snapshot pasan por `normalizeSteps`, igual que las recetas del
+planner: los endosantes se derivan de cada transacción, no de un MSP fijo para
+todo el plan. `RegisterUnit` apunta al laboratorio invocante; las recepciones
+conservan el par emisor–receptor calculado por el planner. Esto evita delegar
+el cálculo automático del plan de endoso de las altas al Gateway, sin cambiar
+argumentos, políticas ni estado lógico. No elimina la necesidad de discovery
+para localizar peers. El plan lógico y su hash cambian: los artefactos anteriores
+se conservan como evidencia diagnóstica y no se reanudan como canónicos;
+la siguiente construcción debe regenerar el plan y comenzar desde cero.
+
+La ampliación autorizada de #137 reconoce además el detalle exacto de endoso
+`Canceled: grpc: the client connection is closing`: Fabric puede cerrar la
+conexión compartida tras otro timeout y cancelar una propuesta vecina.
+La recuperación sigue exigiendo reconciliación y cinco intentos como máximo.
+Cancelación explícita del operador, detalles mixtos/permanentes y ambigüedad
+posterior al submit no autorizan nuevas escrituras. Las rondas medidas no
+incorporan estos reintentos de preparación.
+
 El diagnóstico del gate de #137 separa dos fallos: cierres gRPC por pings y
 un timeout de endoso coincidente con una escritura de estado de Lab de ~31 s.
 La causa física de esa pausa sigue pendiente de evidencia; no se atribuye a
@@ -123,6 +141,16 @@ captura logs permitidos antes de limpiar contenedores y registra recursos
 (CPU, memoria, I/O y throttling) cada 15 s **sólo durante la construcción**.
 Antes de las rondas medidas se detiene ese muestreo adicional.
 No contiene hooks de apagado: tanto éxito como fallo dejan la PC encendida.
+Después del arranque/restauración no basta con `/healthz` ni con lecturas
+locales: gossip/discovery puede todavía omitir una organización remota. Antes
+de construir o medir, una guarda acotada a 180 s exige dos pasadas completas
+desde los siete Gateways hacia los siete peers. Usa propuestas de lectura
+`org.hyperledger.fabric:GetMetadata`, comprueba las siete MSP en los endosos
+y **nunca hace submit**. No modifica unidades, historial ni marcadores y no
+añade reintentos a la ventana medida. Si no converge, bloquea el inicio.
+La restauración diagnóstica local reprodujo lecturas locales exitosas con
+discovery remoto incompleto, que convergió tras 52,324 s; esto explica ese
+fallo de arranque, no demuestra la causa física de las pausas de Lab.
 La prueba de transporte requiere 15 minutos sin consultas de chaincode entre
 dos lecturas contra los siete peers; véase [configuración](../../network/compose.md).
 
@@ -211,6 +239,13 @@ rondas separadas: `UNAUTHORIZED_TRANSFER`, `DUPLICATE_IDENTITY` y
 Un rechazo con otro código, o un éxito inesperado, descarta la ronda.
 
 ## Series reproducibles
+
+El [procedimiento del gate Docker](../../docs/fabric-gate.md) distingue la
+calificación completa de un snapshot de los controles obligatorios por ronda,
+describe sus prerrequisitos y la evidencia que debe registrarse en PR #141.
+No hace falta reconstruir el snapshot para cada ronda; sí restaurarlo y
+verificar su compatibilidad. El artefacto actual está ligado al HEAD exacto,
+por lo que un nuevo commit exige una nueva construcción.
 
 `npm run series` restaura el snapshot antes de cada intento y luego ejecuta la
 verificación, el calentamiento dirigido a los siete peers, la medición de

@@ -12,7 +12,8 @@ const protos = require('@hyperledger/fabric-protos');
 const {
     SNAPSHOT_SCHEMA_ID, canonicalJSON, fileDescriptor, readSnapshot, sha256, sha256File, validateDocument,
 } = require('../src/artifacts');
-const {candidateKey, indexCandidatePools} = require('../src/planner');
+const {candidateKey, indexCandidatePools, normalizeSteps} = require('../src/planner');
+const {contractArguments} = require('../src/requests');
 const {parseArguments: parseRoundArguments} = require('../src/run-round');
 const {createBuildTimer, snapshotIdentifier} = require('../src/snapshot');
 const {
@@ -20,7 +21,7 @@ const {
 } = require('../src/run-series');
 const {smokeRegistration, verifyExistingUnit} = require('../src/run-smoke');
 const {
-    EXPECTED_COUNTS, buildGoldenSnapshotPlan, profileMatrix,
+    EXPECTED_COUNTS, buildGoldenSnapshotPlan, canonicalRecipe, profileMatrix,
 } = require('../src/snapshot-plan');
 const {
     PreparationJournal, isTransientGrpcError, journalStatistics, prepareRecipe, progressReaderMspId,
@@ -307,6 +308,58 @@ test('only exclusively transient endorsement details make ABORTED recoverable', 
     assert.equal(isTransientGrpcError({code: grpc.status.UNAVAILABLE, phase: 'journal'}), false);
 });
 
+test('shared connection closure is recoverable only in endorsement, never operator cancellation', () => {
+    const closing = 'rpc error: code = Canceled desc = grpc: the client connection is closing';
+    const error = abortedEndorsement([closing]);
+    assert.equal(isTransientGrpcError(error), true);
+    for (const phase of ['submit', 'commit-status', 'journal']) {
+        assert.equal(isTransientGrpcError({...error, phase}), false);
+    }
+    assert.equal(isTransientGrpcError({...error, operatorCancelled: true}), false);
+    assert.equal(isTransientGrpcError({...error, name: 'AbortError'}), false);
+    assert.equal(isTransientGrpcError(abortedEndorsement([closing, 'proposal responses do not match'])), false);
+    assert.equal(isTransientGrpcError(abortedEndorsement([closing + ' by operator'])), false);
+});
+
+test('connection-closure recovery reconciles before retry and remains bounded to five attempts', async (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-connection-close-'));
+    t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+    for (const recover of [true, false]) {
+        const ledger = fakeLedger();
+        const journal = new PreparationJournal(path.join(directory, `journal-${recover}.jsonl`));
+        let attempts = 0;
+        let reconciliations = 0;
+        const read = ledger.gateway.readUnit;
+        ledger.gateway.readUnit = async (...args) => {reconciliations += 1; return read(...args);};
+        const prepare = () => prepareRecipe({
+            gatewayPool: ledger.gateway, journal, unit: unit(),
+            recipe: {datasetSequence: 1, invocations: [registration()]}, sleep: async () => {},
+            invoke: async (_gateway, _invocation, hooks) => {
+                attempts += 1;
+                assert.ok(reconciliations >= attempts);
+                const transactionId = `tx-closure-${attempts}`;
+                await hooks.onTransactionId(transactionId);
+                if (!recover || attempts === 1) throw abortedEndorsement([
+                    'rpc error: code = Canceled desc = grpc: the client connection is closing',
+                ]);
+                await hooks.onEndorsed({transactionId, transactionBytes: Buffer.from('endorsed')});
+                ledger.commit(transactionId);
+                return {transactionId, transactionBytes: Buffer.from('endorsed'), result: Buffer.from('{}')};
+            },
+            summarize: () => ({collections: [], markerWrites: 1, pairPrivateWrites: 0}),
+        });
+        if (recover) {
+            await prepare();
+            assert.equal(attempts, 2);
+            assert.equal(ledger.history.length, 1);
+        } else {
+            await assert.rejects(prepare, /exceeded 5 transient attempts/u);
+            assert.equal(attempts, 5);
+            assert.equal(ledger.history.length, 0);
+        }
+    }
+});
+
 test('gateway preserves SDK errors and identifies the exact failing phase', async () => {
     for (const phase of ['endorsement', 'submit', 'commit-status', 'journal']) {
         const sdkError = Object.assign(new Error('transport is closing'), {
@@ -450,6 +503,36 @@ test('profile matrix and canonical constants encode the consolidated golden deci
     });
 });
 
+test('canonical recipes normalize registration and retain transaction-specific endorsers', () => {
+    const source = unit();
+    const identity = {gtin: source.preparation[0].request.gtin, numeroSerie: source.preparation[0].request.numeroSerie};
+    const preparation = normalizeSteps([
+        source.preparation[0],
+        {operation: 'DispatchTransfer', invokerMspId: 'LabMSP', request: identity},
+        {operation: 'ReceiveTransfer', invokerMspId: 'DrogueriaMSP', request: identity},
+        {operation: 'DispatchTransfer', invokerMspId: 'DrogueriaMSP', request: identity},
+        {operation: 'ReceiveTransfer', invokerMspId: 'FarmaciaMSP', request: identity},
+    ]);
+    const original = JSON.stringify({source, preparation});
+    const recipe = canonicalRecipe(source, preparation);
+    assert.deepEqual(recipe.map((step) => step.targetMspIds), [
+        ['LabMSP'], ['LabMSP'], ['LabMSP', 'DrogueriaMSP'],
+        ['DrogueriaMSP'], ['DrogueriaMSP', 'FarmaciaMSP'],
+    ]);
+    assert.deepEqual(recipe.slice(1), preparation.slice(1));
+    assert.deepEqual(canonicalRecipe(source, preparation.slice(1)), recipe);
+    assert.deepEqual(canonicalRecipe(source), [normalizeSteps(source.preparation)[0]]);
+    assert.deepEqual(contractArguments(recipe[0]), contractArguments(source.preparation[0]));
+    const proposal = GatewayPool.prototype.proposal.call({connection(mspId) {
+        assert.equal(mspId, source.preparation[0].invokerMspId);
+        return {contract: {newProposal: (operation, options) => ({operation, options})}};
+    }}, recipe[0]);
+    assert.equal(proposal.operation, 'RegisterUnit');
+    assert.deepEqual(proposal.options.endorsingOrganizations, [source.preparation[0].invokerMspId]);
+    assert.deepEqual(proposal.options.arguments, contractArguments(source.preparation[0]));
+    assert.equal(JSON.stringify({source, preparation}), original);
+});
+
 const canonicalDatasetDirectory = process.env.SNT_CALIPER_DATASET_DIR
     ? path.resolve(process.env.SNT_CALIPER_DATASET_DIR)
     : path.join(repoRoot, 'build', 'dataset');
@@ -468,6 +551,10 @@ test('canonical dataset produces the exact golden partition and reserved filler 
     assert.equal(plan.excludedSequences.includes(plan.smokeSequence), false);
     assert.equal(plan.preparedSequences.includes(plan.smokeSequence), false);
     assert.equal(plan.expectedMarkers.registrations, 46_920);
+    for (const entry of plan.units.filter((unit) => unit.expected.present)) {
+        assert.deepEqual(entry.recipe, normalizeSteps(entry.recipe));
+        assert.deepEqual(entry.recipe[0].targetMspIds, [entry.recipe[0].invokerMspId]);
+    }
     const smoke = plan.units.find((entry) => entry.datasetSequence === plan.smokeSequence);
     assert.deepEqual(smoke.expected, {
         present: true, state: 'EN_LABORATORIO', custodian: 'GLN:7791234500017',

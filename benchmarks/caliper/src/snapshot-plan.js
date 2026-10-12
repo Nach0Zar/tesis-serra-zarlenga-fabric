@@ -1,6 +1,6 @@
 'use strict';
 
-const {buildPlan, candidatePools} = require('./planner');
+const {buildPlan, candidatePools, normalizeSteps} = require('./planner');
 const {PROFILES, buildProfile} = require('./profiles');
 
 const EXPECTED_COUNTS = Object.freeze({
@@ -64,7 +64,7 @@ function expectedMarkerWrites(invocation) {
 }
 
 function canonicalRecipe(unit, preparation = []) {
-    const registration = registrationForUnit(unit);
+    const [registration] = normalizeSteps([registrationForUnit(unit)]);
     const remaining = preparation[0]?.operation === 'RegisterUnit' ? preparation.slice(1) : preparation;
     return [registration, ...remaining];
 }
