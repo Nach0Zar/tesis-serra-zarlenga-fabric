@@ -188,6 +188,108 @@ function abortedEndorsement(messages) {
     });
 }
 
+function disseminationMessage(transactionId, failed = 1, total = 2) {
+    return `error in simulation: failed to distribute private collection, txID ${transactionId}, channel snt-channel: Failed disseminating ${failed} out of ${total} private dissemination plans`;
+}
+
+test('only the exact Fabric dissemination failure for the current endorsement is recoverable', () => {
+    const transactionId = 'c'.repeat(64);
+    const message = disseminationMessage(transactionId);
+    const error = {...abortedEndorsement([message]), transactionId};
+    assert.equal(isTransientGrpcError(error), true);
+    assert.equal(isTransientGrpcError({...abortedEndorsement([
+        message, 'rpc error: code = DeadlineExceeded desc = context deadline exceeded',
+    ]), transactionId}), true);
+    for (const details of [
+        [disseminationMessage('d'.repeat(64))],
+        [disseminationMessage(transactionId, 0)],
+        [disseminationMessage(transactionId, 3, 2)],
+        [disseminationMessage(transactionId, 1, '9007199254740992')],
+        [message + ': timed out'],
+        [message, 'rpc error: code = PermissionDenied desc = denied'],
+        [message, 'proposal responses do not match'],
+        [message, 'chaincode response 500: {"code":"NOT_IN_TRANSIT","message":"denied"}'],
+        [`error in simulation: failed to distribute private collection, txID ${transactionId}, channel snt-channel: no configuration for collection found`],
+        [`error in simulation: failed to distribute private collection, txID ${transactionId}, channel snt-channel: required to disseminate to at least 1 peers, but know of only 0 eligible peers`],
+    ]) assert.equal(isTransientGrpcError({...error, details: details.map((value) => ({message: value}))}), false);
+    assert.equal(isTransientGrpcError({...error, transactionId: undefined}), false);
+    for (const phase of ['submit', 'commit-status', 'journal', undefined]) {
+        assert.equal(isTransientGrpcError({...error, phase}), false);
+    }
+});
+
+test('dissemination failure reconciles a dispatch prefix and exhausts at five attempts', async (t) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-dissemination-'));
+    t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+    for (const mode of ['retry', 'exhaust', 'unexpected', 'state-changed', 'permanent', 'ambiguous']) {
+        const journal = new PreparationJournal(path.join(directory, `${mode}.jsonl`));
+        const ledger = fakeLedger();
+        ledger.commit('registered');
+        journal.append({datasetSequence: 1, step: 0, status: 'committed',
+            transactionId: 'registered', operation: 'RegisterUnit', unit: ledger.history[0].value});
+        let calls = 0;
+        let reads = 0;
+        const readUnit = ledger.gateway.readUnit;
+        ledger.gateway.readUnit = async (...args) => {
+            reads += 1;
+            const value = await readUnit(...args);
+            return mode === 'state-changed' && reads > 1 ? {...value, estado: 'EN_TRANSITO'} : value;
+        };
+        const delays = [];
+        const invocation = {...registration(), operation: 'DispatchTransfer'};
+        const prepare = () => prepareRecipe({
+            gatewayPool: ledger.gateway, journal, unit: unit(),
+            recipe: {datasetSequence: 1, invocations: [registration(), invocation]},
+            retryDelayMs: 4000, sleep: async (delay) => {delays.push(delay);},
+            visibilityTimeoutMs: 0,
+            invoke: async (_pool, _invocation, hooks) => {
+                calls += 1;
+                const transactionId = String(calls).repeat(64);
+                await hooks.onTransactionId(transactionId);
+                if (mode !== 'retry' || calls === 1) {
+                    if (mode === 'unexpected') ledger.commit('foreign-dispatch');
+                    if (mode === 'ambiguous') await hooks.onEndorsed({transactionId, transactionBytes: Buffer.from('endorsed')});
+                    const details = [disseminationMessage(transactionId)];
+                    if (mode === 'permanent') details.push('rpc error: code = PermissionDenied desc = denied');
+                    throw Object.assign(abortedEndorsement(details), {transactionId});
+                }
+                await hooks.onEndorsed({transactionId, transactionBytes: Buffer.from('endorsed')});
+                ledger.commit(transactionId);
+                return {transactionId, transactionBytes: Buffer.from('endorsed'), result: Buffer.from('{}')};
+            },
+            summarize: () => ({collections: [], markerWrites: 0, pairPrivateWrites: 2}),
+        });
+        if (mode === 'retry') {
+            await prepare();
+            assert.equal(calls, 2);
+            assert.ok(reads >= 2, 'state is reconciled before retry');
+            assert.equal(ledger.history.length, 2);
+            assert.equal(journal.committed().length, 2);
+        } else if (mode === 'exhaust') {
+            await assert.rejects(prepare, /exceeded 5 transient attempts/u);
+            assert.equal(calls, 5);
+            assert.deepEqual(delays, [4000, 8000, 10000, 10000]);
+            assert.equal(ledger.history.length, 1);
+        } else if (mode === 'unexpected' || mode === 'state-changed') {
+            await assert.rejects(prepare, /changed unexpectedly/u);
+            assert.equal(calls, 1);
+        } else if (mode === 'permanent') {
+            await assert.rejects(prepare, /ABORTED/u);
+            assert.equal(calls, 1);
+        } else {
+            await assert.rejects(prepare, /visibility deadline/u);
+            await assert.rejects(prepare, /visibility deadline/u);
+            assert.equal(calls, 1, 'an endorsed ambiguity must not duplicate on resume');
+        }
+        const failed = journal.events.find((event) => event.status === 'failed');
+        assert.equal(failed.details[0].disseminationFailure, true);
+        assert.equal(failed.details[0].transportCode, null);
+        assert.equal(failed.step, 1);
+        assert.equal(failed.operation, 'DispatchTransfer');
+        assert.equal(JSON.stringify(failed).includes('private dissemination plans'), false);
+    }
+});
+
 test('only exclusively transient endorsement details make ABORTED recoverable', () => {
     const deadline = 'rpc error: code = DeadlineExceeded desc = context deadline exceeded';
     const unavailable = 'rpc error: code = Unavailable desc = transport is closing';
