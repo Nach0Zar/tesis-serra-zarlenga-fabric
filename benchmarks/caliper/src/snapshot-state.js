@@ -62,8 +62,44 @@ function progressReaderMspId(gatewayPool, unit) {
 }
 
 function isTransientGrpcError(error) {
-    return TRANSIENT_GRPC_CODES.has(error?.code)
-        || /\b(?:CANCELLED|DEADLINE_EXCEEDED|UNAVAILABLE)\b/u.test(error?.message ?? '');
+    if (error?.phase === 'journal' || extractContractError(error)) return false;
+    if (error?.code === grpc.status.ABORTED) {
+        return error.phase === 'endorsement' && Array.isArray(error.details)
+            && error.details.length > 0 && error.details.every((detail) => transientDetailCode(detail) !== null);
+    }
+    if (error?.code !== undefined) return TRANSIENT_GRPC_CODES.has(error.code);
+    return /\b(?:CANCELLED|DEADLINE_EXCEEDED|UNAVAILABLE)\b/u.test(error?.message ?? '');
+}
+
+function transientDetailCode(detail) {
+    // SDK ErrorDetail contains address, mspId and the remote RPC status message.
+    // Do not classify free-form messages mentioning a status as a transport error.
+    const match = /^rpc error: code = (Canceled|Cancelled|DeadlineExceeded|Unavailable) desc = (.+)$/u.exec(detail?.message ?? '');
+    if (!match || extractContractError({message: detail.message})) return null;
+    const descriptions = {
+        Canceled: /^context canceled$/u,
+        Cancelled: /^context canceled$/u,
+        DeadlineExceeded: /^context deadline exceeded$/u,
+        Unavailable: /^(?:transport is closing|connection (?:error|closed|refused)|error reading from server|failed to (?:connect|create new connection)|all SubConns are in TransientFailure|keepalive ping failed|EOF)/u,
+    };
+    return descriptions[match[1]].test(match[2]) ? match[1] : null;
+}
+
+function preparationErrorDiagnostics(error) {
+    // Deliberately exclude raw messages, proposals, arguments and transient data.
+    return {
+        phase: error?.phase ?? 'unknown',
+        code: error?.code ?? null,
+        contractCode: extractContractError(error)?.code ?? null,
+        transactionId: error?.transactionId ?? null,
+        details: Array.isArray(error?.details) ? error.details.map((detail) => ({
+            address: detail.address ?? null,
+            mspId: detail.mspId ?? null,
+            rpcCode: /^rpc error: code = ([A-Za-z]+) desc = /u.exec(detail.message ?? '')?.[1] ?? null,
+            transportCode: transientDetailCode(detail),
+        })) : [],
+        cause: error?.cause ? preparationErrorDiagnostics(error.cause) : undefined,
+    };
 }
 
 async function readProgress(gatewayPool, unit) {
@@ -265,6 +301,8 @@ async function invokeRecipeStep({
     sleep,
     invoke = invokePreparation,
     summarize = summarizePrivateWrites,
+    visibilityTimeoutMs = 30_000,
+    visibilityPollMs = 100,
 }) {
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         let transactionId;
@@ -293,6 +331,11 @@ async function invokeRecipeStep({
                 recovered: false,
             };
         } catch (error) {
+            error.transactionId ??= transactionId;
+            await journal.appendDurable({
+                datasetSequence: sequence, step, operation: invocation.operation,
+                status: 'failed', attempt, ...preparationErrorDiagnostics(error),
+            });
             if (!isTransientGrpcError(error)) throw error;
             const reconciliationUnit = {sequence, preparation: [
                 {operation: 'RegisterUnit', invokerMspId: invocation.invokerMspId, request: invocation.request},
@@ -307,12 +350,19 @@ async function invokeRecipeStep({
                     unit: reconciliationUnit,
                     step,
                     transactionId: ambiguousTransactionId,
-                    timeoutMs: 30_000,
-                    pollMs: retryDelayMs,
+                    timeoutMs: visibilityTimeoutMs,
+                    pollMs: visibilityPollMs,
                     sleep,
                 });
             } else {
                 progress = await readProgress(gatewayPool, reconciliationUnit);
+            }
+            assertHistoryPrefix(sequence, progress.history, records.committed);
+            const previous = records.committed.get(step - 1);
+            if (progress.history.length === step && previous
+                && (!equalUnit(progress.current, previous.unit)
+                    || !equalUnit(progress.history[step - 1]?.value, previous.unit))) {
+                throw new Error(`dataset sequence ${sequence} state changed unexpectedly after transient ${invocation.operation}`);
             }
             if (progress.history.length === step + 1 && progress.history[step]?.txId === ambiguousTransactionId) {
                 return {
@@ -320,6 +370,8 @@ async function invokeRecipeStep({
                     privateWrites: endorsed?.privateWrites ?? {collections: [], markerWrites: 0, pairPrivateWrites: 0},
                     result: Buffer.from(JSON.stringify(progress.current)),
                     recovered: true,
+                    attempt,
+                    phase: error.phase ?? 'unknown',
                 };
             }
             if (progress.history.length !== step) {
@@ -328,6 +380,10 @@ async function invokeRecipeStep({
             if (attempt === maxAttempts) {
                 throw new Error(`dataset sequence ${sequence}/${invocation.operation} exceeded ${maxAttempts} transient attempts`, {cause: error});
             }
+            await journal.appendDurable({
+                datasetSequence: sequence, step, operation: invocation.operation,
+                status: 'retrying', attempt, ...preparationErrorDiagnostics(error),
+            });
             await sleep(Math.min(retryDelayMs * attempt, 10_000));
         }
     }
@@ -356,6 +412,18 @@ async function prepareRecipe({
     if (progress.history.length !== records.committed.size) {
         throw new Error(`dataset sequence ${unit.sequence} ledger history does not match its durable journal`);
     }
+    // An endorsed transaction may have reached ordering before the process died.
+    // Absence at one reader is not evidence of non-submission, including on resume.
+    const unresolved = (records.pending.get(records.committed.size) ?? [])
+        .find((event) => records.endorsed.has(event.transactionId));
+    if (unresolved) {
+        progress = await waitForCommittedStep({
+            gatewayPool, unit, step: records.committed.size, transactionId: unresolved.transactionId,
+            timeoutMs: visibilityTimeoutMs, pollMs: visibilityPollMs, sleep,
+        });
+        await recoverPending(unit.sequence, records, progress, journal);
+        records = stepRecords(journal.forSequence(unit.sequence));
+    }
     for (let step = records.committed.size; step < recipe.invocations.length; step += 1) {
         const invocation = recipe.invocations[step];
         const previousInvocation = recipe.invocations[step - 1];
@@ -369,7 +437,7 @@ async function prepareRecipe({
         }
         const result = await invokeRecipeStep({
             gatewayPool, journal, sequence: unit.sequence, step, invocation, maxAttempts, retryDelayMs, sleep,
-            invoke, summarize,
+            invoke, summarize, visibilityTimeoutMs, visibilityPollMs,
         });
         const resultUnit = committedUnit(result.result);
         progress = resultUnit
@@ -391,6 +459,7 @@ async function prepareRecipe({
             transactionId: result.transactionId,
             privateWrites: result.privateWrites,
             unit: progress.current,
+            ...(result.recovered ? {attempt: result.attempt, phase: result.phase} : {}),
         });
     }
     return progress;
@@ -519,6 +588,7 @@ module.exports = {
     invokeRecipeStep,
     journalStatistics,
     parallel,
+    preparationErrorDiagnostics,
     prepareRecipe,
     progressReaderMspId,
     readProgress,

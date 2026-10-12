@@ -97,13 +97,22 @@ El modo de medición también exige que los archivos que gobiernan la corrida
 estén versionados y sin cambios staged o unstaged. Así, el commit informado
 identifica efectivamente la configuración ejecutada en ambos hosts.
 
-Los siete peers fijan `CORE_PEER_KEEPALIVE_MININTERVAL=30s`. El cliente gRPC
-del shim de chaincode envía pings cada 60 s; el mínimo anterior de 60 s en el
-servidor produjo cierres `GOAWAY ENHANCE_YOUR_CALM: too_many_pings` durante la
-construcción prolongada del snapshot de #137. Este ajuste, autorizado para
-reconstruir el snapshot canónico, cambia la configuración de transporte del
-SUT y debe quedar identificado por el commit del artefacto. No cambia
-`BatchTimeout`, recursos, topología ni lógica de negocio.
+Los siete peers fijan `CORE_PEER_KEEPALIVE_MININTERVAL=30s` para el servidor
+peer. Esto **no** configura el servidor de chaincode: Fabric 2.5.16 fija su
+mínimo gRPC en 60 s en
+[createChaincodeServer](https://github.com/hyperledger/fabric/blob/v2.5.16/internal/peer/node/start.go).
+Los peers añaden `CORE_CHAINCODE_KEEPALIVE=30` (segundos): son mensajes
+de aplicación `KEEPALIVE` en el stream peer↔chaincode, no pings gRPC ni un
+cambio del mínimo fijo. Véase el
+[handler oficial](https://github.com/hyperledger/fabric/blob/v2.5.16/core/chaincode/handler.go).
+Los tres orderers fijan `ORDERER_GENERAL_KEEPALIVE_SERVERMININTERVAL=30s`
+para dar margen a clientes Fabric con pings cada 60 s
+([configuración oficial](https://github.com/hyperledger/fabric/blob/v2.5.16/sampleconfig/orderer.yaml)).
+La eficacia frente a `too_many_pings` requiere lecturas contra los siete peers,
+15 minutos de inactividad y nuevas lecturas, sin salidas ni reconexiones por
+ese motivo. Estos ajustes de transporte fueron autorizados para #137 y
+requieren reconstruir el snapshot canónico ligado al nuevo commit.
+No cambian `BatchTimeout`, recursos, topología ni lógica de negocio.
 
 `up --wait` falla si alguno de los once contenedores no alcanza `healthy`.
 Los peers y orderers consultan `/healthz` en sus endpoints de operaciones.

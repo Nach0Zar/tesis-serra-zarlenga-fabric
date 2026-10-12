@@ -4,6 +4,7 @@
 const path = require('node:path');
 
 const {buildSnapshot, parseSnapshotArguments} = require('./snapshot');
+const {preparationErrorDiagnostics} = require('./snapshot-state');
 
 async function main() {
     const repoRoot = path.resolve(__dirname, '..', '..', '..');
@@ -12,7 +13,8 @@ async function main() {
 
 if (require.main === module) {
     main().catch((error) => {
-        process.stderr.write(`Fabric snapshot build failed: ${error.message}\n`);
+        process.stderr.write('Fabric snapshot build failed; see failure.json and the preparation journal.\n');
+        process.stderr.write(`${JSON.stringify(preparationErrorDiagnostics(error))}\n`);
         process.exitCode = 1;
     });
 }
