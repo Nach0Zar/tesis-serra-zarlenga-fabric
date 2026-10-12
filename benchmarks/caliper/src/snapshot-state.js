@@ -65,7 +65,8 @@ function isTransientGrpcError(error) {
     if (error?.phase === 'journal' || extractContractError(error)) return false;
     if (error?.code === grpc.status.ABORTED) {
         return error.phase === 'endorsement' && Array.isArray(error.details)
-            && error.details.length > 0 && error.details.every((detail) => transientDetailCode(detail) !== null);
+            && error.details.length > 0 && error.details.every((detail) =>
+                transientDetailCode(detail) !== null || disseminationFailure(detail, error.transactionId));
     }
     if (error?.code !== undefined) return TRANSIENT_GRPC_CODES.has(error.code);
     return /\b(?:CANCELLED|DEADLINE_EXCEEDED|UNAVAILABLE)\b/u.test(error?.message ?? '');
@@ -85,6 +86,18 @@ function transientDetailCode(detail) {
     return descriptions[match[1]].test(match[2]) ? match[1] : null;
 }
 
+function disseminationFailure(detail, transactionId) {
+    // Fabric 2.5.16 aggregates SendByCriteria failures without their causes:
+    // gossip/privdata/distributor.go:disseminate and core/endorser/endorser.go.
+    // Accept only this pre-submit simulation failure for the current proposal,
+    // not collection configuration/ACL errors or a message mentioning a timeout.
+    const match = /^error in simulation: failed to distribute private collection, txID ([a-f0-9]{64}), channel ([a-z][a-z0-9.-]*): Failed disseminating ([1-9][0-9]*) out of ([1-9][0-9]*) private dissemination plans$/u.exec(detail?.message ?? '');
+    if (!match || match[1] !== transactionId) return false;
+    const failed = Number(match[3]);
+    const total = Number(match[4]);
+    return Number.isSafeInteger(failed) && Number.isSafeInteger(total) && failed <= total;
+}
+
 function preparationErrorDiagnostics(error) {
     // Deliberately exclude raw messages, proposals, arguments and transient data.
     return {
@@ -97,6 +110,7 @@ function preparationErrorDiagnostics(error) {
             mspId: detail.mspId ?? null,
             rpcCode: /^rpc error: code = ([A-Za-z]+) desc = /u.exec(detail.message ?? '')?.[1] ?? null,
             transportCode: transientDetailCode(detail),
+            disseminationFailure: disseminationFailure(detail, error.transactionId),
         })) : [],
         cause: error?.cause ? preparationErrorDiagnostics(error.cause) : undefined,
     };

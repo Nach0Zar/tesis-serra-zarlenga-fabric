@@ -95,14 +95,23 @@ reconcilia un timeout ambiguo con `ReadUnit` e historial antes de decidir si
 continúa o reintenta.
 
 Un `ABORTED` sólo es transitorio en la fase de endoso y si todos sus detalles
-son timeouts o errores de transporte reconocidos. Códigos sin detalles,
+son timeouts o errores de transporte reconocidos, o el error específico de
+simulación de Fabric `Failed disseminating N out of M private dissemination plans`
+ligado al transaction ID de la propuesta actual. Este último permite recuperación
+acotada antes del submit; no incluye errores de configuración de colecciones o ACL.
+Fabric agrega los fallos de envío sin exponer sus causas al cliente
+([distribuidor 2.5.16](https://github.com/hyperledger/fabric/blob/v2.5.16/gossip/privdata/distributor.go),
+[endorser](https://github.com/hyperledger/fabric/blob/v2.5.16/core/endorser/endorser.go));
+por eso el journal lo identifica como `disseminationFailure`, **no** como timeout
+demostrado. La causa se comprueba en los logs del peer. Códigos sin detalles,
 errores contractuales, respuestas incompatibles y detalles mixtos abortan.
 Se comprueban estado e historial contra el prefijo durable antes del reintento,
 con un máximo de cinco intentos por paso. Si ya hubo endoso, una ausencia
 temporal del historial **no** permite reenviar: la construcción se detiene
 si no puede confirmar el commit, y conserva esa guarda también en `--resume`.
 Los eventos `failed`/`retrying` del journal y `failure.json` conservan fase,
-código, transaction ID y códigos de los endpoints, sin argumentos ni propuestas.
+código, transaction ID, códigos de los endpoints e indicador de fallo de
+diseminación, sin argumentos ni propuestas.
 La diseminación privada y el timeout interno de endoso de 30 s no cambian.
 
 El diagnóstico del gate de #137 separa dos fallos: cierres gRPC por pings y
