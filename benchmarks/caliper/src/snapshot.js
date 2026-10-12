@@ -14,6 +14,7 @@ const {
 } = require('./artifacts');
 const {resolveOrganizationCredentials} = require('./credentials');
 const {GatewayPool} = require('./gateway-bridge');
+const {waitForDiscovery} = require('./discovery-readiness');
 const {buildHostMetadata} = require('./host');
 const {buildPreparationMetadata, writeJSONAtomic} = require('./metadata');
 const {buildMultiOrganizationNetworkConfig, inspectOrganizationRuntime} = require('./network-config');
@@ -288,6 +289,8 @@ async function buildSnapshot(repoRoot, options = {}) {
         const unitBySequence = new Map(bundle.dataset.units.map((unit) => [unit.sequence, unit]));
         let completed = 0;
         try {
+            const readiness = await waitForDiscovery(gatewayPool, credentials);
+            process.stdout.write(`Discovery ready: ${JSON.stringify(readiness)}\n`);
             const presentUnits = plan.units.filter((entry) => entry.expected.present);
             await parallel(presentUnits, concurrency, async (logicalUnit) => {
                 const unit = unitBySequence.get(logicalUnit.datasetSequence);

@@ -6,6 +6,7 @@ const path = require('node:path');
 const {readSnapshot} = require('./artifacts');
 const {resolveOrganizationCredentials} = require('./credentials');
 const {GatewayPool} = require('./gateway-bridge');
+const {waitForDiscovery} = require('./discovery-readiness');
 const {buildMultiOrganizationNetworkConfig, inspectOrganizationRuntime} = require('./network-config');
 const {assertSnapshotCompatibility, CALIPER_VERSION} = require('./snapshot');
 const {readPreconditions} = require('./snapshot-preconditions');
@@ -68,12 +69,14 @@ async function warmPeers(repoRoot, options = {}) {
     });
     const gatewayPool = new GatewayPool(networkConfig);
     let warmed;
+    let discovery;
     try {
         warmed = await warmConfiguredPeers(gatewayPool, credentials, registration.request, expected);
+        discovery = await waitForDiscovery(gatewayPool, credentials);
     } finally {
         gatewayPool.close();
     }
-    return {snapshotId: snapshot.manifest.snapshotId, sequence: unit.sequence, warmed};
+    return {snapshotId: snapshot.manifest.snapshotId, sequence: unit.sequence, warmed, discovery};
 }
 
 async function main() {

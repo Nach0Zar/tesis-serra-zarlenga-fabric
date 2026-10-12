@@ -97,7 +97,7 @@ El modo de medición también exige que los archivos que gobiernan la corrida
 estén versionados y sin cambios staged o unstaged. Así, el commit informado
 identifica efectivamente la configuración ejecutada en ambos hosts.
 
-Los siete peers fijan `CORE_PEER_KEEPALIVE_MININTERVAL=30s` para el servidor
+Los siete peers fijan `CORE_PEER_KEEPALIVE_MININTERVAL=5s` para el servidor
 peer. Esto **no** configura el servidor de chaincode: Fabric 2.5.16 fija su
 mínimo gRPC en 60 s en
 [createChaincodeServer](https://github.com/hyperledger/fabric/blob/v2.5.16/internal/peer/node/start.go).
@@ -105,9 +105,14 @@ Los peers añaden `CORE_CHAINCODE_KEEPALIVE=30` (segundos): son mensajes
 de aplicación `KEEPALIVE` en el stream peer↔chaincode, no pings gRPC ni un
 cambio del mínimo fijo. Véase el
 [handler oficial](https://github.com/hyperledger/fabric/blob/v2.5.16/core/chaincode/handler.go).
-Los tres orderers fijan `ORDERER_GENERAL_KEEPALIVE_SERVERMININTERVAL=30s`
-para dar margen a clientes Fabric con pings cada 60 s
-([configuración oficial](https://github.com/hyperledger/fabric/blob/v2.5.16/sampleconfig/orderer.yaml)).
+Los tres orderers fijan `ORDERER_GENERAL_KEEPALIVE_SERVERMININTERVAL=5s`.
+No todos los clientes Fabric envían pings a 60 s: el
+[Gateway 2.5.16](https://github.com/hyperledger/fabric/blob/v2.5.16/internal/pkg/gateway/endpoint.go)
+crea conexiones con KaOpts vacíos, y
+[gRPC 1.79.3](https://github.com/grpc/grpc-go/blob/v1.79.3/dialoptions.go)
+eleva el intervalo cero al mínimo de 10 s. Un mínimo de servidor de 30 s
+es incompatible; 5 s deja margen. La reproducción aislada debe acompañarse
+de inactividad y carga sostenida reales.
 La eficacia frente a `too_many_pings` requiere lecturas contra los siete peers,
 15 minutos de inactividad y nuevas lecturas, sin salidas ni reconexiones por
 ese motivo. Estos ajustes de transporte fueron autorizados para #137 y

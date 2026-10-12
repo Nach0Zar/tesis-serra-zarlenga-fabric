@@ -297,7 +297,14 @@ Si el coeficiente de variacion de throughput o p95 supera 15%, ejecutar 3 repeti
 
 En Fabric, el warm-up evalua `ReadUnit` sobre la unidad reservada dirigiendose
 individualmente a cada uno de los siete peers. Cualquier peer que no responda o
-devuelva otro estado invalida el warm-up. Se permite exactamente un segundo
+devuelva otro estado invalida el warm-up. Antes de preparar o medir, se comprueba
+ademas la disponibilidad de discovery entre organizaciones: cada uno de los
+siete Gateways debe reunir los endosos de los siete peers en dos pasadas
+consecutivas de `org.hyperledger.fabric:GetMetadata`, sin submit. La espera es
+acotada a 180 s y ocurre fuera de la ventana medida; si no converge, bloquea el
+inicio. `/healthz` y una lectura local no acreditan esa disponibilidad remota.
+No se agregan reintentos generales a las operaciones medidas.
+Se permite exactamente un segundo
 intento despues de restaurar nuevamente el snapshot; si tambien falla, el
 escenario queda bloqueado y no se ejecutan sus mediciones.
 

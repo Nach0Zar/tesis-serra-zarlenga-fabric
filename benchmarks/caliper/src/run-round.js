@@ -7,6 +7,7 @@ const {spawnSync} = require('node:child_process');
 
 const {resolveOrganizationCredentials} = require('./credentials');
 const {GatewayPool, invokePreparation} = require('./gateway-bridge');
+const {waitForDiscovery} = require('./discovery-readiness');
 const {buildHostMetadata} = require('./host');
 const {buildRoundMetadata, writeJSONAtomic} = require('./metadata');
 const {buildMultiOrganizationNetworkConfig, inspectOrganizationRuntime} = require('./network-config');
@@ -170,7 +171,7 @@ async function main() {
     const sourceTruth = readSourceTruth(repoRoot);
     const bundle = loadDatasetBundle(datasetDirectory);
     const plan = buildPlan(bundle.dataset, profile, bundle.manifest.seed);
-    const credentials = resolveOrganizationCredentials(repoRoot, [...new Set([...plan.requiredMspIds, 'LabMSP'])]);
+    const credentials = resolveOrganizationCredentials(repoRoot);
     const runtime = inspectOrganizationRuntime(repoRoot, credentials);
     const networkConfig = buildMultiOrganizationNetworkConfig({
         organizations: credentials,
@@ -193,6 +194,13 @@ async function main() {
     writeJSONAtomic(paths.workPlanPath, plan);
     writeJSONAtomic(paths.benchmarkConfigPath, benchmarkConfig);
 
+    const readinessPool = new GatewayPool(networkConfig);
+    try {
+        const readiness = await waitForDiscovery(readinessPool, credentials);
+        process.stdout.write(`Discovery ready: ${JSON.stringify(readiness)}\n`);
+    } finally {
+        readinessPool.close();
+    }
     if (options.stateMode === 'prepare') {
         await preparePlan(plan, networkConfig);
     } else {

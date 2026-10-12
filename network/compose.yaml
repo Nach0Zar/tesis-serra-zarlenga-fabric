@@ -16,7 +16,8 @@ x-peer-environment: &peer-environment
   CORE_PEER_MSPCONFIGPATH: /etc/hyperledger/fabric/msp
   CORE_PEER_PROFILE_ENABLED: "false"
   # Main peer server only; Fabric 2.5.16 fixes the chaincode server minimum at 60s.
-  CORE_PEER_KEEPALIVE_MININTERVAL: 30s
+  # Gateway KaOpts are zero in 2.5.16: gRPC clamps client pings to 10s.
+  CORE_PEER_KEEPALIVE_MININTERVAL: 5s
   # Application KEEPALIVE messages keep the peer/chaincode stream active.
   CORE_CHAINCODE_KEEPALIVE: "30"
   CORE_PEER_LISTENADDRESS: 0.0.0.0:7051
@@ -63,8 +64,8 @@ x-orderer-environment: &orderer-environment
   FABRIC_LOGGING_SPEC: INFO
   ORDERER_GENERAL_LISTENADDRESS: 0.0.0.0
   ORDERER_GENERAL_LISTENPORT: "7050"
-  # Give Fabric clients' 60s transport pings margin at the orderer server.
-  ORDERER_GENERAL_KEEPALIVE_SERVERMININTERVAL: 30s
+  # Gateway uses 10s transport pings; server minimum must leave margin.
+  ORDERER_GENERAL_KEEPALIVE_SERVERMININTERVAL: 5s
   ORDERER_GENERAL_BOOTSTRAPMETHOD: none
   ORDERER_CHANNELPARTICIPATION_ENABLED: "true"
   ORDERER_GENERAL_TLS_ENABLED: "true"
