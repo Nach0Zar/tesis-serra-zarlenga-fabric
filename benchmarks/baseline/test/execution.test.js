@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const {performance} = require('node:perf_hooks');
 const test = require('node:test');
 
 const {aggregateResults} = require('../../caliper/src/raw-results');
@@ -97,10 +98,11 @@ test('slow responses do not reduce offered load and pending requests drain after
     const profile = {scenario: 'read-unit', operation: 'query-unit', workers: 1,
         durationSeconds: 2, rate: 10, transactionsPerOperation: 1};
     const starts = [];
+    const now = () => Math.floor(performance.now());
     let inFlight = 0;
     let maximumInFlight = 0;
     const client = {invoke: async () => {
-        starts.push(Date.now());
+        starts.push(now());
         inFlight += 1;
         maximumInFlight = Math.max(maximumInFlight, inFlight);
         await timers.setTimeout(250);
@@ -110,7 +112,8 @@ test('slow responses do not reduce offered load and pending requests drain after
     const plan = {workers: [{workerIndex: 0, operations: Array.from({length: 20}, (_, ordinal) => ({
         ordinal, datasetSequence: ordinal + 1, type: 'query-unit', invocations: [{operation: 'ReadUnit'}],
     }))}]};
-    const window = await runFixedRate({client, plan, profile, partPaths: [path.join(directory, 'raw-worker-0.jsonl')]});
+    const window = await runFixedRate({client, plan, profile, now,
+        partPaths: [path.join(directory, 'raw-worker-0.jsonl')]});
     const {summary, operations} = aggregateResults(directory, profile, window);
     assert.equal(starts.length, 20);
     assert.ok(maximumInFlight >= 3);

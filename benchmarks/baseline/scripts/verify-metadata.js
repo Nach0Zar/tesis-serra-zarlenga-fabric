@@ -31,7 +31,9 @@ function baseContext() {
         host: {cpu: 'CI CPU', cpuCores: 2, memoryGB: 4, os: 'CI OS', kernel: 'CI kernel'},
         environment: {
             docker: '29.0.0', dockerCompose: '5.0.0',
-            baselineCommit: 'c'.repeat(40), baselineImage: `snt-baseline@sha256:${'d'.repeat(64)}`, postgres: '16.15',
+            baselineCommit: 'c'.repeat(40),
+            baselineImage: `registry.example.invalid/long-baseline-reference@sha256:${'d'.repeat(64)}`,
+            postgres: '16.15',
         },
     };
 }

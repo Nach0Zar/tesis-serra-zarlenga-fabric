@@ -33,7 +33,10 @@ function baseMetadata(context) {
         sut: 'baseline',
         dataset: context.dataset,
         host: context.host,
-        environment: context.environment,
+        environment: {
+            ...context.environment,
+            baselineImage: context.environment.baselineImage.replace(/^.*@(sha256:[a-f0-9]{64})$/u, '$1'),
+        },
     };
 }
 

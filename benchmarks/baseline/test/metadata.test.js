@@ -52,3 +52,15 @@ test('smoke metadata records exactly thirty reads', () => {
     assert.equal(metadata.rate.operation, 'query-unit');
     assert.equal(metadata.rate.effectiveTransactionsPerSecond, 1);
 });
+
+test('metadata uses an immutable image digest without truncating long references in the context', () => {
+    const input = context();
+    input.environment.baselineImage = `registry.example.invalid/${'long-reference-'.repeat(10)}@sha256:${'d'.repeat(64)}`;
+    const original = input.environment.baselineImage;
+    const metadata = buildSmokeMetadata(input, {
+        startedAt: '2026-10-08T00:00:00.000Z', endedAt: '2026-10-08T00:00:30.000Z',
+        observedDurationSeconds: 30, successfulTransactions: 30,
+    });
+    assert.equal(metadata.environment.baselineImage, `sha256:${'d'.repeat(64)}`);
+    assert.equal(input.environment.baselineImage, original);
+});

@@ -190,7 +190,10 @@ Cada ronda escribe bajo `build/benchmarks/baseline/runs/<token>/`:
 
 El metadata usa exclusivamente los identificadores de la baseline. El contexto
 adjunto conserva la versión contractual y el package ID completo como
-referencias de equivalencia con Fabric. Todo `build/` está ignorado por Git.
+referencias de equivalencia con Fabric. `environment.baselineImage` usa el
+digest inmutable de la imagen para respetar el límite del schema; la referencia
+completa con tag y digest permanece en el manifiesto y el contexto.
+Todo `build/` está ignorado por Git.
 
 ## Asimetrías preservadas
 
