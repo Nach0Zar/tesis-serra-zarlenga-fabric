@@ -3,7 +3,6 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const timers = require('node:timers/promises');
 
 const {writeJSONAtomic} = require('../../caliper/src/metadata');
 const {loadDatasetBundle, readSourceTruth, sha256File} = require('../../caliper/src/sources');
@@ -14,7 +13,7 @@ const {
     benchmarkEnvironment, compose, dumpDatabase, ensureFabricStopped, inspectRuntime,
     queryDatabase, repositoryCommit, restoreDatabase, writePrivateFile,
 } = require('./runtime');
-const {buildGoldenSnapshotPlan, registrationForUnit} = require('./snapshot-plan');
+const {buildGoldenSnapshotPlan, expectedLogicalState, registrationForUnit} = require('./snapshot-plan');
 
 const SNAPSHOT_SCHEMA_VERSION = '1.0.0';
 const CANONICAL_DATASET_SHA256 = 'de523ee8fafeed0a39f8518b501fce4692192869030762816de353654385163d';
@@ -65,25 +64,16 @@ async function parallel(items, concurrency, operation) {
 }
 
 function requiredMspIds(plan) {
-    return [...new Set(plan.preparations.flatMap((entry) => entry.invocations.map((invocation) => invocation.invokerMspId)))].sort();
+    return [...new Set(plan.units.flatMap((entry) => entry.recipe.map((invocation) => invocation.invokerMspId)))].sort();
 }
 
-async function prepareSnapshot(client, plan, expectedBySequence, concurrency, options = {}) {
-    const sleep = options.sleep ?? timers.setTimeout;
-    const retryDelayMs = options.retryDelayMs ?? 1100;
+async function prepareSnapshot(client, plan, concurrency) {
     let completed = 0;
-    let receiveRetries = 0;
-    await parallel(plan.preparations, concurrency, async (preparation) => {
-        let expected = expectedBySequence.get(preparation.datasetSequence);
-        for (const invocation of preparation.invocations) {
+    const preparations = plan.units.filter((entry) => entry.role === 'prepared');
+    await parallel(preparations, concurrency, async (preparation) => {
+        for (const invocation of preparation.recipe) {
             if (invocation.operation === 'RegisterUnit') continue;
-            let result = await client.invoke(invocation);
-            if (!result.ok && invocation.operation === 'ReceiveTransfer'
-                && result.transaction.errorCode === 'INTERNAL_ERROR') {
-                receiveRetries += 1;
-                await sleep(retryDelayMs);
-                result = await client.invoke(invocation);
-            }
+            const result = await client.invoke(invocation);
             if (!result.ok) {
                 const classification = result.transaction.errorCode
                     ?? result.transaction.transportError
@@ -92,36 +82,73 @@ async function prepareSnapshot(client, plan, expectedBySequence, concurrency, op
                 const envelope = result.errorEnvelope ? ` ${JSON.stringify(result.errorEnvelope)}` : '';
                 throw new Error(`snapshot preparation ${preparation.datasetSequence}/${invocation.operation} failed with ${classification}${envelope}`);
             }
-            expected = stableUnit(result.value);
         }
-        expectedBySequence.set(preparation.datasetSequence, expected);
         completed += 1;
-        if (completed % 500 === 0 || completed === plan.preparations.length) {
-            process.stdout.write(`Prepared ${completed}/${plan.preparations.length} baseline recipes\n`);
+        if (completed % 500 === 0 || completed === preparations.length) {
+            process.stdout.write(`Prepared ${completed}/${preparations.length} baseline recipes\n`);
         }
     });
-    return {recipes: completed, receiveRetries};
+    return {recipes: completed, receiveRetries: 0};
+}
+
+function logicalHistory(unit, entry) {
+    return entry.recipe.map((_invocation, index) => {
+        const expected = expectedLogicalState(unit, entry.recipe.slice(0, index + 1));
+        return {isDelete: false, value: {
+            ...initialUnit(unit), estado: expected.state, custodioActual: expected.custodian,
+        }};
+    });
+}
+
+function snapshotPreconditions(dataset, plan) {
+    const units = new Map(dataset.units.map((unit) => [unit.sequence, unit]));
+    return plan.units.map((entry) => {
+        const unit = units.get(entry.datasetSequence);
+        return {
+            sequence: entry.datasetSequence,
+            unit: entry.expected.present ? {
+                ...initialUnit(unit), estado: entry.expected.state, custodioActual: entry.expected.custodian,
+            } : null,
+            history: logicalHistory(unit, entry),
+        };
+    });
+}
+
+function stableLogicalHistory(history) {
+    if (!Array.isArray(history)) throw new Error('unit history must be an array');
+    return history.map((entry) => ({isDelete: entry.isDelete === true, value: entry.value ? stableUnit(entry.value) : null}));
+}
+
+async function verifyUnitPrecondition(client, unit, expected) {
+    const registration = registrationForUnit(unit);
+    const request = {gtin: registration.request.gtin, numeroSerie: registration.request.numeroSerie};
+    const result = await client.invoke({operation: 'ReadUnit', invokerMspId: registration.invokerMspId, request});
+    if (expected.unit === null) {
+        if (result.ok || result.transaction.errorCode !== 'UNIT_NOT_FOUND') {
+            throw new Error(`sequence ${unit.sequence} should be absent before the round`);
+        }
+    } else if (!result.ok || !equalUnit(result.value, expected.unit)) {
+        throw new Error(`sequence ${unit.sequence} has a contaminated public precondition`);
+    }
+    const history = await client.invoke({operation: 'GetUnitHistory', invokerMspId: registration.invokerMspId, request});
+    if (expected.unit === null) {
+        if (history.ok || history.transaction.errorCode !== 'UNIT_NOT_FOUND') {
+            throw new Error(`sequence ${unit.sequence} should have no history`);
+        }
+    } else if (!history.ok || JSON.stringify(stableLogicalHistory(history.value)) !== JSON.stringify(expected.history)) {
+        throw new Error(`sequence ${unit.sequence} has a contaminated history precondition`);
+    }
 }
 
 async function verifyAllUnits(client, dataset, expectedBySequence, concurrency) {
     let present = 0;
     let absent = 0;
     await parallel(dataset.units, concurrency, async (unit) => {
-        const registration = registrationForUnit(unit);
-        const result = await client.invoke({
-            operation: 'ReadUnit', invokerMspId: registration.invokerMspId,
-            request: {gtin: registration.request.gtin, numeroSerie: registration.request.numeroSerie},
-        });
         const expected = expectedBySequence.get(unit.sequence);
-        if (expected === null) {
-            if (result.ok || result.transaction.errorCode !== 'UNIT_NOT_FOUND') {
-                throw new Error(`dataset sequence ${unit.sequence} should be absent from the snapshot`);
-            }
+        await verifyUnitPrecondition(client, unit, expected);
+        if (expected.unit === null) {
             absent += 1;
             return;
-        }
-        if (!result.ok || !equalUnit(result.value, expected)) {
-            throw new Error(`dataset sequence ${unit.sequence} does not match its snapshot precondition`);
         }
         present += 1;
     });
@@ -166,7 +193,7 @@ async function buildSnapshot(options = {}) {
     const plan = buildGoldenSnapshotPlan(bundle.dataset, bundle.manifest.seed);
     const snapshotDirectory = createOutputDirectory('snapshots', options.snapshotToken);
     const selectionPath = path.join(snapshotDirectory, 'seed-selection.json');
-    const planPath = path.join(snapshotDirectory, 'snapshot-plan.json');
+    const planPath = path.join(snapshotDirectory, 'logical-plan.json');
     writeJSONAtomic(selectionPath, {
         schemaVersion: '1.0.0', datasetSHA256: bundle.manifest.dataset.sha256,
         excludedSequences: plan.excludedSequences,
@@ -182,10 +209,8 @@ async function buildSnapshot(options = {}) {
     const required = requiredMspIds(plan);
     const credentials = resolveCredentials(repoRoot, required, environment);
     const client = new BaselineClient({baseURL: effectiveAPIURL(environment), credentials});
-    const excluded = new Set(plan.excludedSequences);
-    const expectedBySequence = new Map(bundle.dataset.units.map((unit) => [
-        unit.sequence, excluded.has(unit.sequence) ? null : initialUnit(unit),
-    ]));
+    const preconditions = snapshotPreconditions(bundle.dataset, plan);
+    const expectedBySequence = new Map(preconditions.map((entry) => [entry.sequence, entry]));
     const concurrency = Number(environment.SNT_BASELINE_PREPARATION_CONCURRENCY ?? 8);
     if (!Number.isInteger(concurrency) || concurrency < 1) throw new Error('preparation concurrency must be a positive integer');
 
@@ -198,7 +223,7 @@ async function buildSnapshot(options = {}) {
             '-v', `${selectionPath}:/selection.json:ro`,
             'seed', '--selection-file', '/selection.json',
         ], {env: environment, inherit: true});
-        const preparation = await prepareSnapshot(client, plan, expectedBySequence, concurrency);
+        const preparation = await prepareSnapshot(client, plan, concurrency);
         const verified = await verifyAllUnits(client, bundle.dataset, expectedBySequence, concurrency);
         if (verified.present !== plan.counts.total - plan.counts.unregistered || verified.absent !== plan.counts.unregistered) {
             throw new Error(`snapshot presence counts are inconsistent: ${JSON.stringify(verified)}`);
@@ -208,7 +233,6 @@ async function buildSnapshot(options = {}) {
             || Number(counts.labInterventions) !== 0 || Number(counts.labInterventionEvents) !== 0) {
             throw new Error(`snapshot database counts are inconsistent: ${JSON.stringify(counts)}`);
         }
-        const preconditions = bundle.dataset.units.map((unit) => ({sequence: unit.sequence, unit: expectedBySequence.get(unit.sequence)}));
         const preconditionsPath = path.join(snapshotDirectory, 'preconditions.json');
         writeJSONAtomic(preconditionsPath, preconditions);
         compose(repoRoot, ['stop', 'api'], {env: environment});
@@ -228,6 +252,7 @@ async function buildSnapshot(options = {}) {
             counts: {...plan.counts, database: counts},
             preparation,
             smokeSequence: plan.smokeSequence,
+            logicalPlanSHA256: sha256File(planPath),
             artifacts: {
                 repositoryCommit: repositoryCommit(repoRoot),
                 baselineCommit: repositoryCommit(repoRoot),
@@ -241,9 +266,9 @@ async function buildSnapshot(options = {}) {
                 dump: {name: path.basename(dumpPath), sha256: sha256File(dumpPath), bytes: dump.length},
                 preconditions: {name: path.basename(preconditionsPath), sha256: sha256File(preconditionsPath)},
                 selection: {name: path.basename(selectionPath), sha256: sha256File(selectionPath)},
-                plan: {name: path.basename(planPath), sha256: sha256File(planPath)},
+                logicalPlan: {name: path.basename(planPath), sha256: sha256File(planPath)},
             },
-            environment: {docker: runtime.docker, dockerCompose: runtime.dockerCompose},
+            environment: {docker: runtime.docker, dockerCompose: runtime.dockerCompose, resources: runtime.resources},
         };
         writeJSONAtomic(path.join(snapshotDirectory, 'manifest.json'), manifest);
         process.stdout.write(`Baseline snapshot completed: ${snapshotDirectory}\n`);
@@ -266,6 +291,9 @@ function readSnapshot(snapshotDirectory) {
     const directory = path.resolve(snapshotDirectory);
     const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf8'));
     if (manifest.schemaVersion !== SNAPSHOT_SCHEMA_VERSION) throw new Error('unsupported snapshot manifest version');
+    if (!manifest.files?.logicalPlan || manifest.logicalPlanSHA256 !== manifest.files.logicalPlan.sha256) {
+        throw new Error('snapshot must include the canonical logical plan hash; rebuild it');
+    }
     for (const file of Object.values(manifest.files)) {
         const filePath = path.join(directory, file.name);
         if (sha256File(filePath) !== file.sha256) throw new Error(`snapshot file hash mismatch: ${file.name}`);
@@ -307,4 +335,5 @@ module.exports = {
     CANONICAL_DATASET_SHA256, CONTRACT_VERSION, PACKAGE_ID, SNAPSHOT_SCHEMA_VERSION,
     buildSnapshot, databaseCounts, effectiveAPIURL, equalUnit, initialUnit, readSnapshot,
     restoreSnapshot, stableUnit, verifyAllUnits, hostUserSpec, prepareSnapshot,
+    logicalHistory, snapshotPreconditions, stableLogicalHistory, verifyUnitPrecondition,
 };

@@ -1,39 +1,95 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const test = require('node:test');
 
-const {prepareSnapshot} = require('../src/snapshot');
+const {writeJSONAtomic} = require('../../caliper/src/metadata');
+const {sha256File} = require('../../caliper/src/sources');
+const {prepareSnapshot, readSnapshot, snapshotPreconditions, verifyUnitPrecondition} = require('../src/snapshot');
 
-test('snapshot preparation retries only a transient internal reception outside the measured window', async () => {
-    let receiveCalls = 0;
-    const delays = [];
-    const result = await prepareSnapshot({invoke: async (invocation) => {
-        if (invocation.operation === 'DispatchTransfer') {
-            return {ok: true, value: {gtin: '1'}, transaction: {}};
-        }
-        receiveCalls += 1;
-        if (receiveCalls === 1) {
-            return {ok: false, errorEnvelope: {code: 'INTERNAL_ERROR'}, transaction: {errorCode: 'INTERNAL_ERROR'}};
-        }
-        return {ok: true, value: {gtin: '1'}, transaction: {}};
-    }}, {
-        preparations: [{datasetSequence: 1, invocations: [
-            {operation: 'DispatchTransfer'}, {operation: 'ReceiveTransfer'},
-        ]}],
-    }, new Map([[1, {}]]), 1, {
-        retryDelayMs: 1100,
-        sleep: async (delay) => delays.push(delay),
-    });
-    assert.deepEqual(result, {recipes: 1, receiveRetries: 1});
-    assert.deepEqual(delays, [1100]);
-    assert.equal(receiveCalls, 2);
+const unit = {
+    sequence: 1, initialState: 'EN_LABORATORIO', initialCustodian: 'GLN:lab',
+    preparation: [{operation: 'RegisterUnit', invokerMspId: 'LabMSP',
+        request: {gtin: '1', numeroSerie: 'S1', lote: 'L1', fechaVencimiento: '2099-01-01'}}],
+};
+const recipe = [
+    ...unit.preparation,
+    {operation: 'DispatchTransfer', privateData: {destinatario: {destino: 'GLN:pharmacy'}}},
+    {operation: 'ReceiveTransfer'},
+];
+const entry = {datasetSequence: 1, role: 'prepared', recipe,
+    expected: {present: true, state: 'EN_CUSTODIA', custodian: 'GLN:pharmacy'}};
+
+test('preparation uses canonical recipes and never retries opaque internal errors', async () => {
+    const calls = [];
+    await assert.rejects(() => prepareSnapshot({invoke: async (invocation) => {
+        calls.push(invocation.operation);
+        return invocation.operation === 'DispatchTransfer'
+            ? {ok: true, transaction: {}}
+            : {ok: false, transaction: {errorCode: 'INTERNAL_ERROR'}};
+    }}, {units: [entry]}, 1), /ReceiveTransfer failed with INTERNAL_ERROR/u);
+    assert.deepEqual(calls, ['DispatchTransfer', 'ReceiveTransfer']);
 });
 
-test('snapshot preparation does not retry unrelated failures', async () => {
-    await assert.rejects(() => prepareSnapshot({invoke: async () => ({
-        ok: false, errorEnvelope: {code: 'INTERNAL_ERROR'}, transaction: {errorCode: 'INTERNAL_ERROR'},
-    })}, {
-        preparations: [{datasetSequence: 2, invocations: [{operation: 'Dispense'}]}],
-    }, new Map([[2, {}]]), 1, {sleep: async () => assert.fail('must not sleep')}), /Dispense failed/u);
+test('successful preparation skips atomic seed registrations and preserves sequential transfers', async () => {
+    const calls = [];
+    const result = await prepareSnapshot({invoke: async (invocation) => {
+        calls.push(invocation.operation);
+        return {ok: true, transaction: {}};
+    }}, {units: [entry]}, 1);
+    assert.deepEqual(calls, ['DispatchTransfer', 'ReceiveTransfer']);
+    assert.deepEqual(result, {recipes: 1, receiveRetries: 0});
+});
+
+test('logical preconditions preserve the complete state and custody history from the common recipe', () => {
+    const [expected] = snapshotPreconditions({units: [unit]}, {units: [entry]});
+    assert.equal(expected.unit.estado, 'EN_CUSTODIA');
+    assert.equal(expected.unit.custodioActual, 'GLN:pharmacy');
+    assert.deepEqual(expected.history.map((event) => [event.value.estado, event.value.custodioActual]), [
+        ['EN_LABORATORIO', 'GLN:lab'], ['EN_TRANSITO', 'GLN:lab'], ['EN_CUSTODIA', 'GLN:pharmacy'],
+    ]);
+});
+
+test('history verification ignores SUT identifiers but rejects altered history with unchanged current state', async () => {
+    const [expected] = snapshotPreconditions({units: [unit]}, {units: [entry]});
+    let history = expected.history.map((event, index) => ({...event,
+        txId: `baseline-${index}`, timestamp: '2026-10-13T00:00:00Z'}));
+    const client = {invoke: async (invocation) => ({
+        ok: true, transaction: {}, value: invocation.operation === 'ReadUnit' ? expected.unit : history,
+    })};
+    await verifyUnitPrecondition(client, unit, expected);
+    history = history.slice(1);
+    await assert.rejects(() => verifyUnitPrecondition(client, unit, expected), /contaminated history/u);
+});
+
+test('absent registrations must have neither current state nor historical events', async () => {
+    const expected = {sequence: 1, unit: null, history: []};
+    const absent = {invoke: async () => ({ok: false, transaction: {errorCode: 'UNIT_NOT_FOUND'}})};
+    await verifyUnitPrecondition(absent, unit, expected);
+    await assert.rejects(() => verifyUnitPrecondition({invoke: async (invocation) =>
+        invocation.operation === 'ReadUnit' ? absent.invoke() : {ok: true, value: []}
+    }, unit, expected), /should have no history/u);
+});
+
+test('snapshot manifests require an intact common logical plan and matching hash', (context) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-baseline-snapshot-'));
+    context.after(() => fs.rmSync(directory, {recursive: true}));
+    const manifestPath = path.join(directory, 'manifest.json');
+    writeJSONAtomic(manifestPath, {schemaVersion: '1.0.0', files: {}});
+    assert.throws(() => readSnapshot(directory), /canonical logical plan hash/u);
+    const planPath = path.join(directory, 'logical-plan.json');
+    writeJSONAtomic(planPath, {units: [entry]});
+    const hash = sha256File(planPath);
+    const manifest = {schemaVersion: '1.0.0', logicalPlanSHA256: hash,
+        files: {logicalPlan: {name: 'logical-plan.json', sha256: hash}}};
+    writeJSONAtomic(manifestPath, manifest);
+    assert.equal(readSnapshot(directory).manifest.logicalPlanSHA256, hash);
+    writeJSONAtomic(manifestPath, {...manifest, logicalPlanSHA256: 'different'});
+    assert.throws(() => readSnapshot(directory), /canonical logical plan hash/u);
+    writeJSONAtomic(manifestPath, manifest);
+    writeJSONAtomic(planPath, {units: []});
+    assert.throws(() => readSnapshot(directory), /snapshot file hash mismatch/u);
 });

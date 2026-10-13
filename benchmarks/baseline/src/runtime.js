@@ -97,12 +97,21 @@ function inspectRuntime(repoRoot, environment) {
     const imageID = run('docker', ['image', 'inspect', '--format', '{{.Id}}', image], {env: environment}).stdout.trim();
     const postgresImage = composeConfig.services?.postgres?.image;
     const fabricImage = networkConfig.services?.['peer0.lab.snt.local']?.image;
+    const containerIds = compose(repoRoot, ['ps', '--all', '--quiet', 'api', 'postgres'], {env: environment})
+        .stdout.trim().split(/\s+/u).filter(Boolean);
+    const containers = JSON.parse(run('docker', ['inspect', ...containerIds], {env: environment}).stdout);
+    const resources = Object.fromEntries(containers.map((container) => [
+        container.Config.Labels['com.docker.compose.service'],
+        Object.fromEntries(['NanoCpus', 'CpuQuota', 'CpuPeriod', 'CpuShares', 'CpusetCpus', 'Memory', 'MemorySwap']
+            .map((field) => [field, container.HostConfig[field]])),
+    ]));
     return {
         docker: run('docker', ['version', '--format', '{{.Server.Version}}'], {env: environment}).stdout.trim(),
         dockerCompose: run('docker', ['compose', 'version', '--short'], {env: environment}).stdout.trim(),
         postgres: String(postgresImage).replace(/^postgres:/u, ''),
         fabric: String(fabricImage).replace(/^hyperledger\/fabric-peer:/u, ''),
         baselineImage: `${image}@${imageID}`,
+        resources,
     };
 }
 

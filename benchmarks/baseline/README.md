@@ -6,6 +6,13 @@ Importa directamente el planificador, los perfiles, la validación del bundle y
 el agregador de [`../caliper/`](../caliper/); las tasas, bandas y reglas de la
 mezcla no se mantienen en una segunda copia.
 
+El plan golden también se importa de `../caliper/src/snapshot-plan.js`.
+`logical-plan.json` conserva exactamente la misma serialización y hash para
+ambos SUT: recetas normalizadas, presencia, estado, custodio y unidad de smoke.
+Fabric restaura volúmenes de ledger y PostgreSQL un dump; son representaciones
+físicas distintas del mismo estado lógico. Los identificadores de transacción
+y timestamps pertenecen a cada SUT y no se exigen iguales al comparar el historial.
+
 El runner no cambia la API ni prepara datos por SQL. Construye un snapshot
 golden mediante el seed atómico existente y completa sus precondiciones por la
 API REST. Cada ronda restaura ese snapshot en un proyecto Compose aislado,
@@ -83,7 +90,9 @@ precondiciones y los conteos de las tablas; exige cero filas en
 format. El resultado queda en
 `build/benchmarks/baseline/snapshots/golden-local/` con hashes, precondiciones y
 un manifiesto ligado al commit, imagen, PostgreSQL, contrato, package ID y
-versión Fabric de referencia.
+versión Fabric de referencia. El manifiesto y el contexto de cada corrida
+registran `logicalPlanSHA256`; el verificador compara también el historial
+lógico completo con cada paso de la receta, conservando su orden.
 
 Una restauración aislada puede comprobarse con:
 
@@ -150,11 +159,16 @@ la latencia end-to-end del par. La respuesta se lee por completo: en
 escrituras, la latencia termina después del commit PostgreSQL confirmado por la
 API. La baseline no incorpora los reintentos propios de Fabric.
 
-La preparación del snapshot queda fuera de la ventana medida. Si el reloj del
-host retrocede entre un despacho de preparación y su recepción, el constraint
-temporal de PostgreSQL rechaza el cierre con `INTERNAL_ERROR`; el constructor
-espera 1,1 segundos y reintenta esa recepción una única vez. El manifiesto
-contabiliza esos reintentos técnicos. Ninguna ronda medida usa este mecanismo.
+El generador usa lazo abierto: cada worker agenda envíos a su fracción de la
+tasa conceptual, independientemente de las respuestas en vuelo. Al cerrar la
+ventana deja de admitir operaciones y espera las respuestas pendientes.
+`scheduledAt` y `submissionDelayMs` permiten auditar la cadencia. La tasa
+ofrecida usa el número real de operaciones enviadas en la ventana; la efectiva
+incluye el tiempo de drenaje. Una ronda incompleta se descarta.
+
+La preparación del snapshot queda fuera de la ventana medida y aborta ante
+cualquier error. No reintenta `INTERNAL_ERROR`: la API no publica la causa
+interna y no permite atribuirla con seguridad al reloj del host.
 
 Antes de medir, el runner verifica las unidades de la ronda contra las
 precondiciones hasheadas y ejecuta el smoke fuera de la ventana. Un timeout,
@@ -186,7 +200,9 @@ referencias de equivalencia con Fabric. Todo `build/` está ignorado por Git.
 - La transferencia sigue siendo bifásica, pero no necesita esperar
   diseminación entre peers ni reintenta estado privado.
 - Los timestamps provienen del servidor de la API y no de una propuesta
-  Fabric.
+  Fabric. Un retroceso del reloj entre despacho y recepción puede violar el
+  constraint temporal de PostgreSQL: la preparación falla, o la ronda medida
+  se descarta, con evidencia preservada.
 - Los historiales son append-only por convención de aplicación y un
   administrador de base puede alterarlos sin las garantías criptográficas de
   un ledger distribuido.
@@ -194,3 +210,11 @@ referencias de equivalencia con Fabric. Todo `build/` está ignorado por Git.
   permanecer sin escrituras en el snapshot y las rondas.
 - El runner no mide operaciones incorporadas posteriormente ni disponibilidad,
   y no orquesta repeticiones o procesamiento estadístico.
+
+Los límites efectivos de CPU/memoria de API y PostgreSQL se registran en el
+manifiesto y el contexto, fuera del schema de metadata. Este Compose no impone
+cuotas individuales; Fabric conserva sus límites por contenedor. La igualdad
+de host y estado lógico no acredita un presupuesto agregado idéntico. La
+decisión de comparabilidad de recursos y el entorno canónico quedan en #54
+antes de resultados citables. Los ensayos diagnósticos previos no pueden
+compararse con Fabric cuando usaba prefijos sobre un ledger casi vacío.

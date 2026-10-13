@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const {equalUnit} = require('./snapshot');
+const {verifyUnitPrecondition} = require('./snapshot');
 
 function readPreconditions(snapshot) {
     const fileName = snapshot.manifest.files.preconditions.name;
@@ -13,10 +13,10 @@ function readPreconditions(snapshot) {
     }
     const bySequence = new Map();
     for (const entry of entries) {
-        if (!Number.isInteger(entry?.sequence) || bySequence.has(entry.sequence)) {
+        if (!Number.isInteger(entry?.sequence) || bySequence.has(entry.sequence) || !Array.isArray(entry.history)) {
             throw new Error('snapshot preconditions contain an invalid or duplicate sequence');
         }
-        bySequence.set(entry.sequence, entry.unit ?? null);
+        bySequence.set(entry.sequence, entry);
     }
     return bySequence;
 }
@@ -45,23 +45,12 @@ function unitReference(dataset, sequence) {
 
 async function verifyPreconditions(client, dataset, preconditions, sequences) {
     const verified = [];
+    const units = new Map(dataset.units.map((unit) => [unit.sequence, unit]));
     for (const sequence of sequences) {
         if (!preconditions.has(sequence)) throw new Error(`snapshot omits precondition for sequence ${sequence}`);
-        const reference = unitReference(dataset, sequence);
-        const result = await client.invoke({
-            operation: 'ReadUnit',
-            invokerMspId: reference.invokerMspId,
-            request: {gtin: reference.gtin, numeroSerie: reference.numeroSerie},
-        });
         const expected = preconditions.get(sequence);
-        if (expected === null) {
-            if (result.ok || result.transaction.errorCode !== 'UNIT_NOT_FOUND') {
-                throw new Error(`sequence ${sequence} should be absent before the round`);
-            }
-        } else if (!result.ok || !equalUnit(result.value, expected)) {
-            throw new Error(`sequence ${sequence} has a contaminated precondition`);
-        }
-        verified.push({sequence, present: expected !== null});
+        await verifyUnitPrecondition(client, units.get(sequence), expected);
+        verified.push({sequence, present: expected.unit !== null});
     }
     return verified;
 }

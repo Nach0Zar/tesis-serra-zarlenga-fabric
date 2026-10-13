@@ -53,6 +53,7 @@ function roundContext({bundle, profile, restored, sourceTruth, credentials}) {
             id: restored.manifest.snapshotId,
             directory: restored.directory,
             manifestSHA256: sha256File(path.join(restored.directory, 'manifest.json')),
+            logicalPlanSHA256: restored.manifest.logicalPlanSHA256,
         },
         referenceArtifacts: {
             contractVersion: sourceTruth.contractVersion,
@@ -61,6 +62,7 @@ function roundContext({bundle, profile, restored, sourceTruth, credentials}) {
         },
         credentials: publicCredentialConfiguration(credentials),
         host: buildHostMetadata(),
+        resources: restored.runtime.resources,
         environment: {
             docker: restored.runtime.docker,
             dockerCompose: restored.runtime.dockerCompose,
@@ -175,6 +177,11 @@ async function runRound(options) {
             path.join(runDirectory, `raw-worker-${index}.jsonl`));
         const observedWindow = await runFixedRate({client, plan, profile, partPaths});
         const aggregated = aggregateResults(runDirectory, profile, observedWindow);
+        const expectedOperations = profile.rate * profile.durationSeconds;
+        if (aggregated.operations.length !== expectedOperations) {
+            aggregated.summary.discardReason = `la ronda ofrecio ${aggregated.operations.length}/${expectedOperations} operaciones`;
+            writeJSONAtomic(path.join(runDirectory, 'summary.json'), aggregated.summary);
+        }
         const counts = databaseCounts(repoRoot, restored.environment);
         writeJSONAtomic(path.join(runDirectory, 'post-run-counts.json'), counts);
         if (Number(counts.labInterventions) !== 0 || Number(counts.labInterventionEvents) !== 0) {

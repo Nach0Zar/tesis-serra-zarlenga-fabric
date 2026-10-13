@@ -57,14 +57,25 @@ async function runFixedRate({client, plan, profile, partPaths, now = Date.now, s
     if (!Number.isInteger(operationsPerWorker)) {
         throw new Error('profile does not divide into an exact per-worker operation count');
     }
+    const pending = [];
+    let executionError;
     await Promise.all(plan.workers.map(async (worker) => {
         for (let ordinal = 0; ordinal < operationsPerWorker; ordinal += 1) {
             const operation = worker.operations[ordinal];
             if (!operation) throw new Error(`worker ${worker.workerIndex} exhausted its deterministic work plan`);
             const delay = Math.max(0, roundStarted + intervalMs * ordinal - now());
             if (delay > 0) await sleep(delay);
-            const record = await executeOperation(client, {...operation, workerIndex: worker.workerIndex}, {now});
-            appendOperation(partPaths[worker.workerIndex], record);
+            if (now() >= roundStarted + durationMs) break;
+            const scheduledAt = roundStarted + intervalMs * ordinal;
+            const submittedAt = now();
+            // Admission follows the clock, independently of responses from the SUT.
+            pending.push(executeOperation(client, {...operation, workerIndex: worker.workerIndex}, {now})
+                .then((record) => appendOperation(partPaths[worker.workerIndex], {
+                    ...record,
+                    scheduledAt: new Date(scheduledAt).toISOString(),
+                    submissionDelayMs: Math.max(0, submittedAt - scheduledAt),
+                }))
+                .catch((error) => { executionError ??= error; }));
         }
     }));
     let remaining = Math.max(0, roundStarted + durationMs - now());
@@ -72,6 +83,8 @@ async function runFixedRate({client, plan, profile, partPaths, now = Date.now, s
         await sleep(remaining);
         remaining = Math.max(0, roundStarted + durationMs - now());
     }
+    await Promise.all(pending);
+    if (executionError) throw executionError;
     return {
         startedAt: new Date(roundStarted).toISOString(),
         endedAt: new Date(now()).toISOString(),

@@ -18,6 +18,7 @@ on:
       - "benchmarks/caliper/src/raw-results.js"
       - "benchmarks/caliper/src/requests.js"
       - "benchmarks/caliper/src/sources.js"
+      - "benchmarks/caliper/src/snapshot-plan.js"
       - "benchmarks/schema/**"
       - "benchmarks/README.md"
       - "baseline/cmd/snt-seed/**"
