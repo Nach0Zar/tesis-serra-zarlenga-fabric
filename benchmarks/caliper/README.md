@@ -6,17 +6,18 @@ red Fabric `2.5.16` del repositorio. Caliper se ejecuta en modo
 `--caliper-flow-only-test`: la creación del canal y el lifecycle del chaincode
 siguen perteneciendo a los scripts de `network/`.
 
-La ronda de smoke es deliberadamente mínima y diagnóstica:
+La ronda de smoke es deliberadamente mínima, diagnóstica y de solo lectura:
 
 - canal `snt-channel`, chaincode `snt` e identidad `User1` de `LabMSP`;
 - una sola operación `ReadUnit`;
 - 1 worker, controlador `fixed-rate`, 1 TPS y 30 consultas;
-- una unidad tomada del primer `RegisterUnit` de `LabMSP` del dataset
-  compartido, registrada fuera de la ronda sólo si aún no existe.
+- una unidad de relleno reservada por el plan lógico, ya existente en el
+  snapshot y fuera de las bandas de todos los escenarios.
 
 El runner medible agrega una ronda individual por operación core, la carga
-mixta y los rechazos esperados. La carga completa del snapshot, la serie de
-repeticiones y el procesamiento comparativo continúan fuera de este módulo.
+mixta y los rechazos esperados. Este módulo también construye, verifica y
+restaura el snapshot golden de Fabric y orquesta las series completa y de
+ensayo. El procesamiento comparativo continúa fuera de este módulo.
 
 ## Requisitos
 
@@ -42,7 +43,6 @@ cd ../benchmarks/caliper
 npm ci
 npm run check
 npm test
-npm run smoke
 ```
 
 La documentación de Caliper 0.7.1 enumera Node.js 20 y 22, pero los paquetes
@@ -84,15 +84,104 @@ puede definir `SNT_CALIPER_RUN_TOKEN` con letras, números, punto, guion o guion
 bajo. Para usar otro bundle generado, se puede definir
 `SNT_CALIPER_DATASET_DIR` con su ruta absoluta o relativa a la raíz.
 
+## Snapshot golden
+
+El plan canónico contiene 50.000 secuencias: 46.920 registradas —22.103
+preparadas para escenarios y 24.817 de relleno— y 3.080 ausentes porque su alta
+se mide. `logical-plan.json` es independiente del SUT y es el contrato que debe
+consumir la baseline. La construcción ejecuta pasos seriales por receta con
+concurrencia entre unidades, 64 por defecto; registra un journal durable y
+reconcilia un timeout ambiguo con `ReadUnit` e historial antes de decidir si
+continúa o reintenta.
+
+Un `ABORTED` sólo es transitorio en la fase de endoso y si todos sus detalles
+son timeouts o errores de transporte reconocidos, o el error específico de
+simulación de Fabric `Failed disseminating N out of M private dissemination plans`
+ligado al transaction ID de la propuesta actual. Este último permite recuperación
+acotada antes del submit; no incluye errores de configuración de colecciones o ACL.
+Fabric agrega los fallos de envío sin exponer sus causas al cliente
+([distribuidor 2.5.16](https://github.com/hyperledger/fabric/blob/v2.5.16/gossip/privdata/distributor.go),
+[endorser](https://github.com/hyperledger/fabric/blob/v2.5.16/core/endorser/endorser.go));
+por eso el journal lo identifica como `disseminationFailure`, **no** como timeout
+demostrado. La causa se comprueba en los logs del peer. Códigos sin detalles,
+errores contractuales, respuestas incompatibles y detalles mixtos abortan.
+Se comprueban estado e historial contra el prefijo durable antes del reintento,
+con un máximo de cinco intentos por paso. Si ya hubo endoso, una ausencia
+temporal del historial **no** permite reenviar: la construcción se detiene
+si no puede confirmar el commit, y conserva esa guarda también en `--resume`.
+Los eventos `failed`/`retrying` del journal y `failure.json` conservan fase,
+código, transaction ID, códigos de los endpoints e indicador de fallo de
+diseminación, sin argumentos ni propuestas.
+La diseminación privada y el timeout interno de endoso de 30 s no cambian.
+
+Las altas del snapshot pasan por `normalizeSteps`, igual que las recetas del
+planner: los endosantes se derivan de cada transacción, no de un MSP fijo para
+todo el plan. `RegisterUnit` apunta al laboratorio invocante; las recepciones
+conservan el par emisor–receptor calculado por el planner. Esto evita delegar
+el cálculo automático del plan de endoso de las altas al Gateway, sin cambiar
+argumentos, políticas ni estado lógico. No elimina la necesidad de discovery
+para localizar peers. El plan lógico y su hash cambian: los artefactos anteriores
+se conservan como evidencia diagnóstica y no se reanudan como canónicos;
+la siguiente construcción debe regenerar el plan y comenzar desde cero.
+
+La ampliación autorizada de #137 reconoce además el detalle exacto de endoso
+`Canceled: grpc: the client connection is closing`: Fabric puede cerrar la
+conexión compartida tras otro timeout y cancelar una propuesta vecina.
+La recuperación sigue exigiendo reconciliación y cinco intentos como máximo.
+Cancelación explícita del operador, detalles mixtos/permanentes y ambigüedad
+posterior al submit no autorizan nuevas escrituras. Las rondas medidas no
+incorporan estos reintentos de preparación.
+
+El diagnóstico del gate de #137 separa dos fallos: cierres gRPC por pings y
+un timeout de endoso coincidente con una escritura de estado de Lab de ~31 s.
+La causa física de esa pausa sigue pendiente de evidencia; no se atribuye a
+CPU, memoria o almacenamiento sin muestras. El controlador persistente del
+gate se guarda bajo su directorio ignorado en `build/benchmarks/fabric/`,
+captura logs permitidos antes de limpiar contenedores y registra recursos
+(CPU, memoria, I/O y throttling) cada 15 s **sólo durante la construcción**.
+Antes de las rondas medidas se detiene ese muestreo adicional.
+No contiene hooks de apagado: tanto éxito como fallo dejan la PC encendida.
+Después del arranque/restauración no basta con `/healthz` ni con lecturas
+locales: gossip/discovery puede todavía omitir una organización remota. Antes
+de construir o medir, una guarda acotada a 180 s exige dos pasadas completas
+desde los siete Gateways hacia los siete peers. Usa propuestas de lectura
+`org.hyperledger.fabric:GetMetadata`, comprueba las siete MSP en los endosos
+y **nunca hace submit**. No modifica unidades, historial ni marcadores y no
+añade reintentos a la ventana medida. Si no converge, bloquea el inicio.
+La restauración diagnóstica local reprodujo lecturas locales exitosas con
+discovery remoto incompleto, que convergió tras 52,324 s; esto explica ese
+fallo de arranque, no demuestra la causa física de las pausas de Lab.
+La prueba de transporte requiere 15 minutos sin consultas de chaincode entre
+dos lecturas contra los siete peers; véase [configuración](../../network/compose.md).
+
+Desde `benchmarks/caliper`:
+
+```bash
+npm run snapshot:build -- --concurrency 64 --max-attempts 5
+# Después de una interrupción, usando el directorio .building-* informado:
+npm run snapshot:build -- --resume --snapshot-dir <ruta> --concurrency 64
+
+npm run snapshot:restore -- --snapshot-dir <ruta-del-snapshot>
+npm run snapshot:verify -- --snapshot-dir <ruta-del-snapshot> --concurrency 64
+npm run warm:peers -- --snapshot-dir <ruta-del-snapshot>
+npm run smoke -- --snapshot-dir <ruta-del-snapshot>
+```
+
+El snapshot terminado se guarda en
+`build/benchmarks/fabric/snapshots/<snapshot-id>/`. Su manifiesto estricto liga
+el dataset, fuentes, contrato, package ID, red, verificación semántica y los
+diez volúmenes de tres orderers y siete peers. La restauración acepta únicamente
+esa allowlist y verifica tanto el SHA-256 del tar como el digest ordenado del
+árbol restaurado. No usa `docker prune` ni borrados globales.
+
 ## Rondas medibles
 
 El runner `npm run round` consume exclusivamente recetas del bundle compartido
-con seed `20260727`. Prepara fuera de la ventana medida sólo los prefijos de
-receta requeridos por la ronda: conserva el orden dentro de cada receta y
-procesa con concurrencia acotada unidades disjuntas. Nunca crea el canal, instala chaincode
-ni reinicia la red. Cada ronda debe comenzar sobre el estado limpio que
-corresponda al protocolo; encontrar una unidad objetivo ya mutada se considera
-contaminación experimental y la operación falla.
+con seed `20260727`. Mantiene `--state-mode prepare` como valor predeterminado
+compatible: prepara fuera de la ventana medida sólo los prefijos requeridos.
+Con `--state-mode snapshot`, exige `--snapshot-dir`, valida el manifiesto y las
+precondiciones de todas las unidades de la ronda y no ejecuta preparación.
+Encontrar contaminación experimental hace fallar la ronda antes de Caliper.
 
 La interfaz es:
 
@@ -104,6 +193,8 @@ npm run round -- \
   --rate <tasa permitida> \
   [--family <UNAUTHORIZED_TRANSFER|DUPLICATE_IDENTITY|BLOCKING_STATE>] \
   [--operation <transfer|dispense>] \
+  [--state-mode <prepare|snapshot>] \
+  [--snapshot-dir <ruta>] \
   [--dataset-dir <ruta>] \
   [--run-token <identificador>]
 ```
@@ -146,6 +237,34 @@ Los rechazos usan las familias y códigos esperados del dataset. Se ejecutan en
 rondas separadas: `UNAUTHORIZED_TRANSFER`, `DUPLICATE_IDENTITY` y
 `BLOCKING_STATE`; esta última admite una ronda `transfer` y otra `dispense`.
 Un rechazo con otro código, o un éxito inesperado, descarta la ronda.
+
+## Series reproducibles
+
+El [procedimiento del gate Docker](../../docs/fabric-gate.md) distingue la
+calificación completa de un snapshot de los controles obligatorios por ronda,
+describe sus prerrequisitos y la evidencia que debe registrarse en PR #141.
+No hace falta reconstruir el snapshot para cada ronda; sí restaurarlo y
+verificar su compatibilidad. El artefacto actual está ligado al HEAD exacto,
+por lo que un nuevo commit exige una nueva construcción.
+
+`npm run series` restaura el snapshot antes de cada intento y luego ejecuta la
+verificación, el calentamiento dirigido a los siete peers, la medición de
+recursos, el smoke y la ronda. Un warm-up fallido se repite exactamente una vez
+sobre una nueva restauración; un segundo fallo bloquea ese escenario. Los
+intentos fallidos o descartados conservan crudos, logs y motivo y no participan
+del CV.
+
+```bash
+npm run series -- --plan full --snapshot-dir <ruta-del-snapshot>
+npm run series -- --plan trial --snapshot-dir <ruta-del-snapshot>
+```
+
+`full` recorre las 20 combinaciones, ejecuta cinco mediciones y agrega las
+repeticiones 6–8 cuando el CV poblacional del throughput efectivo o de p95
+supera 15 %. `trial` ejecuta `read-unit` a 50 TPS, `write-transfer` a 20
+pares/s y `mixed` a 20 TPS, con dos mediciones cada uno; queda marcado como no
+citable. El índice estricto se guarda en
+`build/benchmarks/fabric/series/<token>/series-index.json`.
 
 Ejemplos:
 
