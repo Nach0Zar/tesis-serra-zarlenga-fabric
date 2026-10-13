@@ -15,7 +15,7 @@ const {
 const {candidateKey, indexCandidatePools, normalizeSteps} = require('../src/planner');
 const {contractArguments} = require('../src/requests');
 const {parseArguments: parseRoundArguments} = require('../src/run-round');
-const {createBuildTimer, snapshotIdentifier} = require('../src/snapshot');
+const {createBuildTimer, preparationDurationSeconds, snapshotIdentifier} = require('../src/snapshot');
 const {
     coefficientOfVariation, fullScenarioMatrix, runSeries, trialScenarioMatrix,
 } = require('../src/run-series');
@@ -862,6 +862,21 @@ test('snapshot build timer checkpoints active duration across interrupted sessio
     current = 1_750;
     assert.equal(timer.elapsedMs(), 950);
     assert.equal(timer.checkpoint(), 950);
+});
+
+test('snapshot preparation duration cannot exceed its recorded timestamp window', () => {
+    const startedAt = '2026-10-13T00:00:00.000Z';
+    const endedAt = '2026-10-13T01:47:05.566Z';
+    const durationSeconds = preparationDurationSeconds(startedAt, endedAt, 6_425_567);
+    assert.equal(durationSeconds, 6425.566);
+    assert.ok(durationSeconds <= (Date.parse(endedAt) - Date.parse(startedAt)) / 1000);
+});
+
+test('snapshot preparation duration preserves active time without counting resume pauses', () => {
+    const startedAt = '2026-10-13T00:00:00.000Z';
+    const endedAt = '2026-10-13T02:00:00.000Z';
+    assert.equal(preparationDurationSeconds(startedAt, endedAt, 3_600_125), 3600.125);
+    assert.equal(preparationDurationSeconds(startedAt, endedAt, 7_200_000), 7200);
 });
 
 test('volume allowlist is exact and tree digests detect byte changes', (t) => {
