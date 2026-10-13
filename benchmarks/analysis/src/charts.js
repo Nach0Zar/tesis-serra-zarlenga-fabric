@@ -173,9 +173,13 @@ function byScenario(aggregates) {
     return grouped;
 }
 
-function throughputChart(aggregates) {
+function rotulo(title, options) {
+    return options.nonCitable ? `NO CITABLE · ${title}` : title;
+}
+
+function throughputChart(aggregates, options = {}) {
     return panels(byScenario(aggregates), {
-        title: 'Throughput efectivo por tasa objetivo (media ± desvío entre repeticiones)',
+        title: rotulo('Throughput efectivo por tasa objetivo (media ± desvío entre repeticiones)', options),
         yLabel: 'operaciones exitosas/s',
         valueOf: (entry) => entry.throughput.mean,
         rangeOf: (entry) => (entry.throughput.n > 1
@@ -186,9 +190,9 @@ function throughputChart(aggregates) {
     });
 }
 
-function latencyChart(aggregates) {
+function latencyChart(aggregates, options = {}) {
     return panels(byScenario(aggregates), {
-        title: 'Latencia por operación: p95 (marcador) y rango p50–p99 (media entre repeticiones, escala logarítmica)',
+        title: rotulo('Latencia por operación: p95 (marcador) y rango p50–p99 (media entre repeticiones, escala logarítmica)', options),
         yLabel: 'latencia',
         valueOf: (entry) => entry.p95Ms.mean,
         rangeOf: (entry) => [entry.p50Ms.mean, entry.p99Ms.mean],

@@ -55,7 +55,34 @@ function recoveryTime(operations, injectedAt, preFaultRate, endAt) {
     return undefined;
 }
 
+// En las caidas de peer (seccion 8.1) la ronda mezcla operaciones que necesitan
+// el peer caido y operaciones de control: el agregado global ocultaria el 0 % de
+// la clase afectada. Cada operacion del crudo debe declarar su clase.
+const PEER_FAULT_SCENARIOS = new Set(['peer-1a', 'peer-1b', 'peer-1c', 'peer-1d']);
+const AVAILABILITY_CLASSES = Object.freeze(['target', 'control']);
+
+function classWindows(run, operations) {
+    return availabilityWindowsFor({...run, raw: operations});
+}
+
 function availabilityWindows(run) {
+    const result = availabilityWindowsFor(run);
+    if (!result || !PEER_FAULT_SCENARIOS.has(run.scenario)) return result;
+    const operations = run.raw ?? [];
+    const unclassified = operations.filter((operation) => !AVAILABILITY_CLASSES.includes(operation.availabilityClass));
+    if (unclassified.length > 0) {
+        return {
+            ...result,
+            blocked: `${unclassified.length} operaciones sin availabilityClass (target/control): no se informa disponibilidad global sola`,
+        };
+    }
+    result.byClass = Object.fromEntries(AVAILABILITY_CLASSES.map((name) => [
+        name, classWindows(run, operations.filter((operation) => operation.availabilityClass === name)),
+    ]));
+    return result;
+}
+
+function availabilityWindowsFor(run) {
     const fault = run.faultInjection;
     const operations = run.raw ?? [];
     if (!fault || operations.length === 0) return undefined;
@@ -106,4 +133,4 @@ function successTimeline(run, bucketSeconds = 5) {
     return buckets;
 }
 
-module.exports = {RECOVERY_SHARE, STABLE_SECONDS, availabilityWindows, recoveryTime, successTimeline, windowSummary};
+module.exports = {AVAILABILITY_CLASSES, PEER_FAULT_SCENARIOS, RECOVERY_SHARE, STABLE_SECONDS, availabilityWindows, recoveryTime, successTimeline, windowSummary};

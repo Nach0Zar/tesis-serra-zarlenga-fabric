@@ -52,8 +52,14 @@ function variantOf(metadata) {
     return [metadata.rejectionFamily, metadata.rate?.operation].filter(Boolean).join('/');
 }
 
+// Condiciones de carga de la seccion 5: dos repeticiones con distinta carga
+// nunca forman un mismo grupo, aunque coincidan escenario y tasa.
+function conditionsOf(run) {
+    return JSON.stringify([run.operation, run.workers, run.durationSeconds, run.transactionsPerOperation, run.mix ?? null]);
+}
+
 function groupKey(run) {
-    return [run.sut, run.scenario, run.variant, run.targetOperationsPerSecond].join('|');
+    return [run.sut, run.scenario, run.variant, run.targetOperationsPerSecond, conditionsOf(run)].join('|');
 }
 
 function comparisonKey(run) {
@@ -134,6 +140,7 @@ function loadRun(metadataPath, options = {}) {
         endedAt: metadata.endedAt,
         faultInjection: metadata.faultInjection,
         notes: metadata.notes,
+        participationMarkers: metadata.participationMarkers,
         discardReason: metadata.discarded?.reason ?? summary?.discardReason,
         summary,
         raw,
@@ -152,7 +159,9 @@ function exclusionReason(run) {
     if (run.phase !== MEASURED_PHASE) return `fase ${run.phase}`;
     if (run.discardReason) return `descartada: ${run.discardReason}`;
     if (!run.summary) return 'falta summary.json';
-    if (run.scenario === 'mixed' && run.raw) {
+    // Sin crudo no se pueden verificar la mezcla, los pares ni los errores.
+    if (!run.raw) return 'falta raw.json';
+    if (run.scenario === 'mixed') {
         const composition = verifyMixComposition(run.raw);
         if (!composition.valid) return `mezcla inválida: ${composition.reason}`;
     }
@@ -172,6 +181,7 @@ module.exports = {
     MIX_PATTERN,
     artifactOf,
     comparisonKey,
+    conditionsOf,
     exclusionReason,
     failureListing,
     findMetadataFiles,
