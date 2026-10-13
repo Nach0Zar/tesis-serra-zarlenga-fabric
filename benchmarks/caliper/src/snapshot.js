@@ -182,6 +182,13 @@ function createBuildTimer(state, buildStatePath, now = Date.now) {
     };
 }
 
+function preparationDurationSeconds(startedAt, endedAt, elapsedMs) {
+    const windowSeconds = (Date.parse(endedAt) - Date.parse(startedAt)) / 1000;
+    // endedAt is sampled before elapsedMs; never exceed the recorded window.
+    // Keep active time shorter than that window when resuming after a pause.
+    return Math.max(Math.min(elapsedMs / 1000, windowSeconds), Number.EPSILON);
+}
+
 function assertPlanResume(planPath, plan, resume) {
     if (!resume) {
         writeJSONAtomic(planPath, plan);
@@ -333,9 +340,8 @@ async function buildSnapshot(repoRoot, options = {}) {
             writeJSONAtomic(semanticPath, semantic);
 
             const endedAt = new Date().toISOString();
-            const durationSeconds = Math.max(
-                buildTimer.elapsedMs() / 1000,
-                Number.EPSILON,
+            const durationSeconds = preparationDurationSeconds(
+                startedAt, endedAt, buildTimer.elapsedMs(),
             );
             const repositorySHA = repositoryCommit(repoRoot);
             const metadata = buildPreparationMetadata({
@@ -555,6 +561,7 @@ module.exports = {
     initializeNetwork,
     networkConfigDigest,
     parseSnapshotArguments,
+    preparationDurationSeconds,
     repositoryCommit,
     restoreSnapshot,
     sourceDigest,
