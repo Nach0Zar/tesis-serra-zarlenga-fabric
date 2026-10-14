@@ -3,13 +3,16 @@
 Este módulo procesa los crudos de Fabric y de la baseline y produce las tablas,
 figuras y el reporte de la sección 10 de
 [`docs/measurement-protocol.md`](../../docs/measurement-protocol.md) (EVAL-7,
-#47). No tiene dependencias: requiere Node.js 22 y, para validar la metadata,
-Go según `client/go.mod`.
+#47). Requiere Node.js 22, la única dependencia fijada en el lockfile (AJV
+8.17.1, para validar el manifiesto del snapshot y el índice de serie contra los
+schemas de `benchmarks/schema/`) y, para validar la metadata, Go según
+`client/go.mod`.
 
 ## Uso
 
 ```bash
 cd benchmarks/analysis
+npm ci
 npm test
 npm run process -- \
   --input ../../build/benchmarks/fabric/series/<serie> \
