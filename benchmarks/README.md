@@ -124,4 +124,8 @@ las tablas por repetición y agregadas, la comparación Fabric frente a baseline
 las figuras de throughput, latencia y disponibilidad, y un reporte con los
 artefactos medidos, las rondas excluidas y las asimetrías declaradas (sección
 10 del protocolo, EVAL-7). Valida cada `metadata.json` contra el contrato antes
-de procesar y sólo compara combinaciones que cumplen la paridad de la sección 9.
+de procesar, admite sólo rondas con el estado inicial acreditado por el
+manifiesto de su snapshot y pertenecientes a una serie citable de su
+`series-index.json`, y compara sobre repeticiones emparejadas que cumplen la
+paridad de la sección 9. Un `trial` sólo entra como diagnóstico rotulado NO
+CITABLE.
