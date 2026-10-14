@@ -19,6 +19,7 @@ func main() {
 		defaultDirectory = "/dataset"
 	}
 	datasetDirectory := flag.String("dataset-dir", defaultDirectory, "directorio del bundle generado por CLI-3")
+	selectionFile := flag.String("selection-file", "", "seleccion opcional de secuencias excluidas del snapshot")
 	flag.Parse()
 
 	databaseURL := os.Getenv("SNT_BASELINE_DATABASE_URL")
@@ -32,6 +33,17 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "snt-seed:", err)
 		os.Exit(1)
+	}
+	registrations := bundle.Registrations
+	skipped := 0
+	if *selectionFile != "" {
+		selection, selectionErr := seed.LoadSelection(*selectionFile, bundle.Hash, len(bundle.Registrations))
+		if selectionErr != nil {
+			fmt.Fprintln(os.Stderr, "snt-seed:", selectionErr)
+			os.Exit(1)
+		}
+		registrations = seed.ApplySelection(bundle.Registrations, selection)
+		skipped = len(bundle.Registrations) - len(registrations)
 	}
 
 	ctx := context.Background()
@@ -49,18 +61,19 @@ func main() {
 	result, err := core.NewStore(pool, core.Credentials{}).SeedSnapshot(
 		ctx,
 		bundle.Organizations,
-		bundle.Registrations,
+		registrations,
 	)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "snt-seed:", err)
 		os.Exit(1)
 	}
 	fmt.Printf(
-		"seed=%d sha256=%s organizations=%d units=%d duration=%s\n",
+		"seed=%d sha256=%s organizations=%d units=%d skipped=%d duration=%s\n",
 		bundle.Manifest.Seed,
 		bundle.Hash,
 		result.Organizations,
 		result.Units,
+		skipped,
 		time.Since(started).Round(time.Millisecond),
 	)
 }
