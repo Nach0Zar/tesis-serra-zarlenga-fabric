@@ -10,5 +10,8 @@
     "check": "node --check src/*.js test/*.js",
     "test": "node --test test/*.test.js",
     "process": "node src/process.js"
+  },
+  "dependencies": {
+    "ajv": "8.17.1"
   }
 }

@@ -6,7 +6,7 @@ const path = require('node:path');
 const {spawnSync} = require('node:child_process');
 
 const {availabilityWindows, successTimeline} = require('./availability');
-const {availabilityChart, latencyChart, throughputChart} = require('./charts');
+const {CLASS_SERIES, availabilityChart, latencyChart, throughputChart} = require('./charts');
 const {accreditRun, loadSnapshotManifests} = require('./evidence');
 const {aggregate, compare, runMetrics} = require('./metrics');
 const {buildReport} = require('./report');
@@ -112,25 +112,39 @@ function validateMetadata(runs) {
     }
 }
 
-// Ninguna medicion entra a las estadisticas sin estado inicial acreditado y sin
-// pertenecer a una serie citable. Con --allow-noncitable se admiten las no
-// citables (por ejemplo un trial), y el reporte entero se rotula como tal.
+const NON_MEASURED = new Set(['smoke', 'dataset-preparation']);
+
+// Acreditacion y citabilidad, separadas de la exclusion del rendimiento estable:
+// valen igual para rendimiento y disponibilidad. Ninguna medicion entra sin
+// estado inicial acreditado y sin serie citable; con --allow-noncitable se
+// admiten las no citables y todas las salidas que las usan se rotulan.
 function accredit(runs, options) {
     const manifests = loadSnapshotManifests(options.snapshots.map((directory) => path.resolve(directory)));
     if (manifests.problems.length) throw new Error(`snapshots invalidos: ${manifests.problems.join('; ')}`);
     const roots = options.inputs.map((input) => path.resolve(input));
     for (const run of runs) {
-        const measured = run.phase === 'measurement' && !['smoke', 'dataset-preparation'].includes(run.scenario);
-        if (!measured || run.exclusion?.startsWith('descartada') || run.exclusion?.startsWith('falta')) continue;
+        if (run.phase !== 'measurement' || NON_MEASURED.has(run.scenario) || run.discardReason || !run.raw) continue;
         const accreditation = accreditRun(run, {manifests, roots});
         run.accreditation = accreditation;
-        if (accreditation.reason) {
-            run.exclusion = `no acreditada: ${accreditation.reason}`;
-        } else if (accreditation.nonCitable) {
-            if (options.allowNonCitable) run.nonCitable = accreditation.nonCitable;
-            else if (!run.exclusion) run.exclusion = `no citable: ${accreditation.nonCitable}`;
+        if (accreditation.reason) run.admission = {ok: false, reason: `no acreditada: ${accreditation.reason}`};
+        else if (accreditation.nonCitable && !options.allowNonCitable) {
+            run.admission = {ok: false, reason: `no citable: ${accreditation.nonCitable}`};
+        } else {
+            run.admission = {ok: true};
+            if (accreditation.nonCitable) run.nonCitable = accreditation.nonCitable;
         }
     }
+}
+
+function admitted(run) {
+    return run.admission?.ok === true;
+}
+
+// Motivo por el que una ronda no entra al rendimiento estable.
+function stableExclusion(run) {
+    if (run.exclusion) return run.admission && !run.admission.ok ? `${run.exclusion}; ${run.admission.reason}` : run.exclusion;
+    if (!admitted(run)) return run.admission?.reason ?? 'no acreditada';
+    return undefined;
 }
 
 // Errores inesperados y timeouts de TODAS las rondas con crudo, incluidas las
@@ -165,25 +179,38 @@ function preparationRows(runs) {
     }));
 }
 
+function availabilityTimelines(entry, run) {
+    const recoveredOffset = run.faultInjection.recoveredAt
+        ? (Date.parse(run.faultInjection.recoveredAt) - Date.parse(run.faultInjection.injectedAt)) / 1000
+        : undefined;
+    // En caidas de peer la figura muestra las clases, nunca solo el global.
+    if (entry.byClass) {
+        return [
+            {series: CLASS_SERIES.target, points: successTimeline({...run, raw: run.raw.filter((operation) => operation.availabilityClass === 'target')}), recoveredOffset},
+            {series: CLASS_SERIES.control, points: successTimeline({...run, raw: run.raw.filter((operation) => operation.availabilityClass === 'control')}), recoveredOffset},
+        ];
+    }
+    return [{sut: run.sut, points: successTimeline(run), recoveredOffset}];
+}
+
 function processResults(options) {
     const runs = loadRuns(options.inputs.map((input) => path.resolve(input)));
     if (runs.length === 0) throw new Error('no metadata.json found under the inputs');
     if (options.validate) validateMetadata(runs);
     accredit(runs, {snapshots: [], allowNonCitable: false, ...options});
-    const included = runs.filter((run) => !run.exclusion);
-    const excluded = runs.filter((run) => run.exclusion);
+    const included = runs.filter((run) => !stableExclusion(run));
+    const excluded = runs.filter((run) => stableExclusion(run)).map((run) => ({...run, exclusion: stableExclusion(run)}));
     const aggregates = aggregate(included);
     const {comparisons, unpaired} = compare(aggregates);
     const repetitions = included.map(runMetrics);
     const failures = failureRows(runs);
     const preparation = preparationRows(runs);
-    const nonCitable = included.some((run) => run.nonCitable);
-    const availabilityRuns = runs.filter((run) => run.faultInjection && run.phase === 'measurement'
-        && !run.discardReason && !run.exclusion?.startsWith('no '));
+    const availabilityRuns = runs.filter((run) => run.faultInjection && admitted(run));
     const availability = availabilityRuns.map((run) => ({
-        sut: run.sut, scenario: run.scenario, repetition: run.repetition, directory: run.directory,
-        nonCitable: run.nonCitable, ...availabilityWindows(run),
-    })).filter((entry) => entry.windows);
+        run, entry: {sut: run.sut, scenario: run.scenario, repetition: run.repetition, directory: run.directory,
+            nonCitable: run.nonCitable, ...availabilityWindows(run)},
+    })).filter(({entry}) => entry.windows);
+    const nonCitable = [...included, ...availabilityRuns].some((run) => run.nonCitable);
 
     const output = path.resolve(options.output);
     fs.mkdirSync(path.join(output, 'figures'), {recursive: true});
@@ -204,12 +231,12 @@ function processResults(options) {
         baselineAttemptedTxPerSecond: entry.baseline.attemptedTransactionThroughput.mean,
         fabricArtifact: entry.fabric.artifact.label, baselineArtifact: entry.baseline.artifact.label,
         fabricSnapshot: entry.fabric.snapshotId, baselineSnapshot: entry.baseline.snapshotId,
-        datasetSHA256: entry.fabric.datasetSHA256,
+        datasetSHA256: entry.fabric.datasetSHA256, logicalPlanSHA256: entry.logicalPlanSHA256,
     })), ['scenario', 'variant', 'targetOperationsPerSecond', 'series', 'pairedRepetitions', 'missingFabric',
         'missingBaseline', 'nonCitable', 'fabricThroughput', 'baselineThroughput', 'throughputRatio', 'fabricP50Ms',
         'baselineP50Ms', 'p50Ratio', 'fabricP95Ms', 'baselineP95Ms', 'p95Ratio', 'fabricP99Ms', 'baselineP99Ms',
         'p99Ratio', 'fabricAttemptedTxPerSecond', 'baselineAttemptedTxPerSecond', 'fabricArtifact',
-        'baselineArtifact', 'fabricSnapshot', 'baselineSnapshot', 'datasetSHA256']));
+        'baselineArtifact', 'fabricSnapshot', 'baselineSnapshot', 'datasetSHA256', 'logicalPlanSHA256']));
     write('excluded.csv', toCSV(excluded.map((run) => ({
         sut: run.sut, scenario: run.scenario, phase: run.phase, repetition: run.repetition, reason: run.exclusion,
         directory: run.directory,
@@ -219,7 +246,9 @@ function processResults(options) {
     if (preparation.length) {
         write('preparation.csv', toCSV(preparation, Object.keys(preparation[0])));
     }
-    if (availability.length) write('availability.json', `${JSON.stringify(availability, null, 2)}\n`);
+    if (availability.length) {
+        write('availability.json', `${JSON.stringify(availability.map(({entry}) => entry), null, 2)}\n`);
+    }
 
     const figures = [];
     const addFigure = (name, svg) => {
@@ -229,27 +258,16 @@ function processResults(options) {
     };
     addFigure('throughput.svg', throughputChart(aggregates, {nonCitable}));
     addFigure('latency.svg', latencyChart(aggregates, {nonCitable}));
-    const byScenario = new Map();
-    for (const run of availabilityRuns) {
-        const list = byScenario.get(run.scenario) ?? [];
-        list.push(run);
-        byScenario.set(run.scenario, list);
-    }
-    for (const [scenario, list] of byScenario) {
-        for (const repetition of [...new Set(list.map((run) => run.repetition))]) {
-            const timelines = list.filter((run) => run.repetition === repetition).map((run) => ({
-                sut: run.sut,
-                points: successTimeline(run),
-                recoveredOffset: run.faultInjection.recoveredAt
-                    ? (Date.parse(run.faultInjection.recoveredAt) - Date.parse(run.faultInjection.injectedAt)) / 1000
-                    : undefined,
-            }));
-            addFigure(`availability-${scenario}-run-${String(repetition).padStart(2, '0')}.svg`,
-                availabilityChart(`Disponibilidad ${scenario}, repetición ${repetition}`, timelines));
-        }
+    // Figuras de disponibilidad sólo desde resultados admitidos y no bloqueados.
+    for (const {run, entry} of availability) {
+        if (entry.blocked) continue;
+        addFigure(`availability-${entry.sut}-${entry.scenario}-run-${String(entry.repetition).padStart(2, '0')}.svg`,
+            availabilityChart(`Disponibilidad ${entry.scenario}, repetición ${entry.repetition}`, availabilityTimelines(entry, run),
+                {nonCitable: Boolean(entry.nonCitable), sut: entry.byClass ? entry.sut : undefined}));
     }
     write('report.md', buildReport({
-        aggregates, comparisons, unpaired, excluded, failures, preparation, availability, inputs: options.inputs,
+        aggregates, comparisons, unpaired, excluded, failures, preparation,
+        availability: availability.map(({entry}) => entry), inputs: options.inputs,
         nonCitable,
     }));
     return {runs: runs.length, included: included.length, excluded: excluded.length, aggregates: aggregates.length,

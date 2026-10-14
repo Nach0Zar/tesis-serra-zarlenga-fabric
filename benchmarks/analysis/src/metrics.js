@@ -140,9 +140,11 @@ function aggregate(includedRuns) {
         const datasets = uniqueValues(runs.map((run) => run.datasetSHA256));
         const artifacts = uniqueValues(runs.map((run) => run.artifact));
         const snapshots = uniqueValues(runs.map((run) => run.accreditation?.snapshot?.id ?? null));
+        const logicalPlans = uniqueValues(runs.map((run) => run.accreditation?.snapshot?.logicalPlanSHA256 ?? null));
         if (datasets.length !== 1) problems.push('repeticiones con distinto dataset');
         if (artifacts.length !== 1) problems.push('repeticiones con distinto artefacto');
         if (snapshots.length !== 1) problems.push('repeticiones con distinto snapshot');
+        if (logicalPlans.length !== 1) problems.push('repeticiones con distinto plan logico');
         const repetitions = metrics.map((metric) => metric.repetition).sort((left, right) => left - right);
         if (new Set(repetitions).size !== repetitions.length) problems.push('repeticiones duplicadas');
         const markers = summarizeMarkers(metrics);
@@ -163,6 +165,7 @@ function aggregate(includedRuns) {
             datasetSHA256: datasets[0],
             artifact: artifacts[0],
             snapshotId: snapshots[0],
+            logicalPlanSHA256: logicalPlans[0],
             nonCitable: runs.some((run) => run.nonCitable),
             repetitions,
             extended: Boolean(extended),
@@ -195,6 +198,11 @@ function parityProblems(fabric, baseline) {
     if (JSON.stringify(fabric.mix ?? null) !== JSON.stringify(baseline.mix ?? null)) problems.push('mezcla distinta');
     if (fabric.problems.length || baseline.problems.length) problems.push('grupo inconsistente');
     if (fabric.nonCitable !== baseline.nonCitable) problems.push('un lado no es citable');
+    // Los snapshots fisicos de cada SUT difieren; lo que debe coincidir es el
+    // estado logico inicial (seccion 4 y #47): el mismo logical-plan.json.
+    if (!fabric.logicalPlanSHA256 || fabric.logicalPlanSHA256 !== baseline.logicalPlanSHA256) {
+        problems.push('plan logico inicial distinto o no acreditado');
+    }
     return problems;
 }
 
@@ -272,6 +280,7 @@ function compare(aggregates) {
                 pairedRepetitions: repetitions,
                 missingRepetitions: missing,
                 nonCitable: fabric.nonCitable,
+                logicalPlanSHA256: fabric.logicalPlanSHA256,
                 fabric: {...fabricStats, artifact: fabric.artifact, datasetSHA256: fabric.datasetSHA256, snapshotId: fabric.snapshotId},
                 baseline: {...baselineStats, artifact: baseline.artifact, snapshotId: baseline.snapshotId},
                 ...ratios(fabricStats, baselineStats),

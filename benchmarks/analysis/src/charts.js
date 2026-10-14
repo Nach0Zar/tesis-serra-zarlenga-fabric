@@ -16,6 +16,12 @@ const SERIES = Object.freeze({
     fabric: {label: 'Fabric', color: '#2a78d6', marker: 'circle', dash: ''},
     baseline: {label: 'Baseline', color: '#eb6834', marker: 'square', dash: '6 4'},
 });
+// Caidas de peer: operaciones que requieren el peer caido frente a las de
+// control (seccion 8.1). Mismos slots validados, con trazo distinto.
+const CLASS_SERIES = Object.freeze({
+    target: {label: 'Objetivo (requiere el peer caído)', color: '#2a78d6', marker: 'circle', dash: ''},
+    control: {label: 'Control', color: '#eb6834', marker: 'square', dash: '6 4'},
+});
 const SCENARIO_LABELS = Object.freeze({
     'write-register': 'Registro',
     'write-transfer': 'Transferencia (pares/s)',
@@ -62,10 +68,10 @@ ${body}
 `;
 }
 
-function legend(x, y, suts) {
-    return suts.map((sut, index) => {
-        const series = SERIES[sut];
-        const left = x + index * 110;
+function legend(x, y, entries) {
+    return entries.map((entry, index) => {
+        const series = typeof entry === 'string' ? SERIES[entry] : entry;
+        const left = x + index * (series.label.length > 10 ? 260 : 110);
         return `<line x1="${left}" y1="${y}" x2="${left + 22}" y2="${y}" stroke="${series.color}" stroke-width="2" stroke-dasharray="${series.dash}"/>
 ${marker(series.marker, left + 11, y, series.color)}
 <text x="${left + 30}" y="${y + 4}">${series.label}</text>`;
@@ -202,7 +208,8 @@ function latencyChart(aggregates, options = {}) {
 
 // Tasa de exito por intervalo alrededor de la falla; las lineas verticales marcan
 // la inyeccion y la restauracion.
-function availabilityChart(title, timelines) {
+function availabilityChart(title, timelines, options = {}) {
+    const decorated = rotulo(options.sut ? `${title} (${SERIES[options.sut].label})` : title, options);
     const width = 720;
     const height = 300;
     const margin = {top: 64, right: 24, bottom: 44, left: 58};
@@ -215,11 +222,13 @@ function availabilityChart(title, timelines) {
     const xAt = (offset) => margin.left + ((offset - minX) / Math.max(maxX - minX, 1)) * plotWidth;
     const yAt = (rate) => margin.top + (1 - rate) * plotHeight;
     // Una sola serie no lleva leyenda: el titulo y el SUT la identifican.
-    const suts = [...new Set(timelines.map((timeline) => timeline.sut))];
+    const seriesOf = (timeline) => timeline.series ?? SERIES[timeline.sut];
+    const entries = timelines.map(seriesOf);
+    const single = entries.length === 1 && timelines[0].sut;
     const parts = [
-        `<text x="16" y="24" font-size="15" font-weight="600">${escape(suts.length === 1 ? `${title} (${SERIES[suts[0]].label})` : title)}</text>`,
+        `<text x="16" y="24" font-size="15" font-weight="600">${escape(single ? `${decorated} (${entries[0].label})` : decorated)}</text>`,
     ];
-    if (suts.length > 1) parts.push(legend(16, 46, suts));
+    if (entries.length > 1) parts.push(legend(16, 46, entries));
     for (let tick = Math.ceil(minX / 30) * 30; tick <= maxX; tick += 30) {
         parts.push(`<line x1="${xAt(tick)}" y1="${margin.top + plotHeight}" x2="${xAt(tick)}" y2="${margin.top + plotHeight + 4}" stroke="${STYLE.axis}"/>`);
         parts.push(`<text x="${xAt(tick)}" y="${margin.top + plotHeight + 16}" text-anchor="middle" fill="${STYLE.textSecondary}" font-size="11">${tick}</text>`);
@@ -237,14 +246,14 @@ function availabilityChart(title, timelines) {
         parts.push(`<text x="${xAt(offset) + 4}" y="${margin.top + 12}" fill="${STYLE.textSecondary}" font-size="11">${label}</text>`);
     }
     for (const timeline of timelines) {
-        const series = SERIES[timeline.sut];
+        const series = seriesOf(timeline);
         const points = timeline.points
             .map((point) => `${xAt(point.midpointSeconds ?? point.offsetSeconds)},${yAt(point.successRate)}`).join(' ');
         parts.push(`<polyline points="${points}" fill="none" stroke="${series.color}" stroke-width="2" stroke-dasharray="${series.dash}"/>`);
     }
     parts.push(`<text x="${margin.left + plotWidth / 2}" y="${height - 10}" text-anchor="middle" fill="${STYLE.textSecondary}" font-size="11">segundos desde la inyección de la falla</text>`);
     parts.push(`<text transform="translate(16 ${margin.top + plotHeight / 2}) rotate(-90)" text-anchor="middle" fill="${STYLE.textSecondary}" font-size="11">tasa de éxito</text>`);
-    return document_(width, height, title, parts.join('\n'));
+    return document_(width, height, decorated, parts.join('\n'));
 }
 
-module.exports = {SCENARIO_LABELS, SERIES, availabilityChart, latencyChart, throughputChart};
+module.exports = {CLASS_SERIES, SCENARIO_LABELS, SERIES, availabilityChart, latencyChart, throughputChart};

@@ -31,22 +31,37 @@ acreditación de las rondas que lo usan.
 
 ## Acreditación de cada medición
 
-Una ronda medida sólo entra en las estadísticas si se cumplen dos condiciones:
+Una ronda medida, de rendimiento o de disponibilidad, sólo se usa si se cumplen
+dos condiciones:
 
-1. **Estado inicial acreditado.** Su `snapshot-context.json` nombra un snapshot
-   provisto con `--snapshot`, el SHA-256 de ese `manifest.json` coincide con el
-   registrado por la ronda, sus conteos son los canónicos (50.000 / 46.920 /
-   3.080 / 22.103 / 24.817 / 25.183) y el dataset es el mismo.
-2. **Serie citable.** La ronda figura en el `series-index.json` de su serie
-   (#141) como intento `measurement` `completed` con la misma repetición, la
-   serie declara ese mismo snapshot y `citable: true` (`plan: full`).
+1. **Estado inicial acreditado.** Se exige, para cada SUT:
+   - un `snapshot-context.json` con el id del snapshot y el SHA-256 de su
+     `manifest.json`, y `verifiedPreconditions` que cubra todas las unidades
+     que la ronda tocó;
+   - el manifiesto provisto con `--snapshot`, con ese mismo SHA-256, conteos
+     canónicos (50.000 / 46.920 / 3.080 / 22.103 / 24.817 / 25.183) y el mismo
+     dataset. El de Fabric debe cumplir `fabric-snapshot-manifest.schema.json`
+     de #141; el de la baseline, declarar `logicalPlanSHA256` igual a
+     `files.logicalPlan` y un `baselineImage` con digest inmutable;
+   - los archivos que acreditan el estado (plan lógico, precondiciones y, en
+     Fabric, la verificación semántica; en la baseline, el dump) presentes
+     junto al manifiesto y con el hash que éste declara.
+2. **Serie citable.** La ronda figura en un `series-index.json` válido contra
+   el schema de #141, como intento `measurement` `completed` con la misma
+   repetición, y la serie declara el mismo snapshot y el mismo SHA-256 de
+   manifiesto, con `citable: true` (`plan: full`).
 
-Una ronda de un `trial`, o sin índice de serie, queda fuera con motivo «no
+Un `trial`, o una ronda sin índice de serie, queda fuera con motivo «no
 citable». `--allow-noncitable` la admite para diagnóstico: entonces el reporte y
-las figuras se rotulan **NO CITABLE** y la comparación exige que ambos lados
-tengan la misma condición. La baseline todavía no tiene un orquestador de
-series que escriba su índice, así que sus rondas sólo entran como no citables
-hasta que exista (EVAL-7).
+todas las figuras que la usan, incluidas las de disponibilidad, se rotulan
+**NO CITABLE**, y la comparación exige que ambos lados tengan la misma
+condición. La baseline todavía no tiene un orquestador de series que escriba su
+índice, así que sus rondas sólo entran como no citables hasta que exista
+(EVAL-7).
+
+Los snapshots físicos de cada SUT difieren; lo que debe coincidir para
+comparar es el **plan lógico**: Fabric y baseline se comparan sólo si ambos
+grupos declaran el mismo `logical-plan.json`.
 
 ## Qué entra en las estadísticas
 
@@ -108,10 +123,11 @@ primer tramo de 30 s cuya tasa de éxito vuelve al 95 % de la previa a la falla.
 
 En las caídas de peer (`peer-1a` a `peer-1d`, sección 8.1) cada operación del
 crudo debe declarar `availabilityClass`: `target` si requiere el peer caído o
-`control` si no. Las ventanas se calculan por clase además del agregado global,
-para que el 0 % de la clase afectada no quede oculto en el promedio. Si alguna
-operación no trae clase, el resultado se marca bloqueado en lugar de informar
-sólo el global. El workload de EVAL-4 (#44) debe emitir ese campo.
+`control` si no. Las ventanas y la figura se calculan por clase, además del
+agregado global en la tabla, para que el 0 % de la clase afectada no quede
+oculto en el promedio. Si alguna operación no trae clase, el resultado se marca
+bloqueado y no se exporta ninguna figura. El workload de EVAL-4 (#44) debe
+emitir ese campo.
 
 ## Salidas
 

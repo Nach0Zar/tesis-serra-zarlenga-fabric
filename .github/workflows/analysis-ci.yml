@@ -12,6 +12,7 @@ on:
       - ready_for_review
     paths:
       - "benchmarks/analysis/**"
+      - "benchmarks/schema/**"
       - ".github/workflows/analysis-ci.yml"
 
 permissions:
@@ -35,6 +36,12 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: benchmarks/analysis/package-lock.json
+
+      - name: Install locked dependencies
+        working-directory: benchmarks/analysis
+        run: npm ci
 
       - name: Check sources
         working-directory: benchmarks/analysis
