@@ -252,7 +252,9 @@ function blockElement(block, fresh) {
   const transactions = block.transactions.length ? block.transactions : [{ function: "", endorsers: [], valid: true }];
   const transaction = transactions[0];
   const item = el("li", "block" + (transaction.valid ? "" : " invalid") + (fresh ? " new" : ""));
-  item.append(el("div", "number", "Bloque #" + block.number));
+  const number = el("div", "number");
+  number.append(el("span", "long", "Bloque "), document.createTextNode("#" + block.number));
+  item.append(number);
   item.append(el("div", "operation", OPERATIONS[transaction.function] || transaction.function || "Configuración"));
   if (!transaction.valid) item.append(el("div", "number", "inválida: " + transaction.validationCode));
   const signers = el("div", "signers");
@@ -308,7 +310,8 @@ function renderRejection() {
   title.append(icon("cross"), document.createTextNode("Rechazado"));
   box.append(
     title,
-    el("div", "detail", "Farmacia → Droguería no está permitido por la normativa. No se agregó ningún bloque."),
+    el("div", "detail long", "Farmacia → Droguería no está permitido por la normativa. No se agregó ningún bloque."),
+    el("div", "detail short", "Farmacia → Droguería: sin bloque nuevo"),
     el("div", "code mono", rejected.rejection.code),
   );
 }
@@ -322,6 +325,7 @@ function renderPrivacy() {
   list.replaceChildren();
   $("privacy-empty").hidden = Boolean(latest);
   $("privacy-transfer").textContent = latest ? label(latest.from) + " → " + label(latest.to) : "";
+  renderPrivacyGroups(latest);
   if (!latest) return;
   const ordered = [...latest.organizations].sort((a, b) => Number(b.sees) - Number(a.sees));
   for (const entry of ordered) {
@@ -340,6 +344,41 @@ function renderPrivacy() {
       item.append(hidden);
     }
     list.append(item);
+  }
+}
+
+// Versión agrupada del mismo panel, que usa la pantalla compacta: quiénes ven
+// los datos y quiénes sólo la huella, en dos líneas.
+function joinNames(names) {
+  return names.length > 1 ? names.slice(0, -1).join(", ") + " y " + names.at(-1) : names.join("");
+}
+
+function renderPrivacyGroups(latest) {
+  const list = $("privacy-groups");
+  list.replaceChildren();
+  if (!latest) return;
+  const sees = latest.organizations.filter((entry) => entry.sees);
+  const hidden = latest.organizations.filter((entry) => !entry.sees && !entry.error);
+  const failed = latest.organizations.filter((entry) => entry.error);
+  if (sees.length) {
+    const item = el("li", "sees");
+    item.append(
+      icon("check"),
+      document.createTextNode(
+        " " + joinNames(sees.map((entry) => label(entry.organization))) +
+          ": Remito " + sees[0].remito + " · Factura " + sees[0].factura,
+      ),
+    );
+    list.append(item);
+  }
+  if (hidden.length) {
+    const item = el("li", "hidden-data");
+    item.append(icon("lock"), document.createTextNode(" " + joinNames(hidden.map((entry) => label(entry.organization))) + ": sólo la huella "));
+    item.append(el("span", "hash mono", latest.hash.slice(0, 8) + "…"));
+    list.append(item);
+  }
+  if (failed.length) {
+    list.append(el("li", "hidden-data", joinNames(failed.map((entry) => label(entry.organization))) + ": sin respuesta del peer"));
   }
 }
 
@@ -378,12 +417,18 @@ function renderSteps() {
   if (!scenario) return;
   const ready = scenario.preparation === "LISTA";
   for (const step of scenario.steps) {
-    const button = el("button", "", step.number + ". " + step.title);
+    const running = view.running === step.number;
+    // La pantalla compacta muestra el texto sólo en el paso siguiente.
+    const button = el("button");
+    button.append(
+      el("span", "num", step.number + "."),
+      el("span", "label", " " + (running ? "Firmando…" : step.title)),
+    );
     button.type = "button";
+    button.title = step.title;
     if (step.done) button.classList.add("done");
-    if (view.running === step.number) {
+    if (running) {
       button.classList.add("running");
-      button.textContent = step.number + ". Firmando…";
     } else if (step.number === scenario.nextStep) {
       button.classList.add("next");
     }

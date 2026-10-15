@@ -18,10 +18,9 @@
   --warn-mark: #e08a00;
   --warn-soft: #fff1d6;
   --radius: 12px;
-  /* 1rem = 18 px a 1920 px de ancho, la resolución de la proyección: ningún
-     texto baja de 1rem y los títulos de panel pasan los 28 px. En pantallas
-     más chicas todo escala en la misma proporción. */
-  font-size: clamp(11px, 0.9375vw, 24px);
+  /* Ningún texto baja de 1rem = 18 px y los títulos de panel pasan los 28 px,
+     en cualquier resolución: crece en pantallas grandes, nunca se achica. */
+  font-size: max(18px, 0.9375vw);
 }
 
 * { box-sizing: border-box; }
@@ -369,6 +368,69 @@ button.reset { color: var(--ink); }
   text-align: center;
 }
 .overlay-box .detail { display: block; font-size: 1rem; font-weight: 500; color: var(--bad); margin-top: 0.4rem; }
+
+/* Versiones largas y cortas de un mismo texto: la corta es la de la pantalla
+   compacta. */
+.short, .privacy-groups { display: none; }
+
+/* Pantalla compacta: con menos de 950 px de alto (una notebook de 13" a
+   1366 × 768) la letra no se achica; se reorganiza el contenido para que la
+   vista completa entre sin scroll. */
+@media (max-height: 949px) {
+  .top { padding: 0.35rem 1rem 0.15rem; }
+  .top h1 { display: none; }
+  .caption { margin: 0; font-size: 1.35rem; min-height: 0; }
+  .grid { gap: 0.5rem; padding: 0.25rem 1rem; }
+  .panel { padding: 0.4rem 0.7rem; }
+  h2 { margin-bottom: 0.3rem; }
+  h2 .hint:not([id]) { display: none; }
+  h2 .hint { font-size: 1.2rem; }
+  #unit-id { font-size: 1rem; white-space: nowrap; }
+  .long { display: none; }
+  .short { display: inline; }
+  .rejection .detail.short { display: block; }
+
+  .orgs { gap: 0.35rem; }
+  .org { padding: 0.25rem 0.45rem; }
+  .org.custodian { padding: calc(0.25rem - 1px) calc(0.45rem - 1px); }
+  .org .name { font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .org .badges { display: none; }
+  .orderers { margin-top: 0.35rem; }
+
+  .route { margin: 0.2rem 0; }
+  .route::before { top: 0.75rem; }
+  .stop .node { width: 1.5rem; height: 1.5rem; margin-bottom: 0.15rem; }
+  .unit-status { font-size: 1.3rem; margin-top: 0.2rem; }
+  .trace { margin-top: 0.3rem; padding-top: 0.3rem; }
+  .trace .verdict { font-size: 1.15rem; }
+  .trace ul { display: flex; flex-wrap: wrap; gap: 0 0.8rem; }
+  .trace li { font-size: 1rem; }
+
+  .chain-row { min-height: 0; }
+  .blocks { gap: 0.5rem; }
+  .block { padding: 0.2rem 0.35rem; min-width: 0; }
+  .block + .block::before { left: -0.5rem; width: 0.5rem; }
+  .block .signers .badge { padding: 0.05rem 0.35rem; }
+  .block .signers .badge .icon { display: none; }
+  .block .operation { font-size: 1.1rem; }
+  .rejection { width: 12rem; padding: 0.25rem 0.5rem; }
+  .rejection .code { display: none; }
+  .rejection .title { font-size: 1.15rem; }
+
+  .privacy-list { display: none; }
+  .privacy-groups { display: grid; list-style: none; margin: 0; padding: 0; gap: 0.2rem; }
+  .privacy-groups li { line-height: 1.3; }
+  .privacy-groups .sees { color: var(--ok); }
+  .privacy-groups .hidden-data { color: var(--muted); }
+
+  .alert { padding: 0.3rem 0.6rem; }
+  .alert .title { font-size: 1.25rem; }
+
+  .controls { padding: 0.35rem 1rem 0.5rem; }
+  .steps { gap: 0.35rem; flex-wrap: nowrap; }
+  button { font-size: 1rem; padding: 0.4rem 0.7rem; }
+  .steps button:not(.next):not(.running) .label { display: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
