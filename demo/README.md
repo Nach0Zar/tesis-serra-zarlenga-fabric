@@ -120,9 +120,12 @@ pantalla (`evidence.mjs`):
 
 Deja en `build/demo/rehearsal/` el video (`demo-<fecha>.webm`, unos 60 MB a
 1920 × 1080) y el registro (`ensayo-<fecha>.json`) con el inicio, la duración y
-la evidencia de cada paso y la duración real del archivo. Termina con error si
-un paso falla, no deja su evidencia o no entra en su ventana, si la pantalla
-registra un error o si el video no dura 180 ± 2 s. El video no se versiona: se
+la evidencia de cada paso y la duración real del archivo. Cada paso se mide
+hasta que su evidencia quedó verificada: una alerta o un bloque que llega tarde
+lo deja fuera de su ventana aunque la operación haya respondido a tiempo.
+Termina con error si un paso falla, no deja su evidencia o no entra en su
+ventana, si la pantalla registra un error, si el total pasa de 180 s (también
+en `npm run time`) o si el video no dura 180 ± 2 s. El video no se versiona: se
 guarda fuera del repositorio y se prueba en la notebook de la defensa, sin
 conexión. En WSL, Chromium headless puede necesitar `libasound2`
 (`sudo npx playwright install-deps chromium`).

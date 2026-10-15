@@ -12,11 +12,9 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { stepEvidence } from "./evidence.mjs";
+import { END, SCHEDULE, rehearsalPassed, stepTiming } from "./schedule.mjs";
 import { ffmpegPath, startRecording, videoDuration } from "./screen-recorder.mjs";
 
-// Segundo en el que empieza cada paso y fin del guion.
-const SCHEDULE = [20, 40, 65, 85, 110, 125, 150];
-const END = 180;
 // Diferencia admitida entre la duración del video y la del guion.
 const VIDEO_TOLERANCE = 2;
 // Tiempo para que los bloques y alertas de un paso lleguen a la pantalla.
@@ -126,17 +124,17 @@ for (const [index, plannedStart] of SCHEDULE.entries()) {
     number,
     { timeout: 60_000 },
   );
-  const end = elapsed();
   const caption = await page.textContent("#caption");
   const problems = caption.startsWith("Error") ? [caption] : await verify(number, blocksBefore);
-  const nextStart = SCHEDULE[index + 1] ?? END;
+  // El paso termina cuando su evidencia quedó verificada, no cuando respondió.
+  const { duration, fitsWindow } = stepTiming(index, start, elapsed());
   steps.push({
     step: number,
     plannedStart,
     start: Number(start.toFixed(1)),
-    duration: Number((end - start).toFixed(1)),
+    duration,
     ok: problems.length === 0,
-    fitsWindow: end <= nextStart,
+    fitsWindow,
     problems,
     caption,
   });
@@ -152,8 +150,7 @@ await browser.close();
 // La duración se lee del archivo terminado, no del grabador.
 const videoSeconds = videoFile ? await videoDuration(ffmpeg, videoFile) : null;
 const videoOk = !videoFile || (videoSeconds !== null && Math.abs(videoSeconds - END) <= VIDEO_TOLERANCE);
-const passed =
-  steps.length === SCHEDULE.length && steps.every((s) => s.ok && s.fitsWindow) && pageErrors.length === 0 && videoOk;
+const passed = rehearsalPassed({ steps, total, pageErrors, videoOk });
 const record = {
   date: new Date().toISOString(),
   url: options.url,
