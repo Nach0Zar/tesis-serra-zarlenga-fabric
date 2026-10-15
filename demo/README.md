@@ -37,6 +37,12 @@ La pantalla queda en `http://127.0.0.1:8080/`. Otro puerto loopback se elige con
 `SNT_DEMO_ADDR=127.0.0.1:9090`; una dirección que no sea loopback se rechaza
 antes de levantar nada.
 
+`up` levanta y verifica la red **siempre**, también si `demo-server` ya está
+corriendo, y sólo anuncia «Demo lista» cuando el escenario está preparado **y**
+el servidor está conectado a la red. Por eso es también el comando para
+recuperar la demo si la red se cae. Si la preparación había fallado mientras la
+red estaba caída, la reintenta.
+
 `up` delega en `network/network.sh`, que es idempotente y **conserva el ledger**:
 no borra volúmenes. Cada ensayo es reproducible igual, porque cada reinicio usa
 series nuevas y la pantalla muestra sólo los bloques del ensayo en curso. El
@@ -50,7 +56,8 @@ snapshot de 50.000 unidades:
 | Situación | Tiempo | Criterio de #146 |
 |---|---|---|
 | `demo.sh up` con la red detenida (`network.sh down`) | 48 s | menos de 5 minutos |
-| `demo.sh up` con todo ya levantado | inmediato | — |
+| `demo.sh up` con todo ya levantado | 25 s (vuelve a verificar la red) | — |
+| `network.sh down` con `demo-server` vivo → `demo.sh up` | 32 s, hasta que el servidor reconecta | — |
 | `demo.sh reset` o el botón «Reiniciar» | 10–12 s | menos de 1 minuto |
 
 ## Sin internet

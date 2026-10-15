@@ -69,15 +69,21 @@ port_in_use() {
   (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null
 }
 
+# La demo está lista cuando el escenario está preparado y demo-server está
+# conectado a la red: un escenario LISTA con la red caída no alcanza.
 wait_until_ready() {
   local deadline=$((SECONDS + READY_TIMEOUT))
-  local preparation=""
+  local state="" preparation="" connected=""
   while ((SECONDS < deadline)); do
-    preparation="$(api_state 2>/dev/null | jq -r '.scenario.preparation' 2>/dev/null || true)"
+    state="$(api_state 2>/dev/null || true)"
+    preparation="$(jq -r '.scenario.preparation' <<<"${state}" 2>/dev/null || true)"
+    connected="$(jq -r '.connected' <<<"${state}" 2>/dev/null || true)"
     case "${preparation}" in
-      LISTA) return 0 ;;
+      LISTA)
+        [[ "${connected}" == true ]] && return 0
+        ;;
       FALLIDA)
-        api_state | jq -r '.scenario.preparationError.message // "sin detalle"' >&2
+        jq -r '.scenario.preparationError.message // "sin detalle"' <<<"${state}" >&2
         fail "the demo scenario could not be prepared; see ${LOG_FILE}"
         ;;
     esac
@@ -87,7 +93,7 @@ wait_until_ready() {
     fi
     sleep 1
   done
-  fail "the demo was not ready after ${READY_TIMEOUT}s (last state: ${preparation:-sin respuesta})"
+  fail "the demo was not ready after ${READY_TIMEOUT}s (escenario: ${preparation:-sin respuesta}, conectado: ${connected:-sin respuesta})"
 }
 
 open_browser() {
@@ -189,18 +195,24 @@ up() {
   require_loopback
   local started=${SECONDS}
 
-  if server_pid >/dev/null; then
-    info "demo-server ya está corriendo"
-  else
-    if port_in_use; then
-      fail "${ADDRESS} is already in use; set SNT_DEMO_ADDR to another loopback port"
-    fi
-    info "Levantando la red (conserva el ledger)"
-    "${NETWORK_SCRIPT}" up
-    "${NETWORK_SCRIPT}" createChannel
-    "${NETWORK_SCRIPT}" deployCC
-    "${NETWORK_SCRIPT}" verify
+  # La red se levanta y verifica siempre, también cuando demo-server sigue
+  # corriendo: es lo que recupera una demo que perdió la conexión.
+  if ! server_pid >/dev/null && port_in_use; then
+    fail "${ADDRESS} is already in use; set SNT_DEMO_ADDR to another loopback port"
+  fi
+  info "Levantando la red (conserva el ledger)"
+  "${NETWORK_SCRIPT}" up
+  "${NETWORK_SCRIPT}" createChannel
+  "${NETWORK_SCRIPT}" deployCC
+  "${NETWORK_SCRIPT}" verify
 
+  if server_pid >/dev/null; then
+    info "demo-server ya está corriendo; se reconecta solo a la red"
+    # Una preparación que falló mientras la red estaba caída se reintenta.
+    if [[ "$(api_state 2>/dev/null | jq -r '.scenario.preparation' 2>/dev/null || true)" == FALLIDA ]]; then
+      curl --silent --fail --max-time 10 -X POST "${URL}api/reset" >/dev/null
+    fi
+  else
     info "Compilando snt-client"
     mkdir -p "${STATE_DIR}"
     (cd "${REPOSITORY_ROOT}/client" && go build -o "${BINARY}" ./cmd/snt-client)
