@@ -214,7 +214,7 @@ func parseBatchOptions(
 
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	flags.StringVar(&opts.organization, "org", "", "organización: anmat, lab, drogueria o farmacia")
+	flags.StringVar(&opts.organization, "org", "", "organización: anmat, lab, drogueria, distribuidor, farmacia, centromedico o financiador")
 	flags.StringVar(&opts.gtin, "gtin", "", "GTIN-14 del producto")
 	flags.StringVar(&opts.lot, "lot", "", "lote de elaboración alcanzado")
 	flags.StringVar(&opts.reason, "reason", "", "motivo regulatorio del evento")

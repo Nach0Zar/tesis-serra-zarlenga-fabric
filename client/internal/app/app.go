@@ -240,7 +240,7 @@ func parseOptions(arguments []string, stderr io.Writer) (options, bool, error) {
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	flags.StringVar(&opts.organization, "org", "", "organización: anmat, lab, drogueria o farmacia")
+	flags.StringVar(&opts.organization, "org", "", "organización: anmat, lab, drogueria, distribuidor, farmacia, centromedico o financiador")
 	flags.StringVar(&opts.function, "function", "", "función pública del contrato")
 	flags.Var(&opts.arguments, "arg", "argumento posicional (repetible y ordenado)")
 	flags.StringVar(

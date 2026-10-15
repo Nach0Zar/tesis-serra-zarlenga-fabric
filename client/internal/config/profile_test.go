@@ -14,7 +14,10 @@ func TestResolveSupportedOrganizations(t *testing.T) {
 		{MspID: "AnmatMSP", Slug: "anmat", PeerHostname: "peer0.anmat.snt.local", Active: true},
 		{MspID: "LabMSP", Slug: "lab", PeerHostname: "peer0.lab.snt.local", Active: true},
 		{MspID: "DrogueriaMSP", Slug: "drogueria", PeerHostname: "peer0.drogueria.snt.local", Active: true},
+		{MspID: "DistribuidorMSP", Slug: "distribuidor", PeerHostname: "peer0.distribuidor.snt.local", Active: true},
 		{MspID: "FarmaciaMSP", Slug: "farmacia", PeerHostname: "peer0.farmacia.snt.local", Active: true},
+		{MspID: "CentroMedicoMSP", Slug: "centromedico", PeerHostname: "peer0.centromedico.snt.local", Active: true},
+		{MspID: "FinanciadorMSP", Slug: "financiador", PeerHostname: "peer0.financiador.snt.local", Active: true},
 	}
 	writeManifest(t, repositoryRoot, organizations)
 	for _, organization := range organizations {
@@ -22,10 +25,13 @@ func TestResolveSupportedOrganizations(t *testing.T) {
 	}
 
 	expectedEndpoints := map[string]string{
-		"anmat":     "dns:///localhost:7051",
-		"lab":       "dns:///localhost:8051",
-		"drogueria": "dns:///localhost:9051",
-		"farmacia":  "dns:///localhost:11051",
+		"anmat":        "dns:///localhost:7051",
+		"lab":          "dns:///localhost:8051",
+		"drogueria":    "dns:///localhost:9051",
+		"distribuidor": "dns:///localhost:10051",
+		"farmacia":     "dns:///localhost:11051",
+		"centromedico": "dns:///localhost:12051",
+		"financiador":  "dns:///localhost:13051",
 	}
 	for _, organization := range organizations {
 		t.Run(organization.Slug, func(t *testing.T) {
