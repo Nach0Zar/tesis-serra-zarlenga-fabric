@@ -20,6 +20,7 @@ Tutora: Dra. Mg. Ing. María Roxana Martínez — UADE, 2026.
 | [`network/`](network/README.md) | Configuración de la red Fabric del prototipo — pendiente. |
 | [`benchmarks/`](benchmarks/README.md) | Workloads y resultados de medición — pendiente. |
 | [`client/`](client/README.md) | Cliente CLI basado en Fabric Gateway SDK y generador reproducible del dataset compartido. |
+| [`demo/`](demo/README.md) | Arranque en un comando de la demo visual de la defensa. |
 
 ## Documentos principales
 
