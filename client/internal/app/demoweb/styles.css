@@ -18,7 +18,10 @@
   --warn-mark: #e08a00;
   --warn-soft: #fff1d6;
   --radius: 12px;
-  font-size: clamp(14px, 1.02vw, 22px);
+  /* 1rem = 18 px a 1920 px de ancho, la resolución de la proyección: ningún
+     texto baja de 1rem y los títulos de panel pasan los 28 px. En pantallas
+     más chicas todo escala en la misma proporción. */
+  font-size: clamp(11px, 0.9375vw, 24px);
 }
 
 * { box-sizing: border-box; }
@@ -50,11 +53,11 @@ svg.icon { width: 1.1em; height: 1.1em; flex: none; vertical-align: -0.18em; }
   padding: 0.8rem 1.2rem 0.4rem;
 }
 
-h1 { font-size: 1.55rem; margin: 0; }
+h1 { font-size: 1.9rem; margin: 0; }
 
 .caption {
   margin: 0.25rem 0 0;
-  font-size: 1.3rem;
+  font-size: 1.5rem;
   font-weight: 600;
   color: var(--accent);
   min-height: 1.7rem;
@@ -105,7 +108,7 @@ h1 { font-size: 1.55rem; margin: 0; }
 .anmat { grid-area: anmat; }
 
 h2 {
-  font-size: 1.05rem;
+  font-size: 1.6rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin: 0 0 0.6rem;
@@ -135,11 +138,11 @@ h2 .hint {
   padding: 0.45rem 0.55rem;
   transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
 }
-.org .name { font-weight: 700; font-size: 1.05rem; }
-.org .role { color: var(--muted); font-size: 0.85rem; }
+.org .name { font-weight: 700; font-size: 1.25rem; }
+.org .role { color: var(--muted); font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .org .badges { display: flex; gap: 0.3rem; margin-top: 0.3rem; min-height: 1.5rem; }
 .org.custodian { border-color: var(--ink); border-width: 3px; padding: calc(0.45rem - 1px) calc(0.55rem - 1px); }
-.org.custodian .role { color: var(--ink); font-weight: 700; display: flex; align-items: center; gap: 0.25rem; }
+.org.custodian .role { color: var(--ink); font-weight: 600; display: flex; align-items: center; gap: 0.2rem; }
 
 .badge {
   display: inline-flex;
@@ -147,7 +150,7 @@ h2 .hint {
   gap: 0.25rem;
   border-radius: 999px;
   padding: 0.1rem 0.5rem;
-  font-size: 0.85rem;
+  font-size: 1rem;
   font-weight: 700;
 }
 .badge.signed { background: var(--accent); color: #fff; }
@@ -165,13 +168,13 @@ h2 .hint {
   gap: 0.6rem;
   flex-wrap: wrap;
 }
-.orderers-label { color: var(--muted); font-size: 0.9rem; }
+.orderers-label { color: var(--muted); font-size: 1rem; }
 .orderer-list { display: flex; gap: 0.4rem; }
 .orderer {
   border: 2px dashed var(--line);
   border-radius: 8px;
   padding: 0.1rem 0.5rem;
-  font-size: 0.85rem;
+  font-size: 1rem;
   transition: border-color 0.3s, background 0.3s;
 }
 .orderer.pulse { border-color: var(--ok); background: var(--ok-soft); border-style: solid; }
@@ -210,15 +213,15 @@ h2 .hint {
 .stop.transit-to .node { border-color: var(--accent); border-style: dashed; }
 .stop .label { font-weight: 600; }
 
-.unit-status { font-size: 1.25rem; font-weight: 700; margin: 0.4rem 0 0; }
-.unit-status .sub { display: block; font-size: 0.95rem; font-weight: 500; color: var(--muted); }
+.unit-status { font-size: 1.5rem; font-weight: 700; margin: 0.4rem 0 0; }
+.unit-status .sub { display: block; font-size: 1rem; font-weight: 500; color: var(--muted); }
 
 .trace { margin-top: 0.6rem; border-top: 1px solid var(--line); padding-top: 0.5rem; }
-.trace .verdict { font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; }
+.trace .verdict { font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; }
 .trace .verdict.ok { color: var(--ok); }
 .trace .verdict.bad { color: var(--bad); }
 .trace ul { list-style: none; margin: 0.3rem 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0.15rem 0.8rem; }
-.trace li { display: flex; align-items: center; gap: 0.35rem; font-size: 0.95rem; }
+.trace li { display: flex; align-items: center; gap: 0.35rem; font-size: 1.1rem; }
 .trace li.ok { color: var(--ok); }
 .trace li.bad { color: var(--bad); }
 
@@ -256,10 +259,10 @@ h2 .hint {
   height: 3px;
   background: var(--ok);
 }
-.block .number { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
-.block .operation { font-size: 1.1rem; font-weight: 700; }
+.block .number { font-size: 1rem; color: var(--muted); font-weight: 600; }
+.block .operation { font-size: 1.3rem; font-weight: 700; }
 .block .signers { display: flex; flex-direction: column; align-items: flex-start; gap: 0.2rem; margin-top: 0.25rem; }
-.block .signers .badge { font-size: 0.78rem; }
+.block .signers .badge { font-size: 1rem; }
 .block.invalid { border-color: var(--bad); background: var(--bad-soft); }
 .block.new { animation: arrive 0.6s ease-out; }
 
@@ -278,9 +281,9 @@ h2 .hint {
   padding: 0.4rem 0.7rem;
   animation: arrive 0.6s ease-out;
 }
-.rejection .title { font-weight: 800; font-size: 1.1rem; display: flex; align-items: center; gap: 0.35rem; }
-.rejection .detail { color: var(--ink); font-size: 0.9rem; }
-.rejection .code { font-size: 0.8rem; color: var(--bad); }
+.rejection .title { font-weight: 800; font-size: 1.3rem; display: flex; align-items: center; gap: 0.35rem; }
+.rejection .detail { color: var(--ink); font-size: 1rem; }
+.rejection .code { font-size: 1rem; color: var(--bad); }
 
 /* --- Privacidad ------------------------------------------------------------- */
 
@@ -291,11 +294,11 @@ h2 .hint {
   display: grid;
   gap: 0.15rem;
 }
-.privacy-list li { display: flex; align-items: center; gap: 0.45rem; white-space: nowrap; font-size: 0.95rem; line-height: 1.25; }
+.privacy-list li { display: flex; align-items: center; gap: 0.45rem; white-space: nowrap; font-size: 1.1rem; line-height: 1.25; }
 .privacy-list .who { font-weight: 700; min-width: 8.8rem; }
 .privacy-list .sees { color: var(--ok); }
 .privacy-list .hidden-data { color: var(--muted); }
-.privacy-list .hash { font-size: 0.85rem; }
+.privacy-list .hash { font-size: 1rem; }
 
 /* --- ANMAT ------------------------------------------------------------------ */
 
@@ -307,7 +310,7 @@ h2 .hint {
   margin-bottom: 0.4rem;
   animation: flash 1.2s ease-out 2;
 }
-.alert .title { color: var(--warn); font-weight: 800; font-size: 1.2rem; display: flex; align-items: center; gap: 0.4rem; }
+.alert .title { color: var(--warn); font-weight: 800; font-size: 1.45rem; display: flex; align-items: center; gap: 0.4rem; }
 .alert .title .icon { color: var(--warn-mark); width: 1.4em; height: 1.4em; }
 .alert .detail { margin-top: 0.2rem; }
 
@@ -330,7 +333,7 @@ h2 .hint {
 button {
   font: inherit;
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 1.15rem;
   border-radius: 10px;
   padding: 0.55rem 0.9rem;
   border: 2px solid var(--line);
@@ -360,12 +363,12 @@ button.reset { color: var(--ink); }
   background: var(--panel);
   border-radius: var(--radius);
   padding: 1.2rem 1.6rem;
-  font-size: 1.3rem;
+  font-size: 1.5rem;
   font-weight: 700;
   max-width: 40rem;
   text-align: center;
 }
-.overlay-box .detail { display: block; font-size: 0.95rem; font-weight: 500; color: var(--bad); margin-top: 0.4rem; }
+.overlay-box .detail { display: block; font-size: 1rem; font-weight: 500; color: var(--bad); margin-top: 0.4rem; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

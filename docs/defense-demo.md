@@ -57,7 +57,10 @@ terminar el guion, sobre la red local:
 ## Boceto de la pantalla
 
 Una sola vista, sin navegación, pensada para 1920 × 1080 proyectado y legible en
-una notebook de 13". Texto mínimo de 18 px y títulos de 28 px o más.
+una notebook de 13". A 1920 × 1080 ningún texto baja de 18 px y los títulos de
+panel tienen 28 px o más; en pantallas más chicas todo escala en la misma
+proporción (a 1366 × 768, 12,8 y 20,5 px), para que la vista completa entre sin
+scroll.
 
 ```text
 ┌───────────────────────────────────────────────────────────────────────────────────────┐

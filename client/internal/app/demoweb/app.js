@@ -130,12 +130,13 @@ function renderNetwork() {
   renderCustody();
 }
 
-// La organización que tiene la unidad se marca con el borde y el texto de su
-// tarjeta, sin cambiar su altura.
+// El custodio registrado se marca con el borde y el texto de su tarjeta, sin
+// cambiar su altura. Durante el tránsito sigue siendo el emisor: ADR-004 sólo
+// cambia CustodioActual al confirmarse la recepción.
 function renderCustody() {
   if (!view.network) return;
   const unit = view.scenario && view.scenario.unit;
-  const custodian = unit && unit.estado !== "DISPENSADO" && !view.transit ? slugForID(unit.custodioActual) : "";
+  const custodian = unit && unit.estado !== "DISPENSADO" ? slugForID(unit.custodioActual) : "";
   for (const organization of view.network.organizations) {
     const card = $("org-" + organization.slug);
     if (!card) continue;
@@ -143,7 +144,7 @@ function renderCustody() {
     const holds = organization.slug === custodian;
     card.classList.toggle("custodian", holds);
     role.replaceChildren();
-    if (holds) role.append(icon("box"), document.createTextNode("tiene la unidad"));
+    if (holds) role.append(icon("box"), document.createTextNode(view.transit ? "custodio registrado" : "tiene la unidad"));
     else role.textContent = ROLES[organization.slug] || "";
   }
 }
@@ -203,6 +204,9 @@ function renderUnit() {
   const unit = scenario && scenario.unit;
   if (view.transit) {
     status.append(document.createTextNode("En tránsito hacia " + ROUTE[view.transit.to].label));
+    if (unit) {
+      status.append(el("span", "sub", "Custodio registrado: " + label(slugForID(unit.custodioActual)) + " hasta que se confirme la recepción"));
+    }
   } else if (!unit) {
     status.append(document.createTextNode("Todavía no registrada"));
   } else {
