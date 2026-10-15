@@ -96,15 +96,34 @@ npx playwright install chromium
 Después:
 
 ```bash
-npm run record   # graba el video y el registro de tiempos
+npm run record   # graba el video y el registro del ensayo
 npm run time     # sólo cronometra, sin video
+npm test         # pruebas de la verificación de evidencia
 ```
 
-Deja en `build/demo/rehearsal/` el video (`demo-<fecha>.webm`, entre 45 y 80 MB
-a 1920 × 1080) y el registro (`ensayo-<fecha>.json`) con el inicio y la duración
-de cada paso, y si entró en su ventana. Termina con error si un paso falla, no
-entra en su ventana o la pantalla registra un error. El video no se versiona:
-se guarda fuera del repositorio y se prueba en la notebook de la defensa, sin
+Antes de abrir el navegador, el ensayo deja un escenario nuevo, listo y
+conectado; si el guion anterior había avanzado, lo reinicia. Así la preparación
+no queda en el video ni en el cronómetro. La grabación empieza con el guion y
+dura exactamente lo que dura: toma los cuadros de la pantalla y los entrega a
+25 por segundo según el reloj. No usa el video de Playwright, que en el guion
+completo estiraba 187 s reales a 210 s y desincronizaba la narración.
+
+Un paso sólo cuenta como correcto si dejó su evidencia en la red y en la
+pantalla (`evidence.mjs`):
+
+- los bloques esperados, válidos y con las firmas de las partes;
+- en las transferencias, que el remito y la factura los vean exactamente emisor,
+  receptor y ANMAT;
+- el rechazo `TRANSFER_NOT_AUTHORIZED` sin bloque nuevo;
+- una sola alerta de ANMAT por el robo de la unidad preparada;
+- el veredicto `legitima: true` de PAMI.
+
+Deja en `build/demo/rehearsal/` el video (`demo-<fecha>.webm`, unos 60 MB a
+1920 × 1080) y el registro (`ensayo-<fecha>.json`) con el inicio, la duración y
+la evidencia de cada paso y la duración real del archivo. Termina con error si
+un paso falla, no deja su evidencia o no entra en su ventana, si la pantalla
+registra un error o si el video no dura 180 ± 2 s. El video no se versiona: se
+guarda fuera del repositorio y se prueba en la notebook de la defensa, sin
 conexión. En WSL, Chromium headless puede necesitar `libasound2`
 (`sudo npx playwright install-deps chromium`).
 
@@ -115,7 +134,7 @@ ellos en la notebook y con el proyector de la defensa.
 
 | Fecha | Máquina y pantalla | Maneja / narra | Duración | Observaciones |
 |---|---|---|---|---|
-| 2026-10-15 | Notebook de desarrollo, headless 1920 × 1080 | automático, sin narración | 3:00 | Ensayo técnico con `npm run time` y `npm run record`: cada paso empezó en su segundo y entró en su ventana; las transferencias tardan 4,2–5,7 s. No cuenta como ensayo de DEMO-5 |
+| 2026-10-15 | Notebook de desarrollo, headless 1920 × 1080 | automático, sin narración | 3:00 | Ensayo técnico con `npm run record`, partiendo de un guion terminado: cada paso empezó en su segundo, dejó su evidencia y entró en su ventana; video de 180 s. No cuenta como ensayo de DEMO-5 |
 | | | | | |
 | | | | | |
 | | | | | |
