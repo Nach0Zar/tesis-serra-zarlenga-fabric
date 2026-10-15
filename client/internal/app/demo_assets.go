@@ -1,9 +1,21 @@
 package app
 
-import "io/fs"
+import (
+	"embed"
+	"io/fs"
+)
 
-// demoAssets devuelve la interfaz que sirve demo-server. La pantalla se agrega
-// en DEMO-3 (#145); hasta entonces el servidor expone sólo la API.
+// La pantalla de la demo (DEMO-3, #145) viaja dentro del binario: el día de
+// la defensa no depende de internet ni de archivos sueltos.
+//
+//go:embed demoweb
+var demoWeb embed.FS
+
+// demoAssets devuelve la interfaz que sirve demo-server en "/".
 func demoAssets() fs.FS {
-	return nil
+	assets, err := fs.Sub(demoWeb, "demoweb")
+	if err != nil {
+		panic(err)
+	}
+	return assets
 }

@@ -47,6 +47,13 @@ tiempos son acumulados.
 Margen: el guion suma 3:00 con frases cortas. Si un paso se demora, el paso 5
 puede narrarse sin pausa y el 7 recortarse a la lectura del veredicto.
 
+## La pantalla
+
+La pantalla la sirve `snt-client demo-server` (DEMO-2 y DEMO-3). Así se ve al
+terminar el guion, sobre la red local:
+
+![Pantalla de la demo al terminar el guion](defense-demo-screen.png)
+
 ## Boceto de la pantalla
 
 Una sola vista, sin navegación, pensada para 1920 × 1080 proyectado y legible en

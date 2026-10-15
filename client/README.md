@@ -217,6 +217,14 @@ make demo-server
 make demo-server DEMO_SERVER_ARGS="--addr 127.0.0.1:9090"
 ```
 
+La pantalla de la demo (DEMO-3) viaja dentro del binario y se abre en esa
+misma URL, sin recursos de internet. Es una sola vista pensada para proyectar:
+la red con las organizaciones que firman cada bloque, el recorrido de la unidad,
+la cadena de bloques, quién ve el remito y la factura, y las alertas de ANMAT.
+Los botones de abajo ejecutan el guion en orden; la barra espaciadora o la
+flecha derecha ejecutan el paso siguiente, y «Reiniciar» empieza un ensayo
+nuevo.
+
 Abre una conexión por cada una de las siete organizaciones y escucha sólo en
 loopback: rechaza cualquier `--addr` que no lo sea, porque firma transacciones
 con esas siete identidades. Las identidades nunca salen del proceso; el
