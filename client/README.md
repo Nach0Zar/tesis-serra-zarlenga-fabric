@@ -5,7 +5,8 @@ Cliente CLI para ejecutar operaciones de negocio e invocar o consultar el chainc
 de CLI-1 (#34) y CLI-2 (#35) contra el contrato público congelado en
 [`docs/api-contract.md`](../docs/api-contract.md), en la versión que declara su encabezado.
 
-Es una interfaz de línea de comandos; no incluye frontend.
+Es una interfaz de línea de comandos. La única excepción es `demo-server`, el
+servidor local de la demo de la defensa.
 
 ## Requisitos
 
@@ -205,6 +206,53 @@ válido, transacción inválida y propuesta rechazada, y la demo farmacia →
 `ReportStolen` están en
 [`docs/anmat-event-listener.md`](../docs/anmat-event-listener.md).
 
+### Servidor de la demo de la defensa
+
+`demo-server` ejecuta el guion de
+[`docs/defense-demo.md`](../docs/defense-demo.md) contra la red y publica lo que
+pasa a la pantalla de la demo. Necesita la red levantada con `snt` desplegado.
+
+```bash
+make demo-server
+make demo-server DEMO_SERVER_ARGS="--addr 127.0.0.1:9090"
+```
+
+Abre una conexión por cada una de las siete organizaciones y escucha sólo en
+loopback: rechaza cualquier `--addr` que no lo sea, porque firma transacciones
+con esas siete identidades. Las identidades nunca salen del proceso; el
+navegador sólo recibe respuestas del contrato y bloques resumidos. Rechaza
+también los `POST` cuyo `Origin` sea otra página. Cuando está listo escribe en
+stderr `{"type":"DEMO_SERVER_READY","url":"http://127.0.0.1:8080/"}`.
+
+Al arrancar, y en cada reinicio, genera series nuevas para la unidad del guion y
+para la de robo, y deja la segunda en custodia de la farmacia con cinco
+transacciones. Mientras tanto el escenario está `PREPARANDO`, los pasos responden
+`409` y esos bloques no se muestran en pantalla.
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/state` | Instantánea: organizaciones, orderers, escenario, bloques y alertas desde el último reinicio |
+| `GET /api/events` | Server-Sent Events: `snapshot` al conectar, y después `block`, `alert`, `scenario` y `connection` |
+| `POST /api/steps/{n}` | Ejecuta el paso `n` del guion; sólo acepta el paso siguiente (`409` si no) |
+| `POST /api/reset` | Empieza un ensayo nuevo |
+
+Cada paso se ejecuta con la identidad de la organización que corresponde y
+responde con las transacciones confirmadas (función, organización, `txId` y
+bloque), la `MedicationUnitView` resultante y, si falla, el error contractual
+normalizado. El paso 4 es correcto cuando la red lo rechaza con
+`TRANSFER_NOT_AUTHORIZED`: si la red lo aceptara, el paso falla.
+
+Los bloques se reciben completos con la identidad de ANMAT y se resumen en
+función invocada, organizaciones que endosaron y código de validación. Las
+alertas son los eventos de chaincode que también reporta `listen-anmat`.
+
+En los pasos 2 y 3, el servidor pide el bloque del despacho al peer de cada
+organización, con su propia identidad y con sus datos privados. El peer de un
+miembro de la colección de la transferencia devuelve el remito y la factura en
+claro; el resto devuelve sólo lo que está en el bloque, el hash del valor. Así
+se ve en pantalla qué organización accede a los datos comerciales, sin que el
+servidor lo deduzca de las políticas.
+
 ### Acceso genérico
 
 La interfaz de CLI-1 permanece disponible para cualquier función pública:
@@ -239,14 +287,18 @@ go run ./cmd/snt-client invoke \
 
 ## Organizaciones e identidades
 
-`--org` admite las cuatro identidades requeridas por CLI-1:
+`--org` admite las cuatro identidades requeridas por CLI-1 y las otras tres
+organizaciones de la red, que agregó la demo de la defensa (DEMO-2):
 
 | Valor | MSP | Gateway local | Identidad |
 |---|---|---|---|
 | `anmat` | `AnmatMSP` | `localhost:7051` | `User1@anmat.snt.local` |
 | `lab` | `LabMSP` | `localhost:8051` | `User1@lab.snt.local` |
 | `drogueria` | `DrogueriaMSP` | `localhost:9051` | `User1@drogueria.snt.local` |
+| `distribuidor` | `DistribuidorMSP` | `localhost:10051` | `User1@distribuidor.snt.local` |
 | `farmacia` | `FarmaciaMSP` | `localhost:11051` | `User1@farmacia.snt.local` |
+| `centromedico` | `CentroMedicoMSP` | `localhost:12051` | `User1@centromedico.snt.local` |
+| `financiador` | `FinanciadorMSP` | `localhost:13051` | `User1@financiador.snt.local` |
 
 El MSP y el hostname del peer se leen de
 `network/organizations-manifest.json`. El certificado, la clave privada

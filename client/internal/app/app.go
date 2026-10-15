@@ -69,6 +69,7 @@ type dependencies struct {
 	resolveCanonicalID func(string, string) (string, error)
 	connect            func(config.Profile, string, string, time.Duration) (transactionClient, error)
 	connectEvents      func(config.Profile, string, string, time.Duration) (eventClient, error)
+	connectDemo        func(config.Profile, string, string, time.Duration) (demoPeer, error)
 	wait               func(context.Context, time.Duration) error
 }
 
@@ -92,6 +93,14 @@ func productionDependencies() dependencies {
 			chaincodeName string,
 			timeout time.Duration,
 		) (eventClient, error) {
+			return fabric.Connect(profile, channelName, chaincodeName, timeout)
+		},
+		connectDemo: func(
+			profile config.Profile,
+			channelName string,
+			chaincodeName string,
+			timeout time.Duration,
+		) (demoPeer, error) {
 			return fabric.Connect(profile, channelName, chaincodeName, timeout)
 		},
 		wait: waitForRetry,
@@ -135,6 +144,9 @@ func runContext(
 ) int {
 	if len(arguments) > 0 && arguments[0] == "listen-anmat" {
 		return runANMATListener(ctx, arguments[1:], stdout, stderr, deps)
+	}
+	if len(arguments) > 0 && arguments[0] == "demo-server" {
+		return runDemoServer(ctx, arguments[1:], stdout, stderr, deps)
 	}
 	if len(arguments) > 0 && arguments[0] == "demo-core" {
 		return runDemoCore(arguments[1:], stdout, stderr, deps)
@@ -299,6 +311,7 @@ func printUsage(writer io.Writer) {
 	_, _ = fmt.Fprintln(writer, "  snt-client prohibit-batch      --org <org> --gtin <gtin> --lot <lote> --reason <motivo>")
 	_, _ = fmt.Fprintln(writer, "  snt-client listen-anmat [--start-block <number>]")
 	_, _ = fmt.Fprintln(writer, "  snt-client demo-core [--repo-root <ruta>]")
+	_, _ = fmt.Fprintln(writer, "  snt-client demo-server [--addr 127.0.0.1:8080]")
 	_, _ = fmt.Fprintln(writer)
 	_, _ = fmt.Fprintln(writer, "Low-level access:")
 	_, _ = fmt.Fprintln(writer, "  snt-client query  --org <org> --function <name> [--arg <value> ...]")
