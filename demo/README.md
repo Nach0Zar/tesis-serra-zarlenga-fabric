@@ -78,6 +78,48 @@ defensa, y repetir el ensayo completo con el Wi-Fi apagado.
 6. Confirmar que la pantalla dice «red en línea» y «Listo para empezar».
 7. Tener abierto el video de respaldo de DEMO-5 (#147).
 
+## Ensayos y video de respaldo
+
+`demo/rehearsal/` recorre el guion sobre la pantalla real, iniciando cada paso en
+el segundo que le asigna el guion (20, 40, 65, 85, 110, 125 y 150 s), y graba el
+video de los 3 minutos. Es el plan B que pide DOC-8 (#60): el video es mudo y se
+narra en vivo con las mismas frases que la demo.
+
+Con la demo levantada, la primera vez y con conexión:
+
+```bash
+cd demo/rehearsal
+npm ci
+npx playwright install chromium
+```
+
+Después:
+
+```bash
+npm run record   # graba el video y el registro de tiempos
+npm run time     # sólo cronometra, sin video
+```
+
+Deja en `build/demo/rehearsal/` el video (`demo-<fecha>.webm`, entre 45 y 80 MB
+a 1920 × 1080) y el registro (`ensayo-<fecha>.json`) con el inicio y la duración
+de cada paso, y si entró en su ventana. Termina con error si un paso falla, no
+entra en su ventana o la pantalla registra un error. El video no se versiona:
+se guarda fuera del repositorio y se prueba en la notebook de la defensa, sin
+conexión. En WSL, Chromium headless puede necesitar `libasound2`
+(`sudo npx playwright install-deps chromium`).
+
+### Registro de ensayos
+
+DEMO-5 pide tres ensayos completos de 3 minutos o menos, con narración, uno de
+ellos en la notebook y con el proyector de la defensa.
+
+| Fecha | Máquina y pantalla | Maneja / narra | Duración | Observaciones |
+|---|---|---|---|---|
+| 2026-10-15 | Notebook de desarrollo, headless 1920 × 1080 | automático, sin narración | 3:00 | Ensayo técnico con `npm run time` y `npm run record`: cada paso empezó en su segundo y entró en su ventana; las transferencias tardan 4,2–5,7 s. No cuenta como ensayo de DEMO-5 |
+| | | | | |
+| | | | | |
+| | | | | |
+
 ## Si algo falla en vivo
 
 | Síntoma | Qué hacer |
