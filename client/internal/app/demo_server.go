@@ -230,7 +230,9 @@ type demoServer struct {
 	blocks      []demoBlock
 	alerts      []demoAlert
 	subscribers map[chan demoMessage]struct{}
-	background  sync.WaitGroup
+	// seenEvents deduplica las alertas que repite la reanudación de eventos.
+	seenEvents map[string]struct{}
+	background sync.WaitGroup
 }
 
 func runDemoServer(
@@ -342,6 +344,7 @@ func newDemoServer(
 		stderr:       stderr,
 		ctx:          context.Background(),
 		subscribers:  map[chan demoMessage]struct{}{},
+		seenEvents:   map[string]struct{}{},
 	}
 }
 
@@ -620,17 +623,36 @@ func (s *demoServer) publishScenarioLocked() {
 
 // --- Observación de la red ---------------------------------------------------
 
+// demoCursor guarda por separado el progreso de los dos streams. Los bloques
+// se reanudan en el siguiente al último recibido. Los eventos se reanudan en el
+// bloque del último evento recibido, inclusive, o en el primer bloque visto si
+// todavía no llegó ninguno: un corte entre un bloque y su evento no puede
+// perder la alerta. El replay se deduplica por transacción en recordEvent.
+type demoCursor struct {
+	nextBlock *uint64
+	eventFrom *uint64
+}
+
+func (cursor *demoCursor) block(number uint64) {
+	following := number + 1
+	cursor.nextBlock = &following
+	if cursor.eventFrom == nil {
+		first := number
+		cursor.eventFrom = &first
+	}
+}
+
+func (cursor *demoCursor) event(number uint64) {
+	cursor.eventFrom = &number
+}
+
 // observe recibe con la identidad de ANMAT los bloques completos y los eventos
-// del chaincode. Si un stream se corta, vuelve a suscribirse desde el bloque
-// siguiente al último recibido.
+// del chaincode. Si un stream se corta, vuelve a suscribirse a cada uno desde
+// su propio cursor.
 func (s *demoServer) observe(ctx context.Context, observer demoPeer) {
-	var next *uint64
+	cursor := &demoCursor{}
 	for ctx.Err() == nil {
-		last, err := s.observeOnce(ctx, observer, next)
-		if last != nil {
-			following := *last + 1
-			next = &following
-		}
+		err := s.observeOnce(ctx, observer, cursor)
 		s.setConnected(false)
 		if ctx.Err() != nil {
 			return
@@ -644,39 +666,34 @@ func (s *demoServer) observe(ctx context.Context, observer demoPeer) {
 	}
 }
 
-func (s *demoServer) observeOnce(
-	ctx context.Context,
-	observer demoPeer,
-	start *uint64,
-) (*uint64, error) {
+func (s *demoServer) observeOnce(ctx context.Context, observer demoPeer, cursor *demoCursor) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	blocks, err := observer.Blocks(ctx, start)
+	blocks, err := observer.Blocks(ctx, cursor.nextBlock)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	events, err := observer.ChaincodeEvents(ctx, start)
+	events, err := observer.ChaincodeEvents(ctx, cursor.eventFrom)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	s.setConnected(true)
 
-	var last *uint64
 	for {
 		select {
 		case <-ctx.Done():
-			return last, nil
+			return nil
 		case block, ok := <-blocks:
 			if !ok {
-				return last, errors.New("block event stream closed unexpectedly")
+				return errors.New("block event stream closed unexpectedly")
 			}
-			number := block.Number
-			last = &number
+			cursor.block(block.Number)
 			s.recordBlock(block)
 		case event, ok := <-events:
 			if !ok {
-				return last, errors.New("chaincode event stream closed unexpectedly")
+				return errors.New("chaincode event stream closed unexpectedly")
 			}
+			cursor.event(event.BlockNumber)
 			s.recordEvent(event)
 		}
 	}
@@ -732,6 +749,10 @@ func (s *demoServer) recordEvent(event fabric.ChaincodeEvent) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, replayed := s.seenEvents[event.TransactionID]; replayed {
+		return
+	}
+	s.seenEvents[event.TransactionID] = struct{}{}
 	if !s.visibleLocked(event.BlockNumber) {
 		return
 	}

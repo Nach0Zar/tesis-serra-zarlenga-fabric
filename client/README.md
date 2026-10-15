@@ -244,7 +244,12 @@ normalizado. El paso 4 es correcto cuando la red lo rechaza con
 
 Los bloques se reciben completos con la identidad de ANMAT y se resumen en
 función invocada, organizaciones que endosaron y código de validación. Las
-alertas son los eventos de chaincode que también reporta `listen-anmat`.
+alertas son los eventos de chaincode que también reporta `listen-anmat`. Si
+un stream se corta, cada uno se reanuda desde su propio cursor: los bloques en
+el siguiente al último recibido, y los eventos en el bloque del último evento
+recibido, de modo que un corte entre el bloque de un robo y su evento no pierde
+la alerta. Las alertas repetidas por esa reanudación se descartan por
+`transactionId`.
 
 En los pasos 2 y 3, el servidor pide el bloque del despacho al peer de cada
 organización, con su propia identidad y con sus datos privados. El peer de un

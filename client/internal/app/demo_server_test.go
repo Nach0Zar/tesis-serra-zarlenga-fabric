@@ -604,3 +604,126 @@ func (b *lockedBuffer) String() string {
 	defer b.mu.Unlock()
 	return b.buffer.String()
 }
+
+// reconnectingObserver entrega streams nuevos en cada suscripción y registra
+// desde qué bloque se pidió cada uno.
+type reconnectingObserver struct {
+	fakeDemoPeer
+	subscriptions chan observerSubscription
+}
+
+type observerSubscription struct {
+	blockStart *uint64
+	eventStart *uint64
+	blocks     chan fabric.Block
+	events     chan fabric.ChaincodeEvent
+}
+
+func newReconnectingObserver() *reconnectingObserver {
+	return &reconnectingObserver{subscriptions: make(chan observerSubscription)}
+}
+
+// reconnectingPeer adapta reconnectingObserver a demoPeer: Blocks y
+// ChaincodeEvents se piden juntos en cada reconexión.
+type reconnectingPeer struct {
+	*reconnectingObserver
+	pending *observerSubscription
+}
+
+func (peer *reconnectingPeer) Blocks(_ context.Context, start *uint64) (<-chan fabric.Block, error) {
+	peer.pending = &observerSubscription{
+		blockStart: copyStart(start),
+		blocks:     make(chan fabric.Block),
+		events:     make(chan fabric.ChaincodeEvent),
+	}
+	return peer.pending.blocks, nil
+}
+
+func (peer *reconnectingPeer) ChaincodeEvents(_ context.Context, start *uint64) (<-chan fabric.ChaincodeEvent, error) {
+	subscription := *peer.pending
+	subscription.eventStart = copyStart(start)
+	peer.subscriptions <- subscription
+	return subscription.events, nil
+}
+
+func copyStart(start *uint64) *uint64 {
+	if start == nil {
+		return nil
+	}
+	value := *start
+	return &value
+}
+
+func startString(start *uint64) string {
+	if start == nil {
+		return "next"
+	}
+	return fmt.Sprint(*start)
+}
+
+func TestDemoServerRecoversAnAlertCutBetweenItsBlockAndItsEvent(t *testing.T) {
+	server := newTestDemoServer(t, newFakeDemoLedger())
+	peer := &reconnectingPeer{reconnectingObserver: newReconnectingObserver()}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go server.observe(ctx, peer)
+
+	first := <-peer.subscriptions
+	if first.blockStart != nil || first.eventStart != nil {
+		t.Fatalf("first subscription = blocks %s, events %s", startString(first.blockStart), startString(first.eventStart))
+	}
+	first.events <- fabric.ChaincodeEvent{BlockNumber: 12, TransactionID: "tx-12", EventName: "ReceiveTransfer", Payload: []byte(`{}`)}
+	first.blocks <- fabric.Block{Number: 12}
+	first.blocks <- fabric.Block{Number: 13, Transactions: []fabric.BlockTransaction{{TransactionID: "tx-13", Function: "ReportStolen"}}}
+	// El stream de eventos se corta antes de entregar el evento del bloque 13.
+	close(first.events)
+
+	second := <-peer.subscriptions
+	if startString(second.blockStart) != "14" || startString(second.eventStart) != "12" {
+		t.Fatalf("resubscription = blocks %s, events %s; want 14 and 12",
+			startString(second.blockStart), startString(second.eventStart))
+	}
+	stolen := fabric.ChaincodeEvent{BlockNumber: 13, TransactionID: "tx-13", EventName: "ReportStolen", Payload: []byte(`{"estado":"ROBADO"}`)}
+	second.events <- fabric.ChaincodeEvent{BlockNumber: 12, TransactionID: "tx-12", EventName: "ReceiveTransfer", Payload: []byte(`{}`)}
+	second.events <- stolen
+	// Un segundo corte repite el replay: la alerta no se duplica.
+	close(second.blocks)
+	third := <-peer.subscriptions
+	if startString(third.blockStart) != "14" || startString(third.eventStart) != "13" {
+		t.Fatalf("second resubscription = blocks %s, events %s; want 14 and 13",
+			startString(third.blockStart), startString(third.eventStart))
+	}
+	third.events <- stolen
+	third.blocks <- fabric.Block{Number: 14}
+
+	snapshot := server.snapshot()
+	for deadline := time.Now().Add(2 * time.Second); len(snapshot.Blocks) < 3 && time.Now().Before(deadline); {
+		time.Sleep(time.Millisecond)
+		snapshot = server.snapshot()
+	}
+	if len(snapshot.Alerts) != 1 || snapshot.Alerts[0].TransactionID != "tx-13" {
+		t.Fatalf("alerts = %+v, want ReportStolen once", snapshot.Alerts)
+	}
+	if len(snapshot.Blocks) != 3 {
+		t.Fatalf("blocks = %+v, want 12, 13 and 14 once", snapshot.Blocks)
+	}
+}
+
+func TestDemoServerResumesEventsFromTheFirstBlockWhenNoEventArrived(t *testing.T) {
+	server := newTestDemoServer(t, newFakeDemoLedger())
+	peer := &reconnectingPeer{reconnectingObserver: newReconnectingObserver()}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go server.observe(ctx, peer)
+
+	first := <-peer.subscriptions
+	first.blocks <- fabric.Block{Number: 20}
+	first.blocks <- fabric.Block{Number: 21}
+	close(first.events)
+
+	second := <-peer.subscriptions
+	if startString(second.blockStart) != "22" || startString(second.eventStart) != "20" {
+		t.Fatalf("resubscription = blocks %s, events %s; want 22 and 20",
+			startString(second.blockStart), startString(second.eventStart))
+	}
+}
