@@ -18,6 +18,8 @@ on:
       # dispararia ninguna verificacion.
       - "benchmarks/schema/**"
       - "benchmarks/examples/**"
+      # demo/demo.sh arranca el servidor de la demo de la defensa (DEMO-4).
+      - "demo/**"
       - ".github/workflows/client-ci.yml"
 
 permissions:
@@ -78,3 +80,6 @@ jobs:
       - name: Test
         working-directory: client
         run: go test -v -count=1 -race ./...
+
+      - name: Shellcheck demo script
+        run: shellcheck demo/demo.sh

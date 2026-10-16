@@ -140,8 +140,9 @@ Lo que la pantalla observa, sin acción del usuario:
 ## Requisitos para el día de la defensa
 
 - Funciona sin internet: la interfaz y sus recursos se sirven localmente.
-- La red está levantada antes de empezar; el arranque y el reinicio entre ensayos
-  son de DEMO-4 (#146).
+- La red está levantada antes de empezar. El arranque en un comando, el
+  reinicio entre ensayos y el checklist del día están en
+  [`demo/README.md`](../demo/README.md) (DEMO-4, #146).
 - Si la demo en vivo falla, se usa el video de respaldo de DEMO-5 (#147).
 
 ## Lo que la demo no muestra
