@@ -727,3 +727,22 @@ func TestDemoServerResumesEventsFromTheFirstBlockWhenNoEventArrived(t *testing.T
 			startString(second.blockStart), startString(second.eventStart))
 	}
 }
+
+func TestDemoServerServesTheScreenWithoutExternalResources(t *testing.T) {
+	server := newTestDemoServer(t, newFakeDemoLedger())
+	handler := server.handler()
+	for _, path := range []string{"/", "/app.js", "/styles.css"} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d", path, recorder.Code)
+		}
+		body := recorder.Body.String()
+		// La demo tiene que funcionar sin internet: ningún recurso externo.
+		for _, external := range []string{"https://", `src="http`, `href="http`, "url(http", "@import"} {
+			if strings.Contains(body, external) {
+				t.Fatalf("GET %s references an external resource (%s)", path, external)
+			}
+		}
+	}
+}

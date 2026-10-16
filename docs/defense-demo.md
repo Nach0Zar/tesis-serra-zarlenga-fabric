@@ -47,10 +47,23 @@ tiempos son acumulados.
 Margen: el guion suma 3:00 con frases cortas. Si un paso se demora, el paso 5
 puede narrarse sin pausa y el 7 recortarse a la lectura del veredicto.
 
+## La pantalla
+
+La pantalla la sirve `snt-client demo-server` (DEMO-2 y DEMO-3). Así se ve al
+terminar el guion, sobre la red local:
+
+![Pantalla de la demo al terminar el guion](defense-demo-screen.png)
+
 ## Boceto de la pantalla
 
 Una sola vista, sin navegación, pensada para 1920 × 1080 proyectado y legible en
-una notebook de 13". Texto mínimo de 18 px y títulos de 28 px o más.
+una notebook de 13". En cualquier resolución ningún texto baja de 18 px y los
+títulos de panel tienen 28 px o más. Con menos de 950 px de alto (por ejemplo,
+1366 × 768) la letra no se achica: la pantalla pasa a una versión compacta que
+oculta el título general y los subtítulos de los paneles, marca la firma sólo
+con el color de la tarjeta, agrupa en dos líneas quién ve la factura y muestra
+el texto sólo en el botón del paso siguiente, para que la vista completa entre
+sin scroll.
 
 ```text
 ┌───────────────────────────────────────────────────────────────────────────────────────┐
