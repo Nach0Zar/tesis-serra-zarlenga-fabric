@@ -1,0 +1,21 @@
+{
+  "name": "snt-baseline-benchmark",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Carga reproducible contra la API REST de la baseline SNT",
+  "engines": {
+    "node": ">=22 <23",
+    "npm": ">=11.5.1 <12"
+  },
+  "packageManager": "npm@11.6.2",
+  "scripts": {
+    "check": "node scripts/check-syntax.js",
+    "test": "node --test test/*.test.js",
+    "test:canonical": "node --test test/canonical-dataset.test.js",
+    "test:metadata": "node scripts/verify-metadata.js",
+    "snapshot:build": "node src/build-snapshot.js",
+    "snapshot:restore": "node src/restore-snapshot.js",
+    "smoke": "node src/run-smoke.js",
+    "round": "node src/run-round.js"
+  }
+}

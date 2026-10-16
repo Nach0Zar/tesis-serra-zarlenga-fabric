@@ -1,0 +1,30 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - gosec
+    - revive
+
+  # `misspell` NO se habilita. Solo trae diccionarios de ingles (en_US, en_UK,
+  # en_CA) y la prosa de este repositorio -- comentarios, mensajes de error y
+  # nombres de constantes de dominio -- esta en castellano por decision del
+  # proyecto. El resultado es ruido puro: `transaccion`, `organizacion`,
+  # `implementacion`, `participacion` o `EN_TRANSITO` se reportan como faltas
+  # de ortografia inglesas. Sobre el codigo actual daba mas de 150 hallazgos,
+  # todos falsos positivos, sobre 44 palabras castellanas distintas; la lista
+  # de `ignore-rules` necesaria crecería con cada comentario nuevo y dejaría el
+  # lint en rojo por escribir castellano correcto. `mode: restricted` tampoco
+  # alcanza: se probó y sigue reportando la mayoría.
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
