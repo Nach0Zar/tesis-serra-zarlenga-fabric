@@ -78,6 +78,70 @@ defensa, y repetir el ensayo completo con el Wi-Fi apagado.
 6. Confirmar que la pantalla dice «red en línea» y «Listo para empezar».
 7. Tener abierto el video de respaldo de DEMO-5 (#147).
 
+## Ensayos y video de respaldo
+
+`demo/rehearsal/` recorre el guion sobre la pantalla real, iniciando cada paso en
+el segundo que le asigna el guion (20, 40, 65, 85, 110, 125 y 150 s), y graba el
+video de los 3 minutos. Es el plan B que pide DOC-8 (#60): el video es mudo y se
+narra en vivo con las mismas frases que la demo.
+
+Con la demo levantada, la primera vez y con conexión:
+
+```bash
+cd demo/rehearsal
+npm ci
+npx playwright install chromium
+```
+
+Después:
+
+```bash
+npm run record   # graba el video y el registro del ensayo
+npm run time     # sólo cronometra, sin video
+npm test         # pruebas de la verificación de evidencia
+```
+
+Antes de abrir el navegador, el ensayo deja un escenario nuevo, listo y
+conectado; si el guion anterior había avanzado, lo reinicia. Así la preparación
+no queda en el video ni en el cronómetro. La grabación empieza con el guion y
+dura exactamente lo que dura: toma los cuadros de la pantalla y los entrega a
+25 por segundo según el reloj. No usa el video de Playwright, que en el guion
+completo estiraba 187 s reales a 210 s y desincronizaba la narración.
+
+Un paso sólo cuenta como correcto si dejó su evidencia en la red y en la
+pantalla (`evidence.mjs`):
+
+- los bloques esperados, válidos y con las firmas de las partes;
+- en las transferencias, que el remito y la factura los vean exactamente emisor,
+  receptor y ANMAT;
+- el rechazo `TRANSFER_NOT_AUTHORIZED` sin bloque nuevo;
+- una sola alerta de ANMAT por el robo de la unidad preparada;
+- el veredicto `legitima: true` de PAMI.
+
+Deja en `build/demo/rehearsal/` el video (`demo-<fecha>.webm`, unos 60 MB a
+1920 × 1080) y el registro (`ensayo-<fecha>.json`) con el inicio, la duración y
+la evidencia de cada paso y la duración real del archivo. Cada paso se mide
+hasta que su evidencia quedó verificada: una alerta o un bloque que llega tarde
+lo deja fuera de su ventana aunque la operación haya respondido a tiempo.
+Termina con error si un paso falla, no deja su evidencia o no entra en su
+ventana, si la pantalla registra un error, si el total pasa de 180 s (también
+en `npm run time`) o si el video no dura 180 ± 2 s. El video no se versiona: se
+guarda fuera del repositorio y se prueba en la notebook de la defensa, sin
+conexión. En WSL, Chromium headless puede necesitar `libasound2`
+(`sudo npx playwright install-deps chromium`).
+
+### Registro de ensayos
+
+DEMO-5 pide tres ensayos completos de 3 minutos o menos, con narración, uno de
+ellos en la notebook y con el proyector de la defensa.
+
+| Fecha | Máquina y pantalla | Maneja / narra | Duración | Observaciones |
+|---|---|---|---|---|
+| 2026-10-15 | Notebook de desarrollo, headless 1920 × 1080 | automático, sin narración | 3:00 | Ensayo técnico con `npm run record`, partiendo de un guion terminado: cada paso empezó en su segundo, dejó su evidencia y entró en su ventana; video de 180 s. No cuenta como ensayo de DEMO-5 |
+| | | | | |
+| | | | | |
+| | | | | |
+
 ## Si algo falla en vivo
 
 | Síntoma | Qué hacer |
