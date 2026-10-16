@@ -18,11 +18,22 @@ const (
 	DefaultChaincodeName = "snt"
 )
 
+// Los puertos son los que publica network/compose.yaml para el Gateway de cada
+// peer.
 var defaultGatewayEndpoints = map[string]string{
-	"anmat":     "dns:///localhost:7051",
-	"lab":       "dns:///localhost:8051",
-	"drogueria": "dns:///localhost:9051",
-	"farmacia":  "dns:///localhost:11051",
+	"anmat":        "dns:///localhost:7051",
+	"lab":          "dns:///localhost:8051",
+	"drogueria":    "dns:///localhost:9051",
+	"distribuidor": "dns:///localhost:10051",
+	"farmacia":     "dns:///localhost:11051",
+	"centromedico": "dns:///localhost:12051",
+	"financiador":  "dns:///localhost:13051",
+}
+
+// SupportedOrganizations lista, en orden estable, las organizaciones con un
+// perfil de conexión conocido.
+var SupportedOrganizations = []string{
+	"anmat", "lab", "drogueria", "distribuidor", "farmacia", "centromedico", "financiador",
 }
 
 // Profile reúne los datos necesarios para conectarse al Gateway del peer de una
@@ -78,8 +89,9 @@ func Resolve(repoRoot, organization, endpointOverride, serverNameOverride string
 	defaultEndpoint, supported := defaultGatewayEndpoints[slug]
 	if !supported {
 		return Profile{}, fmt.Errorf(
-			"unsupported organization %q: use anmat, lab, drogueria, or farmacia",
+			"unsupported organization %q: use %s",
 			organization,
+			strings.Join(SupportedOrganizations, ", "),
 		)
 	}
 

@@ -85,7 +85,7 @@ func parseBusinessOptions(
 	var expirationDate string
 	var reason string
 
-	flags.StringVar(&opts.organization, "org", "", "organización: anmat, lab, drogueria o farmacia")
+	flags.StringVar(&opts.organization, "org", "", "organización: anmat, lab, drogueria, distribuidor, farmacia, centromedico o financiador")
 	flags.StringVar(&gtin, "gtin", "", "GTIN-14 de la unidad")
 	if command != "query-units-by-gtin" {
 		flags.StringVar(&serialNumber, "serial", "", "número de serie de la unidad")

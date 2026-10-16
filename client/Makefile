@@ -3,8 +3,9 @@ OUTPUT_DIR ?= ../build/dataset
 RUN_METADATA ?= $(wildcard ../benchmarks/examples/*.json)
 DEMO_ARGS ?=
 LISTENER_ARGS ?=
+DEMO_SERVER_ARGS ?=
 
-.PHONY: build test test-race vet demo-core listen-anmat generate-dataset validate-run-metadata
+.PHONY: build test test-race vet demo-core demo-server listen-anmat generate-dataset validate-run-metadata
 
 build:
 	go build ./...
@@ -20,6 +21,9 @@ vet:
 
 demo-core:
 	go run ./cmd/snt-client demo-core $(DEMO_ARGS)
+
+demo-server:
+	go run ./cmd/snt-client demo-server $(DEMO_SERVER_ARGS)
 
 listen-anmat:
 	go run ./cmd/snt-client listen-anmat $(LISTENER_ARGS)
