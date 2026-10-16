@@ -8,6 +8,17 @@ const {spawnSync} = require('node:child_process');
 const {SERIES_SCHEMA_ID, readSnapshot, sha256File, validateDocument} = require('./artifacts');
 const {writeJSONAtomic} = require('./metadata');
 const {PROFILES} = require('./profiles');
+const {SCENARIOS: AVAILABILITY_SCENARIOS} = require('./availability');
+
+// Planes de serie: la matriz de rendimiento (full/trial) y los escenarios de
+// disponibilidad de la seccion 8.1 (availability/availability-trial). Los
+// planes trial son ensayos no citables.
+const PLANS = Object.freeze({
+    full: {citable: true, repetitions: 5, extendByCV: true},
+    trial: {citable: false, repetitions: 2, extendByCV: false},
+    availability: {citable: true, repetitions: 5, extendByCV: false},
+    'availability-trial': {citable: false, repetitions: 1, extendByCV: false},
+});
 
 function fullScenarioMatrix() {
     const matrix = [];
@@ -35,6 +46,18 @@ function trialScenarioMatrix() {
     ];
 }
 
+// Cada escenario de disponibilidad es una ronda independiente desde un estado
+// limpio (#44): la falla no se combina con otra en la misma ronda.
+function availabilityScenarioMatrix() {
+    return Object.keys(AVAILABILITY_SCENARIOS).map((scenario) => ({key: scenario, scenario, rate: 20}));
+}
+
+function scenarioMatrix(plan) {
+    if (plan === 'full') return fullScenarioMatrix();
+    if (plan === 'trial') return trialScenarioMatrix();
+    return availabilityScenarioMatrix();
+}
+
 function coefficientOfVariation(values) {
     if (!Array.isArray(values) || values.length === 0) throw new Error('CV requires at least one value');
     if (values.some((value) => !Number.isFinite(value) || value < 0)) throw new Error('CV values must be finite and non-negative');
@@ -59,7 +82,7 @@ function parseArguments(arguments_) {
     const supported = new Set(['snapshot-dir', 'dataset-dir', 'plan', 'series-token', 'output-root']);
     for (const key of Object.keys(values)) if (!supported.has(key)) throw new Error(`unsupported argument --${key}`);
     if (!values['snapshot-dir']) throw new Error('--snapshot-dir is required');
-    if (!['full', 'trial'].includes(values.plan)) throw new Error('--plan must be full or trial');
+    if (!PLANS[values.plan]) throw new Error(`--plan must be one of ${Object.keys(PLANS).join(', ')}`);
     return {
         snapshotDirectory: values['snapshot-dir'],
         datasetDirectory: values['dataset-dir'],
@@ -106,6 +129,9 @@ function runLogged(command, args, logPath, options = {}) {
 }
 
 function scenarioArguments(scenario, phase, repetition) {
+    if (AVAILABILITY_SCENARIOS[scenario.scenario]) {
+        return ['--scenario', scenario.scenario, '--phase', phase, '--repetition', String(repetition)];
+    }
     const args = [
         '--scenario', scenario.scenario,
         '--phase', phase,
@@ -143,11 +169,12 @@ function executeAttempt(repoRoot, options) {
             path.join(sourceDirectory, 'run-smoke.js'), ...common,
             '--output-root', path.relative(repoRoot, attemptDirectory), '--run-token', 'smoke',
         ], path.join(attemptDirectory, 'smoke.log'), {cwd: repoRoot});
+        const availability = Boolean(AVAILABILITY_SCENARIOS[options.scenario.scenario]);
         runLogged(process.execPath, [
-            path.join(sourceDirectory, 'run-round.js'),
+            path.join(sourceDirectory, availability ? 'run-availability.js' : 'run-round.js'),
             ...scenarioArguments(options.scenario, options.kind, options.repetition),
             ...common,
-            '--state-mode', 'snapshot',
+            ...(availability ? [] : ['--state-mode', 'snapshot']),
             '--output-root', path.relative(repoRoot, attemptDirectory), '--run-token', 'round',
         ], path.join(attemptDirectory, 'round.log'), {cwd: repoRoot});
         const summaryPath = path.join(attemptDirectory, 'round', 'summary.json');
@@ -195,8 +222,8 @@ async function runSeries(repoRoot, options, dependencies = {}) {
         throw new Error('series snapshot must be stored inside the repository');
     }
     const created = (dependencies.createSeriesDirectory ?? createSeriesDirectory)(repoRoot, options);
-    const matrix = dependencies.scenarioMatrix
-        ?? (options.plan === 'full' ? fullScenarioMatrix() : trialScenarioMatrix());
+    const planPolicy = PLANS[options.plan];
+    const matrix = dependencies.scenarioMatrix ?? scenarioMatrix(options.plan);
     const scenarios = matrix.map((entry) => ({
         ...entry, status: 'pending', extended: false, attempts: [],
     }));
@@ -205,7 +232,7 @@ async function runSeries(repoRoot, options, dependencies = {}) {
         schemaVersion: '1.0.0',
         seriesToken: created.token,
         plan: options.plan,
-        citable: options.plan === 'full',
+        citable: planPolicy.citable,
         snapshot: {
             id: snapshot.manifest.snapshotId,
             directory: snapshotRelative.split(path.sep).join('/'),
@@ -219,7 +246,7 @@ async function runSeries(repoRoot, options, dependencies = {}) {
     writeIndex(repoRoot, indexPath, index);
     const execute = dependencies.executeAttempt ?? executeAttempt;
     const now = dependencies.now ?? (() => new Date().toISOString());
-    const measuredRepetitions = options.plan === 'full' ? 5 : 2;
+    const measuredRepetitions = planPolicy.repetitions;
 
     for (const scenario of scenarios) {
         scenario.status = 'running';
@@ -269,12 +296,14 @@ async function runSeries(repoRoot, options, dependencies = {}) {
         for (let repetition = 1; repetition <= measuredRepetitions; repetition += 1) {
             if (!await measure(repetition)) complete = false;
         }
-        if (complete) {
+        // En disponibilidad la variacion entre repeticiones no se reduce
+        // extendiendo la serie: la falla la produce a proposito (seccion 8).
+        if (complete && planPolicy.extendByCV) {
             scenario.throughputCV = coefficientOfVariation(
                 summaries.map((summary) => summary.rate.effectiveOperationsPerSecond),
             );
             scenario.p95CV = coefficientOfVariation(summaries.map((summary) => summary.operationLatency.p95Ms));
-            if (options.plan === 'full' && (scenario.throughputCV > 0.15 || scenario.p95CV > 0.15)) {
+            if (scenario.throughputCV > 0.15 || scenario.p95CV > 0.15) {
                 scenario.extended = true;
                 for (let repetition = 6; repetition <= 8; repetition += 1) {
                     if (!await measure(repetition)) complete = false;
@@ -306,7 +335,9 @@ if (require.main === module) {
 }
 
 module.exports = {
+    PLANS,
     attemptRecord,
+    availabilityScenarioMatrix,
     coefficientOfVariation,
     createSeriesDirectory,
     executeAttempt,
