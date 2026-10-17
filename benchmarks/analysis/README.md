@@ -124,10 +124,23 @@ throughput, el p95 y los errores por código en las ventanas previa, de falla y
 de recuperación, y el tiempo de recuperación de la sección 3.3: el comienzo del
 primer tramo de 30 s cuya tasa de éxito vuelve al 95 % de la previa a la falla.
 
-Cada operación cuenta en la ventana en que termina. Así, las que estaban en
-vuelo al inyectar la falla y fallan por ella quedan en la ventana de falla y no
-rebajan la tasa previa: en Raft-1 eran unas 50 operaciones iniciadas en los
-últimos segundos antes de la caída del líder.
+Un éxito cuenta en la ventana en que se completó, que es cuando el sistema
+prestó el servicio. Una falla cuenta en la ventana en que se pidió, salvo que
+estuviera en vuelo al inyectar la falla, en cuyo caso cuenta en la ventana de
+falla. Así, las que fallan por haber quedado en vuelo al caer el componente no
+rebajan la tasa previa (unas 50 en Raft-1); las pedidas durante la falla que
+vencen por timeout después de la restauración no rebajan la recuperación; y las
+que la API de la baseline retuvo durante la caída de la base y completó al
+volver cuentan en la recuperación, no como servicio durante la falla (`db-1`).
+
+El tramo estable de 30 s del tiempo de recuperación sólo puede empezar en un
+instante en que el sistema completó un pedido con éxito. Si pudiera empezar en
+una falla, unos pocos fallos y los éxitos posteriores a la restauración
+alcanzarían el umbral antes de que el componente volviera. Así, la recuperación
+mide cuándo vuelve el servicio y no cuándo se aceptan pedidos. En `peer-1a`, el
+peer restaurado endosa a los ~4 s, pero las transacciones de su organización se
+confirman recién cuando su ledger se pone al día con los bloques que se perdió,
+unos 15 s después.
 
 En las caídas de peer (`peer-1a` a `peer-1d`, sección 8.1) cada operación del
 crudo debe declarar `availabilityClass`: `target` si requiere el peer caído o

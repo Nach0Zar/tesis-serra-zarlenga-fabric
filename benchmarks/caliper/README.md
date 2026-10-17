@@ -386,7 +386,11 @@ ronda de prueba de `peer-1c` el peer de ANMAT estuvo listo menos de 2 s después
 del `docker start`, pero sus cuarentenas, que necesitan el endoso del
 laboratorio, recién se confirmaron unos 25 s después. Aislado y sin carga, el
 mismo redescubrimiento tardó 5,2 s. Es parte de lo que mide el tiempo de
-recuperación, no un efecto del cliente.
+recuperación, no un efecto del cliente. Lo mismo pasa con el ledger: el peer del
+centro médico (`peer-1a`) volvió a endosar unos 4 s después de restaurado, pero
+las transacciones de su organización, cuya confirmación el cliente espera en ese
+mismo peer, se confirmaron recién cuando su ledger alcanzó los ~33 bloques que
+se perdió durante la caída, unos 15 s después.
 
 **Descarte.** En estas rondas los fallos durante la falla son el resultado que
 se mide. La ronda sólo se descarta si alguna operación **terminó** fallando antes

@@ -485,6 +485,32 @@ test('operations in flight when the fault is injected count in the fault window'
     assert.equal(result.windows.fault.successRate, 0.5);
 });
 
+test('operations that start during the fault and time out after the restoration count in the fault window', () => {
+    const injectedAt = Date.parse(FAULT.injectedAt);
+    const operation = (startOffset, endOffset, outcome) => ({
+        datasetSequence: 1, startedAt: new Date(injectedAt + startOffset).toISOString(),
+        endedAt: new Date(injectedAt + endOffset).toISOString(), latencyMs: endOffset - startOffset, outcome,
+        transactions: [{status: outcome === 'success' ? 'success' : 'failed', transportError: 'TimeoutError'}],
+    });
+    const raw = [
+        operation(-10_000, -9_990, 'success'),
+        operation(50_000, 80_000, 'unexpected-failure'),
+        operation(65_000, 65_010, 'success'),
+        operation(70_000, 70_010, 'success'),
+    ];
+    // Retenida por la API durante la falla y completada al volver la base.
+    raw.push(operation(55_000, 62_000, 'success'));
+    const result = availabilityWindows({scenario: 'db-1', raw, faultInjection: FAULT});
+    assert.equal(result.windows.fault.operations, 1);
+    assert.equal(result.windows.fault.successes, 0);
+    assert.equal(result.windows.fault.failuresByCode.TimeoutError, 1);
+    assert.equal(result.windows.recovery.operations, 3);
+    assert.equal(result.windows.recovery.successRate, 1);
+    // La recuperacion empieza cuando vuelve a completarse un pedido (62 s), no en
+    // la falla de los 50 s, aunque el tramo desde ahi alcanzaria el umbral.
+    assert.equal(result.recoverySeconds, 62);
+});
+
 test('peer faults report availability per operation class and block without classes', () => {
     const classified = availabilityWindows({scenario: 'peer-1a', raw: faultOperations((name) => name), faultInjection: FAULT});
     assert.equal(classified.windows.fault.successRate, 0.75);
