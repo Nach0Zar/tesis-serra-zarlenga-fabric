@@ -25,7 +25,7 @@ function parseRoundArguments(arguments_) {
     const values = pairs(arguments_);
     assertSupported(values, new Set([
         'scenario', 'phase', 'repetition', 'rate', 'family', 'operation',
-        'dataset-dir', 'snapshot-dir', 'run-token',
+        'dataset-dir', 'snapshot-dir', 'run-token', 'output-root',
     ]));
     for (const required of ['scenario', 'phase', 'repetition', 'rate', 'snapshot-dir']) {
         if (!values[required]) throw new Error(`--${required} is required`);
@@ -40,6 +40,7 @@ function parseRoundArguments(arguments_) {
         datasetDirectory: values['dataset-dir'],
         snapshotDirectory: values['snapshot-dir'],
         runToken: values['run-token'],
+        outputRoot: values['output-root'],
     };
 }
 

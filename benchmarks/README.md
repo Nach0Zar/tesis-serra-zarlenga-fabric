@@ -129,6 +129,15 @@ Las credenciales permanecen sólo en memoria y los resultados se guardan bajo
 snapshot, perfiles, rechazos separados y asimetrías metodológicas están
 documentados en [`baseline/README.md`](baseline/README.md).
 
+## Disponibilidad y series de la baseline
+
+El proyecto de la baseline ejecuta los dos escenarios de disponibilidad de la
+sección 8.2 (EVAL-5, #45), caída de PostgreSQL y caída de la API, con la misma
+carga, el mismo plan y el mismo nivel de simulación que EVAL-4. También tiene
+su orquestador de series, que escribe el mismo índice que Fabric: sin él, el
+procesamiento no podía acreditar rondas de la baseline como citables. El
+detalle está en [`baseline/README.md`](baseline/README.md#disponibilidad-eval-5).
+
 ## Procesamiento comparativo
 
 El proyecto [`analysis/`](analysis/) procesa los crudos de ambos SUT y produce
