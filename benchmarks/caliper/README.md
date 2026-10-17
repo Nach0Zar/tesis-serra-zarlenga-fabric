@@ -378,6 +378,16 @@ volver a usarlo después de restaurarlo (10,7 s frente a 1,7 s). El tiempo de
 recuperación habría medido al cliente. En las rondas de disponibilidad la
 configuración de red acota ese backoff a 1 s; las demás rondas no cambian.
 
+**Recuperación de un peer.** Un peer restaurado no sólo tiene que arrancar:
+su Gateway necesita volver a conocer por gossip a los peers de las demás
+organizaciones antes de poder reunir sus endosos. Mientras tanto responde
+`UNAVAILABLE: failed to find any endorsing peers for org(s): LabMSP`. En la
+ronda de prueba de `peer-1c` el peer de ANMAT estuvo listo menos de 2 s después
+del `docker start`, pero sus cuarentenas, que necesitan el endoso del
+laboratorio, recién se confirmaron unos 25 s después. Aislado y sin carga, el
+mismo redescubrimiento tardó 5,2 s. Es parte de lo que mide el tiempo de
+recuperación, no un efecto del cliente.
+
 **Descarte.** En estas rondas los fallos durante la falla son el resultado que
 se mide. La ronda sólo se descarta si alguna operación **terminó** fallando antes
 de inyectar la falla, porque entonces el estado previo no era estable. Las que
