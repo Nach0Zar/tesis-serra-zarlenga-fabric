@@ -124,13 +124,18 @@ throughput, el p95 y los errores por código en las ventanas previa, de falla y
 de recuperación, y el tiempo de recuperación de la sección 3.3: el comienzo del
 primer tramo de 30 s cuya tasa de éxito vuelve al 95 % de la previa a la falla.
 
+Cada operación cuenta en la ventana en que termina. Así, las que estaban en
+vuelo al inyectar la falla y fallan por ella quedan en la ventana de falla y no
+rebajan la tasa previa: en Raft-1 eran unas 50 operaciones iniciadas en los
+últimos segundos antes de la caída del líder.
+
 En las caídas de peer (`peer-1a` a `peer-1d`, sección 8.1) cada operación del
 crudo debe declarar `availabilityClass`: `target` si requiere el peer caído o
 `control` si no. Las ventanas y la figura se calculan por clase, además del
 agregado global en la tabla, para que el 0 % de la clase afectada no quede
 oculto en el promedio. Si alguna operación no trae clase, el resultado se marca
-bloqueado y no se exporta ninguna figura. El workload de EVAL-4 (#44) debe
-emitir ese campo.
+bloqueado y no se exporta ninguna figura. El runner de disponibilidad de EVAL-4
+(#44) emite ese campo, derivado del plan determinístico.
 
 ## Salidas
 

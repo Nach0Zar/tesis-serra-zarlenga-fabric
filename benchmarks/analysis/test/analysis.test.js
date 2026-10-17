@@ -465,6 +465,26 @@ test('availability splits pre-fault, fault and recovery windows and finds the re
     assert.equal(successTimeline(run_, 10).find((point) => point.offsetSeconds === 0).successRate, 0.75);
 });
 
+test('operations in flight when the fault is injected count in the fault window', () => {
+    const injectedAt = Date.parse(FAULT.injectedAt);
+    const operation = (startOffset, endOffset, outcome) => ({
+        datasetSequence: 1, startedAt: new Date(injectedAt + startOffset).toISOString(),
+        endedAt: new Date(injectedAt + endOffset).toISOString(), latencyMs: endOffset - startOffset, outcome,
+        transactions: [{status: outcome === 'success' ? 'success' : 'failed'}],
+    });
+    const raw = [
+        operation(-30_000, -29_950, 'success'),
+        operation(-2_000, 1_200, 'unexpected-failure'),
+        operation(10_000, 10_050, 'success'),
+        operation(70_000, 70_050, 'success'),
+    ];
+    const result = availabilityWindows({scenario: 'raft-1', raw, faultInjection: FAULT});
+    assert.equal(result.windows.preFault.operations, 1);
+    assert.equal(result.windows.preFault.successRate, 1);
+    assert.equal(result.windows.fault.operations, 2);
+    assert.equal(result.windows.fault.successRate, 0.5);
+});
+
 test('peer faults report availability per operation class and block without classes', () => {
     const classified = availabilityWindows({scenario: 'peer-1a', raw: faultOperations((name) => name), faultInjection: FAULT});
     assert.equal(classified.windows.fault.successRate, 0.75);

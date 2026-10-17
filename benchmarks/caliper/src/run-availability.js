@@ -99,6 +99,18 @@ function currentLeader() {
     return leaderFromLogs(logs);
 }
 
+// Despues de restaurar los orderers, el lider se registra recien cuando el
+// cluster lo eligio.
+async function electedLeader(timeoutMs = 60_000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const leader = currentLeader();
+        if (leader) return leader;
+        await timers.setTimeout(1000);
+    }
+    return undefined;
+}
+
 // Inicio real de la carga: el primer startedAt que escriben los workers.
 async function waitForFirstOperation(runDirectory, caliperExit, timeoutMs = 120_000) {
     const deadline = Date.now() + timeoutMs;
@@ -235,8 +247,10 @@ function runLaunch(command, args, options) {
 }
 
 function availabilitySummary(summary, operations, windows, definition) {
-    const preFault = operations.filter((operation) => Date.parse(operation.startedAt) < Date.parse(windows.injectedAt));
-    const failedBeforeFault = preFault.filter((operation) => operation.outcome !== 'success');
+    // Cuenta lo que fallo antes de la falla: las operaciones en vuelo al
+    // inyectarla que fallan por ella terminan despues y no cuentan.
+    const failedBeforeFault = operations.filter((operation) => operation.outcome !== 'success'
+        && Date.parse(operation.endedAt) < Date.parse(windows.injectedAt));
     const byClass = {};
     for (const operation of operations) {
         const name = operation.availabilityClass ?? 'all';
@@ -367,7 +381,7 @@ async function main() {
             killed = [];
         }
         ensureNetworkRunning(repoRoot);
-        if (definition.kind === 'orderer') faultEvents.leaderAfter = currentLeader();
+        if (definition.kind === 'orderer') faultEvents.leaderAfter = await electedLeader();
 
         const aggregated = aggregateResults(runDirectory, profile);
         const summaryWindow = {startedAt: aggregated.summary.startedAt, endedAt: aggregated.summary.endedAt};

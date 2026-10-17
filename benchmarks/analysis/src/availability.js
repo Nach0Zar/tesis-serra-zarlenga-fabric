@@ -13,10 +13,14 @@ function succeeded(operation) {
     return operation.outcome === 'success';
 }
 
+// Cada operacion cuenta en la ventana en que termina. Las que estaban en vuelo
+// al inyectar la falla y fallan por ella cuentan asi en la ventana de falla, no
+// en la previa: en Raft-1 eran unas 50 operaciones iniciadas en los ultimos
+// segundos previos que fallaron al caer el lider.
 function windowSummary(operations, from, to) {
     const inside = operations.filter((operation) => {
-        const {started} = operationTimes(operation);
-        return started >= from && started < to;
+        const {ended} = operationTimes(operation);
+        return ended >= from && ended < to;
     });
     const successes = inside.filter(succeeded);
     const seconds = Math.max((to - from) / 1000, Number.EPSILON);
@@ -42,9 +46,9 @@ function windowSummary(operations, from, to) {
 // estable de 30 s cuya tasa de exito vuelve al 95 % de la previa a la falla.
 function recoveryTime(operations, injectedAt, preFaultRate, endAt) {
     if (!Number.isFinite(preFaultRate)) return undefined;
-    const starts = operations.map((operation) => operationTimes(operation).started)
-        .filter((started) => started >= injectedAt).sort((left, right) => left - right);
-    for (const candidate of starts) {
+    const ends = operations.map((operation) => operationTimes(operation).ended)
+        .filter((ended) => ended >= injectedAt).sort((left, right) => left - right);
+    for (const candidate of ends) {
         const to = candidate + STABLE_SECONDS * 1000;
         if (to > endAt) break;
         const stretch = windowSummary(operations, candidate, to);
@@ -112,10 +116,10 @@ function availabilityWindowsFor(run) {
 function successTimeline(run, bucketSeconds = 5) {
     const operations = run.raw ?? [];
     if (operations.length === 0) return [];
-    const starts = operations.map((operation) => operationTimes(operation).started);
-    const origin = run.faultInjection ? Date.parse(run.faultInjection.injectedAt) : Math.min(...starts);
-    const first = Math.min(...starts);
-    const last = Math.max(...starts);
+    const ends = operations.map((operation) => operationTimes(operation).ended);
+    const origin = run.faultInjection ? Date.parse(run.faultInjection.injectedAt) : Math.min(...ends);
+    const first = Math.min(...ends);
+    const last = Math.max(...ends);
     const buckets = [];
     const firstIndex = Math.floor((first - origin) / (bucketSeconds * 1000));
     const lastIndex = Math.floor((last - origin) / (bucketSeconds * 1000));

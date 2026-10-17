@@ -163,7 +163,7 @@ test('the extended plan keeps the mixed cycle and the first operations of the re
 
 test('an availability round is discarded only when the load was already failing before the fault', () => {
     const windows = {injectedAt: '2026-10-16T10:01:00.000Z'};
-    const operation = (startedAt, outcome, availabilityClass) => ({startedAt, outcome, availabilityClass});
+    const operation = (startedAt, outcome, availabilityClass) => ({startedAt, endedAt: startedAt, outcome, availabilityClass});
     const definition = scenarioDefinition('peer-1b');
     const healthy = availabilitySummary({scenario: 'mixed'}, [
         operation('2026-10-16T10:00:10.000Z', 'success', 'control'),
@@ -175,6 +175,13 @@ test('an availability round is discarded only when the load was already failing 
 
     const unstable = availabilitySummary({}, [operation('2026-10-16T10:00:10.000Z', 'unexpected-failure', 'control')], windows, definition);
     assert.match(unstable.discardReason, /antes de inyectar la falla/u);
+
+    // En vuelo al inyectar la falla: empezo antes, fallo despues por la falla.
+    const inFlight = availabilitySummary({}, [{
+        startedAt: '2026-10-16T10:00:58.000Z', endedAt: '2026-10-16T10:01:01.200Z', outcome: 'unexpected-failure', availabilityClass: 'target',
+    }], windows, definition);
+    assert.equal(inFlight.discardReason, undefined);
+    assert.equal(inFlight.availability.preFaultFailures, 0);
 });
 
 test('availability rounds run through the series orchestrator with their own plans', async () => {
