@@ -14,8 +14,15 @@ function safeToken(explicitToken) {
     return token;
 }
 
-function createOutputDirectory(kind, explicitToken) {
-    const directory = path.join(buildRoot, kind, safeToken(explicitToken));
+// outputRoot permite que una serie guarde cada ronda dentro de su propio
+// directorio; debe quedar dentro de build/ del repositorio.
+function createOutputDirectory(kind, explicitToken, outputRoot) {
+    const root = outputRoot ? path.resolve(repoRoot, outputRoot) : path.join(buildRoot, kind);
+    const relative = path.relative(path.join(repoRoot, 'build'), root);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new Error('--output-root must resolve inside the repository build directory');
+    }
+    const directory = path.join(root, safeToken(explicitToken));
     fs.mkdirSync(path.dirname(directory), {recursive: true});
     fs.mkdirSync(directory, {recursive: false});
     return directory;

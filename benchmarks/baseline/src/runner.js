@@ -146,7 +146,7 @@ async function runRound(options) {
     const restored = restoreSnapshot(options.snapshotDirectory);
     const credentials = resolveCredentials(repoRoot, plan.requiredMspIds, restored.environment);
     const client = new BaselineClient({baseURL: restored.apiURL, credentials});
-    const runDirectory = createOutputDirectory('runs', options.runToken);
+    const runDirectory = createOutputDirectory('runs', options.runToken, options.outputRoot);
     const context = roundContext({bundle, profile, restored, sourceTruth, credentials});
     const attemptStarted = Date.now();
     try {
