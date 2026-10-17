@@ -301,3 +301,124 @@ PEM; las configuraciones efectivas sólo referencian rutas locales.
 `work-plan.json` sí contiene las recetas transient sintéticas provenientes del
 dataset para que los workers puedan ejecutarlas, por lo que permanece bajo el
 directorio `build/` ignorado por Git y no debe publicarse como resultado.
+
+## Disponibilidad (EVAL-4)
+
+`run-availability.js` ejecuta los seis escenarios de la sección 8.1 del
+protocolo. Cada ronda corre la carga mixta de referencia (20 operaciones
+conceptuales/s, ciclo 2/11/2/5) durante tres ventanas de 60 s y, desde fuera de
+los workloads, da de baja el componente del escenario con `docker kill` a los
+60 s de la primera operación y lo vuelve a levantar con `docker start` a los
+120 s.
+
+| Escenario | Componente dado de baja | Restauración |
+|---|---|---|
+| `raft-1` | El orderer líder del canal, según los logs de etcdraft | a los 120 s |
+| `raft-2` | El líder y el siguiente orderer en el orden de consenters: pérdida de quórum | después de la ronda, fuera de la medición |
+| `peer-1a` | `peer0.centromedico`: custodio de las unidades que dispensa y receptor de sus transferencias | a los 120 s |
+| `peer-1b` | `peer0.distribuidor`: receptor de los tránsitos laboratorio → distribuidor | a los 120 s |
+| `peer-1c` | `peer0.anmat`: organización regulatoria | a los 120 s |
+| `peer-1d` | `peer0.lab`: laboratorio que registra unidades | a los 120 s |
+
+**Qué simula.** Fallas de un contenedor en un único host. Miden la tolerancia a
+la caída de nodos asignados a organizaciones distintas, no la caída física ni
+administrativa de una organización completa ni una infraestructura distribuida
+(ADR-007). La metadata y las notas de cada ronda lo declaran.
+
+**Clases de operación.** En los escenarios de peer, cada operación del crudo
+lleva `availabilityClass`: `target` si necesita el peer caído y `control` si no.
+La clase se deriva del plan determinístico, sin tocar el workload. Una operación
+necesita un peer cuando es el Gateway de su invocador o uno de sus endosantes;
+`availabilityRequirement` registra cuál de las dos cosas aplica. En la carga
+mixta cada organización entra por el Gateway de su propio peer, de modo que las
+operaciones de la organización caída fallan ya en su Gateway. Las que la
+necesitan sólo como endosante son, por ejemplo, las recepciones de otras
+organizaciones cuando cae el laboratorio emisor (`peer-1d`).
+
+Reparto de la carga mixta por organización, que explica la elección de cada
+peer:
+
+| Operación | Invocador | Endosantes |
+|---|---|---|
+| Registro | Laboratorio | Laboratorio |
+| Transferencia | Laboratorio (despacho) y receptor (recepción) | Laboratorio; laboratorio y receptor |
+| Dispensación | Centro médico o farmacia | El mismo |
+| Lectura | Laboratorio | — |
+
+La clase refleja lo que la operación exige, no todo lo que puede afectarla. En
+`peer-1c`, con el peer de ANMAT caído, una parte de las transferencias de control
+falla igual: ANMAT es miembro de todas las colecciones de transferencia, y el
+peer que endosa a veces no logra diseminar los datos privados antes de endosar
+(«failed to distribute private collection» en el log del laboratorio). En la
+ronda de prueba fue cerca del 6 % de las transferencias, durante la falla y los
+primeros segundos de la recuperación. Es un acople de disponibilidad de las PDC,
+no un error de clasificación, y por eso se reporta aparte.
+
+**Sonda regulatoria de `peer-1c`.** La carga mixta no tiene eventos regulatorios,
+así que la caída de ANMAT no la afecta. Para observar la clase objetivo, la
+ronda agrega una sonda de 1 cuarentena por segundo invocada por ANMAT sobre
+unidades filler del snapshot (registradas, en custodia del laboratorio y fuera
+de todos los planes). Cada cuarentena exige el endoso de ANMAT, por su marcador
+de participación, y el del laboratorio custodio. Es una desviación declarada de
+la carga: queda en `probe.jsonl`, en `raw.json` con `type: regulatory-event` y
+en las notas de la metadata.
+
+**Plan de 180 s.** El snapshot canónico prepara las unidades de la mixta de
+120 s. El plan de disponibilidad conserva, worker por worker, las 2800
+operaciones de esa mixta y continúa con el mismo ciclo sobre unidades que el
+snapshot preparó para los escenarios de una sola operación (`write-register`,
+`write-transfer`, `write-dispense` y `read-unit`). Una ronda de disponibilidad
+parte de su propia restauración y no usa esas unidades. `work-plan.json`
+registra cuántas operaciones vienen de cada origen, y la verificación previa
+cubre todas las unidades, incluidas las de la sonda.
+
+**Reconexión del cliente.** Con el backoff por defecto de grpc-js, un cliente
+que perdió la conexión con un peer tardaba unos 9 s más que un cliente nuevo en
+volver a usarlo después de restaurarlo (10,7 s frente a 1,7 s). El tiempo de
+recuperación habría medido al cliente. En las rondas de disponibilidad la
+configuración de red acota ese backoff a 1 s; las demás rondas no cambian.
+
+**Recuperación de un peer.** Un peer restaurado no sólo tiene que arrancar:
+su Gateway necesita volver a conocer por gossip a los peers de las demás
+organizaciones antes de poder reunir sus endosos. Mientras tanto responde
+`UNAVAILABLE: failed to find any endorsing peers for org(s): LabMSP`. En la
+ronda de prueba de `peer-1c` el peer de ANMAT estuvo listo menos de 2 s después
+del `docker start`, pero sus cuarentenas, que necesitan el endoso del
+laboratorio, recién se confirmaron unos 25 s después. Aislado y sin carga, el
+mismo redescubrimiento tardó 5,2 s. Es parte de lo que mide el tiempo de
+recuperación, no un efecto del cliente. Lo mismo pasa con el ledger: el peer del
+centro médico (`peer-1a`) volvió a endosar unos 4 s después de restaurado, pero
+las transacciones de su organización, cuya confirmación el cliente espera en ese
+mismo peer, se confirmaron recién cuando su ledger alcanzó los ~33 bloques que
+se perdió durante la caída, unos 15 s después.
+
+**Descarte.** En estas rondas los fallos durante la falla son el resultado que
+se mide. La ronda sólo se descarta si alguna operación **terminó** fallando antes
+de inyectar la falla, porque entonces el estado previo no era estable. Las que
+estaban en vuelo al inyectarla y fallan por ella no cuentan: en Raft-1 son unas
+50 operaciones iniciadas en los últimos segundos antes de la caída del líder.
+
+**Evidencia por ronda.** Además de las salidas de una ronda normal:
+
+| Archivo | Contenido |
+|---|---|
+| `fault-events.json` | Contenedores dados de baja, instantes de `kill` y `start`, líder Raft antes y después, ventanas y las líneas de log que explican la falla |
+| `logs/<contenedor>.log` | Logs con timestamps de los tres orderers, del peer caído y del peer del laboratorio, acotados a la ronda con 15 s de margen |
+| `probe.jsonl` | Operaciones de la sonda regulatoria (`peer-1c`) |
+| `metadata.json` | `faultInjection` con los instantes registrados y las duraciones de cada ventana derivadas de ellos |
+
+Las series usan los mismos controles por intento que las de rendimiento
+(restauración, verificación, calentamiento de peers, recursos y smoke):
+
+```bash
+npm run series -- --plan availability --snapshot-dir <ruta-del-snapshot>
+npm run series -- --plan availability-trial --snapshot-dir <ruta-del-snapshot>
+```
+
+`availability` es citable: un warm-up y cinco mediciones por escenario.
+`availability-trial` hace un warm-up y una medición por escenario y queda
+marcado como no citable. No se extiende la serie por CV: la variación entre
+ventanas la produce la falla a propósito. Estas rondas no entran en las
+estadísticas de rendimiento estable; el procesamiento (`benchmarks/analysis`)
+calcula, por ventana y por clase, la tasa de éxito, el throughput, el p95 y el
+tiempo de recuperación de la sección 3.3.
