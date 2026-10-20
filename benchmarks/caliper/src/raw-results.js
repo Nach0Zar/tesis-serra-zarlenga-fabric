@@ -76,6 +76,16 @@ function summarizeRetries(transactions) {
 
 function aggregateResults(runDirectory, profile, observedWindow = {}) {
     const operations = readParts(runDirectory);
+    const summary = summarizeOperations(operations, profile, observedWindow);
+    writeJSONAtomic(path.join(runDirectory, 'raw.json'), operations);
+    writeJSONAtomic(path.join(runDirectory, 'summary.json'), summary);
+    return {operations, summary};
+}
+
+// Resumen procesable de una lista de operaciones conceptuales. Lo usa la ronda
+// normal sobre sus partes y la de disponibilidad sobre el crudo completo,
+// sonda incluida.
+function summarizeOperations(operations, profile, observedWindow = {}) {
     const transactions = operations.flatMap((operation) => operation.transactions);
     const measuredWindow = durationSeconds(operations, profile.durationSeconds, observedWindow);
     const retries = summarizeRetries(transactions);
@@ -146,9 +156,7 @@ function aggregateResults(runDirectory, profile, observedWindow = {}) {
         observedDurationSeconds: measuredWindow.seconds,
         discardReason,
     };
-    writeJSONAtomic(path.join(runDirectory, 'raw.json'), operations);
-    writeJSONAtomic(path.join(runDirectory, 'summary.json'), summary);
-    return {operations, summary};
+    return summary;
 }
 
 module.exports = {
@@ -158,5 +166,6 @@ module.exports = {
     percentile,
     readParts,
     statistics,
+    summarizeOperations,
     summarizeRetries,
 };

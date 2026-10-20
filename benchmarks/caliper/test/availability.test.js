@@ -188,7 +188,8 @@ test('availability rounds run through the series orchestrator with their own pla
     assert.deepEqual(availabilityScenarioMatrix().map((entry) => entry.key), Object.keys(SCENARIOS));
     assert.deepEqual(scenarioArguments({scenario: 'peer-1c', rate: 20}, 'measurement', 3),
         ['--scenario', 'peer-1c', '--phase', 'measurement', '--repetition', '3']);
-    assert.deepEqual(PLANS.availability, {citable: true, repetitions: 5, extendByCV: false});
+    assert.deepEqual(PLANS.availability, {citable: true, repetitions: 5, extendByCV: true});
+    assert.deepEqual(PLANS['availability-trial'], {citable: false, repetitions: 1, extendByCV: false});
     assert.throws(() => parseArguments(['--scenario', 'raft-3', '--phase', 'measurement', '--repetition', '1', '--snapshot-dir', 'x']),
         /unsupported availability scenario/u);
 
@@ -222,4 +223,54 @@ test('availability rounds bound the gRPC reconnect backoff without touching othe
     assert.deepEqual(bounded.organizations[0].peers[0].grpcOptions, {'ssl-target-name-override': 'peer0.lab', ...RECONNECT_GRPC_OPTIONS});
     assert.deepEqual(config.organizations[0].peers[0].grpcOptions, {'ssl-target-name-override': 'peer0.lab'});
     assert.ok(RECONNECT_GRPC_OPTIONS['grpc.max_reconnect_backoff_ms'] <= 1000);
+});
+
+test('the citable availability plan extends a scenario to eight repetitions when its CV exceeds 15 %', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'availability-cv-'));
+    const p95 = [1, 100, 1, 100, 1, 100, 1, 100];
+    const attempts = [];
+    const result = await runSeries(repoRoot, {plan: 'availability', snapshotDirectory: 'snapshot'}, {
+        readSnapshot: () => ({
+            directory: path.join(repoRoot, 'build', 'snapshot'), manifestPath: __filename,
+            manifest: {snapshotId: 'c'.repeat(64)},
+        }),
+        createSeriesDirectory: () => ({directory, token: 'availability-cv'}),
+        scenarioMatrix: [{key: 'raft-1', scenario: 'raft-1', rate: 20}],
+        executeAttempt: async (_root, options) => {
+            attempts.push(`${options.kind}:${options.repetition}`);
+            const p95Ms = options.kind === 'warmup' ? 1 : p95[options.repetition - 1];
+            return {status: 'completed', summary: {rate: {effectiveOperationsPerSecond: 20}, operationLatency: {p95Ms}}};
+        },
+        now: () => '2026-10-20T10:00:00.000Z',
+    });
+    const [scenario] = result.index.scenarios;
+    assert.equal(result.index.citable, true);
+    assert.equal(scenario.extended, true);
+    assert.ok(scenario.p95CV > 0.15);
+    assert.deepEqual(attempts, ['warmup:0', 'measurement:1', 'measurement:2', 'measurement:3', 'measurement:4',
+        'measurement:5', 'measurement:6', 'measurement:7', 'measurement:8']);
+    validateDocument(repoRoot, 'fabric-series-index.schema.json', result.index);
+});
+
+test('the availability summary counts every observed attempt, probe included, with a per-source breakdown', () => {
+    const {summarizeOperations} = require('../src/raw-results');
+    const {sourceStatistics} = require('../src/run-availability');
+    const profile = availabilityProfile({phase: 'measurement', repetition: '1'}, 180);
+    const transaction = (functionName, status) => ({function: functionName, status, latencyMs: 10, retry: false});
+    const mixed = {workerIndex: 0, ordinal: 0, type: 'query-unit', outcome: 'success', latencyMs: 10,
+        startedAt: '2026-10-20T10:00:00.000Z', endedAt: '2026-10-20T10:00:00.010Z', transactions: [transaction('ReadUnit', 'success')]};
+    const probe = {workerIndex: 2, ordinal: 0, type: 'regulatory-event', outcome: 'success', latencyMs: 10,
+        startedAt: '2026-10-20T10:00:01.000Z', endedAt: '2026-10-20T10:00:01.010Z', transactions: [transaction('Quarantine', 'success')]};
+    const window = {startedAt: '2026-10-20T10:00:00.000Z', endedAt: '2026-10-20T10:03:00.000Z'};
+    const complete = summarizeOperations([mixed, probe], profile, window);
+    const summary = availabilitySummary(complete, [mixed, probe], {injectedAt: '2026-10-20T10:01:00.000Z'}, scenarioDefinition('peer-1c'));
+    assert.equal(summary.operationCount, 2);
+    assert.equal(summary.transactionCount, 2);
+    assert.equal(summary.successfulOperations, 2);
+    assert.equal(summary.rate.effectiveTransactionsPerSecond, 2 / 180);
+    assert.equal(summary.rate.targetOperationsPerSecond, 20, 'the reference conceptual rate does not change');
+    assert.deepEqual(sourceStatistics([probe], 180), {
+        operations: 1, successfulOperations: 1, failedOperations: 0, transactions: 1, successfulTransactions: 1,
+        effectiveOperationsPerSecond: 1 / 180, effectiveTransactionsPerSecond: 1 / 180,
+    });
 });

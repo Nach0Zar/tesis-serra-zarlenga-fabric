@@ -28,7 +28,7 @@ const {buildRoundMetadata, writeJSONAtomic} = require('./metadata');
 const {buildMultiOrganizationNetworkConfig, inspectOrganizationRuntime} = require('./network-config');
 const {MIX_PATTERN, buildPlan, candidatePools, plannedCalls} = require('./planner');
 const {buildProfile} = require('./profiles');
-const {aggregateResults} = require('./raw-results');
+const {aggregateResults, summarizeOperations} = require('./raw-results');
 const {normalizeInvocation} = require('./requests');
 const {buildBenchmarkConfig, createRunDirectory} = require('./run-round');
 const {assertSnapshotCompatibility} = require('./snapshot');
@@ -277,6 +277,21 @@ function availabilitySummary(summary, operations, windows, definition) {
     };
 }
 
+// Conteos y tasas de una fuente de carga dentro de la ronda.
+function sourceStatistics(operations, observedSeconds) {
+    const transactions = operations.flatMap((operation) => operation.transactions ?? []);
+    const seconds = Math.max(observedSeconds, Number.EPSILON);
+    return {
+        operations: operations.length,
+        successfulOperations: operations.filter((operation) => operation.outcome === 'success').length,
+        failedOperations: operations.filter((operation) => operation.outcome !== 'success').length,
+        transactions: transactions.length,
+        successfulTransactions: transactions.filter((transaction) => transaction.status === 'success').length,
+        effectiveOperationsPerSecond: operations.length / seconds,
+        effectiveTransactionsPerSecond: transactions.length / seconds,
+    };
+}
+
 async function main() {
     const options = parseArguments(process.argv.slice(2));
     const definition = scenarioDefinition(options.scenario);
@@ -395,9 +410,16 @@ async function main() {
         const operations = definition.kind === 'peer'
             ? classifyOperations([...aggregated.operations, ...probeRecords], plan, definition.mspId, probeByKey)
             : aggregated.operations;
-        const summary = availabilitySummary(aggregated.summary, operations, windows, definition);
+        // El resumen cubre todos los intentos observados, sonda incluida
+        // (DES-20, seccion 9.3); el desglose conserva la carga mixta de
+        // referencia por separado.
+        const complete = summarizeOperations(operations, profile, summaryWindow);
+        const summary = availabilitySummary(complete, operations, windows, definition);
         if (caliperCode !== 0 && !summary.discardReason) summary.discardReason = `Caliper terminó con código ${caliperCode}`;
-        summary.availability.probeOperations = probeRecords.length;
+        summary.availability.load = {
+            mixed: sourceStatistics(aggregated.operations, complete.observedDurationSeconds),
+            probe: sourceStatistics(probeRecords, complete.observedDurationSeconds),
+        };
         writeJSONAtomic(path.join(runDirectory, 'raw.json'), operations);
         writeJSONAtomic(path.join(runDirectory, 'summary.json'), summary);
 
@@ -467,4 +489,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = {availabilityProfile, availabilitySummary, fillerSequences, parseArguments, probeInvocation};
+module.exports = {availabilityProfile, availabilitySummary, fillerSequences, parseArguments, probeInvocation, sourceStatistics};

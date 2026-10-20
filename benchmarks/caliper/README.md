@@ -361,7 +361,10 @@ unidades filler del snapshot (registradas, en custodia del laboratorio y fuera
 de todos los planes). Cada cuarentena exige el endoso de ANMAT, por su marcador
 de participación, y el del laboratorio custodio. Es una desviación declarada de
 la carga: queda en `probe.jsonl`, en `raw.json` con `type: regulatory-event` y
-en las notas de la metadata.
+en las notas de la metadata. `summary.json` y la tasa efectiva de la metadata
+cuentan todos los intentos observados, sonda incluida. `availability.load`
+desglosa la carga mixta y la sonda, y la tasa conceptual de referencia sigue
+siendo la de la mixta (20 operaciones/s).
 
 **Plan de 180 s.** El snapshot canónico prepara las unidades de la mixta de
 120 s. El plan de disponibilidad conserva, worker por worker, las 2800
@@ -415,10 +418,12 @@ npm run series -- --plan availability --snapshot-dir <ruta-del-snapshot>
 npm run series -- --plan availability-trial --snapshot-dir <ruta-del-snapshot>
 ```
 
-`availability` es citable: un warm-up y cinco mediciones por escenario.
-`availability-trial` hace un warm-up y una medición por escenario y queda
-marcado como no citable. No se extiende la serie por CV: la variación entre
-ventanas la produce la falla a propósito. Estas rondas no entran en las
+`availability` es citable: un warm-up y cinco mediciones por escenario, que
+se extienden a ocho cuando el CV del throughput efectivo o del p95 entre
+repeticiones supera 15 %, como en cualquier escenario medido (sección 7). Ese CV
+es entre repeticiones del mismo escenario, no entre las ventanas de una ronda.
+`availability-trial` hace un warm-up y una medición por escenario, no se
+extiende y queda marcado como no citable. Estas rondas no entran en las
 estadísticas de rendimiento estable; el procesamiento (`benchmarks/analysis`)
 calcula, por ventana y por clase, la tasa de éxito, el throughput, el p95 y el
 tiempo de recuperación de la sección 3.3.

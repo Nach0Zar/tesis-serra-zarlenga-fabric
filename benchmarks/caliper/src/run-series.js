@@ -16,7 +16,7 @@ const {SCENARIOS: AVAILABILITY_SCENARIOS} = require('./availability');
 const PLANS = Object.freeze({
     full: {citable: true, repetitions: 5, extendByCV: true},
     trial: {citable: false, repetitions: 2, extendByCV: false},
-    availability: {citable: true, repetitions: 5, extendByCV: false},
+    availability: {citable: true, repetitions: 5, extendByCV: true},
     'availability-trial': {citable: false, repetitions: 1, extendByCV: false},
 });
 
@@ -296,8 +296,9 @@ async function runSeries(repoRoot, options, dependencies = {}) {
         for (let repetition = 1; repetition <= measuredRepetitions; repetition += 1) {
             if (!await measure(repetition)) complete = false;
         }
-        // En disponibilidad la variacion entre repeticiones no se reduce
-        // extendiendo la serie: la falla la produce a proposito (seccion 8).
+        // La seccion 7 rige para cada escenario medido, tambien los de
+        // disponibilidad: el CV es entre repeticiones del mismo escenario, no
+        // entre las ventanas de una ronda. Los planes trial no se extienden.
         if (complete && planPolicy.extendByCV) {
             scenario.throughputCV = coefficientOfVariation(
                 summaries.map((summary) => summary.rate.effectiveOperationsPerSecond),
