@@ -427,3 +427,20 @@ extiende y queda marcado como no citable. Estas rondas no entran en las
 estadísticas de rendimiento estable; el procesamiento (`benchmarks/analysis`)
 calcula, por ventana y por clase, la tasa de éxito, el throughput, el p95 y el
 tiempo de recuperación de la sección 3.3.
+
+## Marcadores por ronda (#46)
+
+El runner registra la altura pública de Lab antes de Caliper y observa sus
+bloques después de drenar la carga, fuera de la ventana medida. Correlaciona
+IDs con el crudo y cuenta únicamente hashes de escritura en colecciones
+implícitas del namespace snt de transacciones VALID. Las escrituras privadas
+bilaterales no se cuentan como marcadores. El esperado deriva de las
+invocaciones del plan que efectivamente fueron ofrecidas, no de las recetas
+de reserva que el planner genera para evitar agotar el pool.
+
+Cada ronda válida informa participationMarkers, incluso con cero marcadores.
+El CSV markers.csv contiene sólo IDs, bloques, funciones, validación y conteos.
+Un error conserva el CSV parcial y marker-observation-error.json, descarta la
+ronda y no sustituye la observación fallida por ceros. El máximo de espera del
+observador es 180 s; no modifica latencias, throughput ni tiempos del workload.
+Los perfiles core sólo generan marcadores en RegisterUnit.

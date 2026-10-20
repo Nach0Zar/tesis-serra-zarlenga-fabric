@@ -14,6 +14,7 @@ const {buildMultiOrganizationNetworkConfig, inspectOrganizationRuntime} = requir
 const {buildPlan} = require('./planner');
 const {buildProfile} = require('./profiles');
 const {aggregateResults} = require('./raw-results');
+const {createObserver, observeRound, writeAudit} = require('./round-markers');
 const {assertSnapshotCompatibility} = require('./snapshot');
 const {readSnapshot, sha256File} = require('./artifacts');
 const {readPreconditions, sequencesForPlan, verifyPlanPreconditions} = require('./snapshot-preconditions');
@@ -228,6 +229,13 @@ async function main() {
         }
     }
     const repositoryCommit = run('git', ['rev-parse', 'HEAD'], {cwd: repoRoot}).stdout.trim();
+    const observer = createObserver(networkConfig);
+    let startHeight;
+    try {
+        startHeight = await observer.height();
+    } finally {
+        observer.close();
+    }
     const startedAt = new Date().toISOString();
     const caliper = path.join(__dirname, '..', 'node_modules', '.bin', 'caliper');
     const caliperResult = run(caliper, [
@@ -244,8 +252,26 @@ async function main() {
         aggregated.summary.discardReason = `Caliper terminó con código ${caliperResult.status}`;
         writeJSONAtomic(path.join(runDirectory, 'summary.json'), aggregated.summary);
     }
+    let participationMarkers;
+    const markerObserver = createObserver(networkConfig);
+    try {
+        const observation = await observeRound(
+            markerObserver, startHeight, plan, aggregated.operations, profile.durationSeconds,
+        );
+        participationMarkers = observation.markers;
+        writeAudit(path.join(runDirectory, 'markers.csv'), observation.records);
+    } catch (error) {
+        writeAudit(path.join(runDirectory, 'markers.csv'), error.observations ?? []);
+        writeJSONAtomic(path.join(runDirectory, 'marker-observation-error.json'), {reason: error.message});
+        aggregated.summary.discardReason = [aggregated.summary.discardReason,
+            'marker observation: ' + error.message].filter(Boolean).join('; ');
+        writeJSONAtomic(path.join(runDirectory, 'summary.json'), aggregated.summary);
+    } finally {
+        markerObserver.close();
+    }
     const metadata = buildRoundMetadata({
         profile,
+        participationMarkers,
         repositoryCommit,
         startedAt: aggregated.summary.startedAt ?? startedAt,
         endedAt: aggregated.summary.endedAt ?? endedAt,

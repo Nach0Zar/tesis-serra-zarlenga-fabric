@@ -73,6 +73,7 @@ function buildRoundMetadata(context, summary) {
         environment: context.environment,
         notes: 'Ronda individual de Fabric. La orquestación estadística y los resultados finales permanecen fuera de este runner.',
     };
+    if (context.participationMarkers) document.participationMarkers = context.participationMarkers;
     if (profile.mix) document.rate.mix = profile.mix;
     if (profile.rejectionFamily) document.rejectionFamily = profile.rejectionFamily;
     if (summary.discardReason) document.discarded = {reason: summary.discardReason};
