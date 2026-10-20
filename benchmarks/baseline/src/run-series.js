@@ -13,6 +13,25 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
 
+// El orquestador de Caliper valida el indice con ajv, que Node resuelve desde
+// benchmarks/caliper/node_modules: instalarlo sólo en la baseline no alcanza.
+function requireCaliperDependencies(resolve = require.resolve) {
+    const caliperSource = path.resolve(__dirname, '..', '..', 'caliper', 'src');
+    try {
+        resolve('ajv/dist/2020', {paths: [caliperSource]});
+    } catch {
+        throw new Error('missing shared Caliper dependencies; run `npm ci --prefix benchmarks/caliper` from the repository root');
+    }
+}
+
+try {
+    requireCaliperDependencies();
+} catch (error) {
+    if (require.main !== module) throw error;
+    process.stderr.write(`Baseline series failed: ${error.message}\n`);
+    process.exit(1);
+}
+
 const {sha256File} = require('../../caliper/src/sources');
 const {PLANS, createSeriesDirectory, fullScenarioMatrix, runSeries, trialScenarioMatrix} = require('../../caliper/src/run-series');
 const {pairs} = require('./arguments');
@@ -108,4 +127,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = {attemptExecutor, baselineSnapshot, parseArguments, roundArguments, scenarioMatrix};
+module.exports = {attemptExecutor, baselineSnapshot, parseArguments, requireCaliperDependencies, roundArguments, scenarioMatrix};

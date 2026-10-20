@@ -52,12 +52,20 @@ desarrollo.
 ## Instalación y controles rápidos
 
 ```bash
+npm ci --prefix benchmarks/caliper
 cd benchmarks/baseline
 npm ci
 npm run check
 npm test
 npm run test:metadata
 ```
+
+La baseline reutiliza módulos del proyecto hermano `benchmarks/caliper`: el
+plan determinístico, la agregación y, para las series, el orquestador, que
+valida el índice con `ajv`. Node resuelve esas dependencias desde
+`benchmarks/caliper/node_modules`, así que hay que instalarlas ahí. Instalarlas
+sólo en la baseline no alcanza. Si faltan, `npm run series` termina con un
+mensaje que indica el comando.
 
 `npm test` requiere el dataset canónico. Se genera desde su fuente única con:
 
@@ -215,7 +223,7 @@ npm run series -- --plan availability --snapshot-dir <snapshot>
 |---|---|---|
 | `full` | Las 20 combinaciones de rendimiento | sí |
 | `trial` | `read-unit` 50, `write-transfer` 20 y `mixed` 20, dos mediciones | no |
-| `availability` | `db-1` y `api-1`, cinco mediciones | sí |
+| `availability` | `db-1` y `api-1`, cinco mediciones, extendidas a ocho por CV como en `full` | sí |
 | `availability-trial` | `db-1` y `api-1`, una medición | no |
 
 El índice queda en `build/benchmarks/baseline/series/<token>/series-index.json`.

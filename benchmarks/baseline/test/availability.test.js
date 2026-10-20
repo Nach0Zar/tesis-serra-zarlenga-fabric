@@ -115,3 +115,11 @@ test('the baseline series uses the same plans, arguments and index as Fabric', a
         fs.rmSync(root, {recursive: true, force: true});
     }
 });
+
+test('the series orchestrator explains how to install the shared Caliper dependencies', () => {
+    const {requireCaliperDependencies} = require('../src/run-series');
+    assert.doesNotThrow(() => requireCaliperDependencies());
+    assert.throws(() => requireCaliperDependencies(() => {
+        throw Object.assign(new Error("Cannot find module 'ajv/dist/2020'"), {code: 'MODULE_NOT_FOUND'});
+    }), /npm ci --prefix benchmarks\/caliper/u);
+});
