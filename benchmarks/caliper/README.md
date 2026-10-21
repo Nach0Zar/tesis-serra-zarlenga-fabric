@@ -444,3 +444,42 @@ Un error conserva el CSV parcial y marker-observation-error.json, descarta la
 ronda y no sustituye la observación fallida por ceros. El máximo de espera del
 observador es 180 s; no modifica latencias, throughput ni tiempos del workload.
 Los perfiles core sólo generan marcadores en RegisterUnit.
+
+## Campaña pareada EVAL-6/EVAL-7 (#47)
+
+Después de calificar ambos snapshots sobre el mismo commit limpio:
+
+```bash
+npm run series:paired -- --plan trial \
+  --fabric-snapshot-dir "$FABRIC_SNAPSHOT" \
+  --baseline-snapshot-dir "$BASELINE_SNAPSHOT" \
+  --dataset-dir build/dataset --campaign-token "$TRIAL_TOKEN"
+```
+
+Cambiar a `--plan full` y otro token únicamente después del ensayo completo.
+La salida está bajo `build/benchmarks/paired/<token>/{fabric,baseline}`.
+Cada árbol conserva el índice estricto existente; `campaign.json` registra
+commit, referencias, orden de intentos y activadores de extensión. La reserva
+global `.active.lock` excluye otro controlador. No robar un lock existente:
+verificar primero su proceso y preservar el estado terminal.
+
+La política usa la matriz compartida: warm-up independiente de cada SUT,
+un único reintento con nueva restauración, y mediciones F/B en repeticiones
+impares, B/F en pares. Cinco repeticiones; si el CV poblacional de throughput
+o p95 de cualquiera supera 15 %, ambos realizan 6–8. Se registra qué SUT y
+métrica lo activaron. El trial hace dos repeticiones y nunca se extiende.
+
+Antes de cada intento se exige HEAD intacto, checkout limpio, el perfil
+homogéneo y 20 GiB físicos libres. El disco físico de este host es C;
+`SNT_EXPERIMENT_PHYSICAL_DRIVE` permite indicar otra letra sólo después de
+verificar la ubicación real de Docker/WSL. El controlador detiene y verifica
+el otro SUT antes de restaurar. No correr otro benchmark o constructor.
+
+Una medición inválida detiene toda la campaña; no se reemplaza ni se reanuda
+automáticamente. Un segundo warm-up fallido bloquea el escenario y detiene.
+Los índices y crudos quedan preservados. Los logs de baseline se capturan
+antes de retirar sus contenedores. No hay reinicios ni apagados automáticos.
+
+Para entorno, secretos locales, respaldo y calificación, seguir
+[el entorno de evaluación](../../docs/eval67-environment.md) y
+[el gate](../../docs/fabric-gate.md). No construir snapshots por ronda.

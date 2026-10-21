@@ -123,6 +123,8 @@ function loadRun(metadataPath, options = {}) {
     const run = {
         directory,
         metadataPath,
+        repositoryCommit: metadata.repositoryCommit,
+        host: metadata.host,
         sut: metadata.sut,
         scenario: metadata.scenario,
         phase: metadata.phase,

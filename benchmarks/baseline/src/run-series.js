@@ -95,6 +95,12 @@ function attemptExecutor(options = {}) {
             return {status: 'failed', reason: result.error?.message ?? `round exited with code ${result.status} before writing summary.json`};
         }
         const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+        const contextPath = path.join(attempt.attemptDirectory, 'round', 'run-context.json');
+        if (fs.existsSync(contextPath)) {
+            const context = JSON.parse(fs.readFileSync(contextPath, 'utf8'));
+            fs.writeFileSync(path.join(attempt.attemptDirectory, 'resources.txt'),
+                JSON.stringify(context.resources ?? {}, null, 2) + '\n', {mode: 0o600});
+        }
         if (summary.discardReason || result.status !== 0) {
             return {status: 'discarded', reason: summary.discardReason ?? `round exited with code ${result.status}`, summaryPath, summary};
         }

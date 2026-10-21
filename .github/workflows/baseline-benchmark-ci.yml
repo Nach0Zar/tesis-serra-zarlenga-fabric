@@ -11,6 +11,8 @@ on:
       - reopened
       - ready_for_review
     paths:
+      - "benchmarks/caliper/src/series-state.js"
+      - "benchmarks/caliper/src/series-policy.js"
       - "benchmarks/baseline/**"
       # El orquestador de series y la disponibilidad de la baseline reutilizan
       # estos modulos de Caliper y sus dependencias (#45).

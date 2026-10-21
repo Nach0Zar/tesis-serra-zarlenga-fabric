@@ -11,7 +11,7 @@ const {BaselineClient} = require('./http-client');
 const {createOutputDirectory, repoRoot} = require('./paths');
 const {
     benchmarkEnvironment, compose, dumpDatabase, ensureFabricStopped, inspectRuntime,
-    queryDatabase, repositoryCommit, restoreDatabase, writePrivateFile,
+    queryDatabase, repositoryCommit, restoreDatabase, writePrivateFile, run,
 } = require('./runtime');
 const {buildGoldenSnapshotPlan, expectedLogicalState, registrationForUnit} = require('./snapshot-plan');
 
@@ -180,6 +180,15 @@ function hostUserSpec() {
     return `${process.getuid()}:${process.getgid()}`;
 }
 
+function snapshotBuildFlag(environment, actualImageId) {
+    const expected = environment.SNT_BASELINE_PREBUILT_IMAGE_ID;
+    if (expected === undefined) return '--build';
+    if (!/^sha256:[0-9a-f]{64}$/u.test(expected) || actualImageId !== expected) {
+        throw new Error('prebuilt baseline image ID does not match the frozen artifact');
+    }
+    return '--no-build';
+}
+
 async function buildSnapshot(options = {}) {
     const datasetDirectory = path.resolve(repoRoot, options.datasetDirectory ?? path.join('build', 'dataset'));
     const bundle = loadDatasetBundle(datasetDirectory);
@@ -205,6 +214,10 @@ async function buildSnapshot(options = {}) {
         throw new Error('SNT_BASELINE_DB_PASSWORD and SNT_BASELINE_API_KEYS are required');
     }
     environment.SNT_BASELINE_DATASET_DIR = datasetDirectory;
+    const actualImageId = environment.SNT_BASELINE_PREBUILT_IMAGE_ID === undefined ? undefined
+        : run('docker', ['image', 'inspect', '--format', '{{.Id}}', environment.SNT_BASELINE_IMAGE],
+            {env: environment}).stdout.trim();
+    const buildFlag = snapshotBuildFlag(environment, actualImageId);
     ensureFabricStopped(repoRoot, environment);
     const required = requiredMspIds(plan);
     const credentials = resolveCredentials(repoRoot, required, environment);
@@ -216,7 +229,7 @@ async function buildSnapshot(options = {}) {
 
     compose(repoRoot, ['--profile', 'seed', 'down', '--volumes', '--remove-orphans'], {env: environment, allowFailure: true});
     try {
-        compose(repoRoot, ['up', '-d', '--build', '--wait', 'postgres', 'api'], {env: environment, inherit: true});
+        compose(repoRoot, ['up', '-d', buildFlag, '--wait', 'postgres', 'api'], {env: environment, inherit: true});
         compose(repoRoot, [
             '--profile', 'seed', 'run', '--rm',
             '--user', hostUserSpec(),
@@ -334,6 +347,6 @@ function restoreSnapshot(snapshotDirectory, options = {}) {
 module.exports = {
     CANONICAL_DATASET_SHA256, CONTRACT_VERSION, PACKAGE_ID, SNAPSHOT_SCHEMA_VERSION,
     buildSnapshot, databaseCounts, effectiveAPIURL, equalUnit, initialUnit, readSnapshot,
-    restoreSnapshot, stableUnit, verifyAllUnits, hostUserSpec, prepareSnapshot,
+    restoreSnapshot, stableUnit, verifyAllUnits, hostUserSpec, prepareSnapshot, snapshotBuildFlag,
     logicalHistory, snapshotPreconditions, stableLogicalHistory, verifyUnitPrecondition,
 };

@@ -11,6 +11,8 @@ on:
       - reopened
       - ready_for_review
     paths:
+      - "benchmarks/caliper/src/series-policy.js"
+      - "benchmarks/caliper/src/profiles.js"
       - "benchmarks/analysis/**"
       - "benchmarks/schema/**"
       - ".github/workflows/analysis-ci.yml"

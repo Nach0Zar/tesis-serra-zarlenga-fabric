@@ -280,3 +280,14 @@ de host y estado lógico no acredita un presupuesto agregado idéntico. La
 decisión de comparabilidad de recursos y el entorno canónico quedan en #54
 antes de resultados citables. Los ensayos diagnósticos previos no pueden
 compararse con Fabric cuando usaba prefijos sobre un ledger casi vacío.
+
+## Imagen congelada para EVAL-7
+
+El constructor conserva su comportamiento histórico de construir la imagen.
+Para una campaña que ya construyó y congeló el artefacto, definir
+SNT_BASELINE_PREBUILT_IMAGE_ID con su ID completo sha256 antes de snapshot:build.
+El constructor exige coincidencia exacta con la imagen local y usa --no-build.
+Una discrepancia bloquea antes de retirar los volúmenes. No acepta etiquetas
+mutables como valor de ese identificador. Las restauraciones siguen verificando
+la imagen contra el manifiesto. Esta opción permite preservar una construcción
+con confianza HTTPS local documentada en docs/eval67-environment.md.
