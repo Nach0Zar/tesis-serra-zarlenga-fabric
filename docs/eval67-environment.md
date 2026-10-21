@@ -113,3 +113,27 @@ Las notas antiguas de #46/#54/#137 sobre PR #141 draft y presupuesto agregado
 son históricas. #137 está cerrada; cada nuevo commit experimental todavía
 requiere su calificación compatible.
 
+
+## Inspección HTTPS local durante la construcción
+
+En este host Norton Web/Mail Shield presenta certificados de servidor firmados
+por su propia raíz dentro de Docker. La imagen Go 1.23.5-alpine no contiene
+esa raíz y la construcción normal puede fallar al consultar proxy.golang.org.
+La misma consulta directa desde WSL puede presentar otra cadena; comprobar
+desde el contenedor, sin desactivar TLS.
+
+La preparación exporta sólo el certificado público inequívoco de la raíz
+Norton ya confiada por Windows. Lo incorpora mediante un contexto de BuildKit
+llamado host-trust y update-ca-certificates exclusivamente en la etapa build
+de una copia local del Dockerfile. No se cambian el Dockerfile versionado,
+las fuentes Go, las imágenes base fijadas ni la etapa runtime. Nunca usar
+InsecureSkipVerify, GOINSECURE, wget --no-check-certificate o equivalentes.
+
+La copia local queda bajo build/benchmarks/paired/preparation/; la campaña
+preserva el SHA-256 de esa definición, de la raíz y el ID final de imagen.
+El comando excepcional es docker build con --file para esa copia,
+--build-context host-trust para el directorio del certificado público y
+--tag snt-baseline:local. El contenido se obtiene del Dockerfile versionado
+agregando únicamente COPY de la raíz y RUN update-ca-certificates después
+del primer FROM. Es una adaptación local de confianza de construcción;
+no altera el presupuesto del SUT ni desactiva controles de integridad.
