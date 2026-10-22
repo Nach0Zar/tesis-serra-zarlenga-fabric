@@ -102,6 +102,18 @@ guardan bajo `build/benchmarks/caliper/`, que está ignorado por Git. Los
 prerrequisitos y comandos reproducibles están documentados en
 [`caliper/README.md`](caliper/README.md).
 
+## Disponibilidad de Fabric
+
+El mismo proyecto ejecuta los seis escenarios de disponibilidad de la sección
+8.1 (EVAL-4, #44): caída del líder Raft, pérdida de quórum y caída del peer del
+custodio, de una parte de un tránsito, del regulador y del laboratorio. Cada
+ronda corre la carga mixta de referencia durante tres ventanas de 60 s, inyecta
+la falla desde fuera de los workloads y conserva los logs de Raft y de los peers
+que la explican. En las caídas de peer, cada operación queda clasificada como
+objetivo o control. Son fallas de contenedor en un único host, no la caída de
+una organización completa. El detalle está en
+[`caliper/README.md`](caliper/README.md#disponibilidad-eval-4).
+
 ## Carga equivalente sobre la baseline
 
 El proyecto aislado [`baseline/`](baseline/) reutiliza directamente los

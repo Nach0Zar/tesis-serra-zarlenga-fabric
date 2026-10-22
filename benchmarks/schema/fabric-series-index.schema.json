@@ -9,7 +9,7 @@
     "$schema": {"const": "urn:pfi-snt:fabric-series-index:schema:1.0.0"},
     "schemaVersion": {"const": "1.0.0"},
     "seriesToken": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,100}$"},
-    "plan": {"enum": ["full", "trial"]},
+    "plan": {"enum": ["full", "trial", "availability", "availability-trial"]},
     "citable": {"type": "boolean"},
     "snapshot": {
       "type": "object",
@@ -79,11 +79,11 @@
   },
   "allOf": [
     {
-      "if": {"properties": {"plan": {"const": "trial"}}, "required": ["plan"]},
+      "if": {"properties": {"plan": {"enum": ["trial", "availability-trial"]}}, "required": ["plan"]},
       "then": {"properties": {"citable": {"const": false}}}
     },
     {
-      "if": {"properties": {"plan": {"const": "full"}}, "required": ["plan"]},
+      "if": {"properties": {"plan": {"enum": ["full", "availability"]}}, "required": ["plan"]},
       "then": {"properties": {"citable": {"const": true}}}
     },
     {

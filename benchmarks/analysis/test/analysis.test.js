@@ -147,7 +147,9 @@ function writeSeries(root, {sut = 'fabric', plan = 'full', snapshot, rounds, ind
         const roundDirectory = path.join(directory, attemptDirectory, 'round');
         const operations = round.raw ?? raw();
         writeJSON(path.join(roundDirectory, 'metadata.json'), metadata({sut, ...round.meta}));
-        writeJSON(path.join(roundDirectory, 'summary.json'), summary(round.sum));
+        writeJSON(path.join(roundDirectory, 'summary.json'),
+            round.restoration ? {...summary(round.sum), availability: {restoration: round.restoration}} : summary(round.sum));
+        if (round.reconstruction) writeJSON(path.join(roundDirectory, 'reconstruction.json'), round.reconstruction);
         if (round.raw !== null) writeJSON(path.join(roundDirectory, 'raw.json'), operations);
         if (snapshot) writeJSON(path.join(roundDirectory, 'snapshot-context.json'), contextFor(sut, snapshot, operations, context));
         const scenario = scenarios.get(key) ?? {key, scenario: round.meta.scenario ?? 'read-unit', rate: round.meta.rate ?? 10,
@@ -465,6 +467,52 @@ test('availability splits pre-fault, fault and recovery windows and finds the re
     assert.equal(successTimeline(run_, 10).find((point) => point.offsetSeconds === 0).successRate, 0.75);
 });
 
+test('operations in flight when the fault is injected count in the fault window', () => {
+    const injectedAt = Date.parse(FAULT.injectedAt);
+    const operation = (startOffset, endOffset, outcome) => ({
+        datasetSequence: 1, startedAt: new Date(injectedAt + startOffset).toISOString(),
+        endedAt: new Date(injectedAt + endOffset).toISOString(), latencyMs: endOffset - startOffset, outcome,
+        transactions: [{status: outcome === 'success' ? 'success' : 'failed'}],
+    });
+    const raw = [
+        operation(-30_000, -29_950, 'success'),
+        operation(-2_000, 1_200, 'unexpected-failure'),
+        operation(10_000, 10_050, 'success'),
+        operation(70_000, 70_050, 'success'),
+    ];
+    const result = availabilityWindows({scenario: 'raft-1', raw, faultInjection: FAULT});
+    assert.equal(result.windows.preFault.operations, 1);
+    assert.equal(result.windows.preFault.successRate, 1);
+    assert.equal(result.windows.fault.operations, 2);
+    assert.equal(result.windows.fault.successRate, 0.5);
+});
+
+test('operations that start during the fault and time out after the restoration count in the fault window', () => {
+    const injectedAt = Date.parse(FAULT.injectedAt);
+    const operation = (startOffset, endOffset, outcome) => ({
+        datasetSequence: 1, startedAt: new Date(injectedAt + startOffset).toISOString(),
+        endedAt: new Date(injectedAt + endOffset).toISOString(), latencyMs: endOffset - startOffset, outcome,
+        transactions: [{status: outcome === 'success' ? 'success' : 'failed', transportError: 'TimeoutError'}],
+    });
+    const raw = [
+        operation(-10_000, -9_990, 'success'),
+        operation(50_000, 80_000, 'unexpected-failure'),
+        operation(65_000, 65_010, 'success'),
+        operation(70_000, 70_010, 'success'),
+    ];
+    // Retenida por la API durante la falla y completada al volver la base.
+    raw.push(operation(55_000, 62_000, 'success'));
+    const result = availabilityWindows({scenario: 'db-1', raw, faultInjection: FAULT});
+    assert.equal(result.windows.fault.operations, 1);
+    assert.equal(result.windows.fault.successes, 0);
+    assert.equal(result.windows.fault.failuresByCode.TimeoutError, 1);
+    assert.equal(result.windows.recovery.operations, 3);
+    assert.equal(result.windows.recovery.successRate, 1);
+    // La recuperacion empieza cuando vuelve a completarse un pedido (62 s), no en
+    // la falla de los 50 s, aunque el tramo desde ahi alcanzaria el umbral.
+    assert.equal(result.recoverySeconds, 62);
+});
+
 test('peer faults report availability per operation class and block without classes', () => {
     const classified = availabilityWindows({scenario: 'peer-1a', raw: faultOperations((name) => name), faultInjection: FAULT});
     assert.equal(classified.windows.fault.successRate, 0.75);
@@ -495,6 +543,30 @@ test('availability outputs follow the same accreditation and citability as perfo
     assert.match(fs.readFileSync(path.join(diagnostic.output, 'report.md'), 'utf8'), /^# NO CITABLE/u);
     const figure = fs.readdirSync(path.join(diagnostic.output, 'figures')).find((name) => name.startsWith('availability-'));
     assert.match(fs.readFileSync(path.join(diagnostic.output, 'figures', figure), 'utf8'), /NO CITABLE/u);
+});
+
+test('a failed restoration stays failed in the index but its measured load is reported', () => {
+    const root = temporary('snt-analysis-');
+    const snapshot = writeSnapshot(root);
+    const restoration = {status: 'failed', reason: 'container orderer.anmat.snt.local is unhealthy',
+        evidence: ['orderer.anmat.snt.local: panic: failed to read WAL and cannot repair']};
+    const reconstruction = {tool: 'benchmarks/caliper/src/reconstruct-availability-round.js', toolCommit: 'a'.repeat(40),
+        reconstructedAt: '2026-10-22T03:00:00.000Z', executionCommit: 'f'.repeat(40),
+        inputs: [{path: 'round.log', sha256: 'b'.repeat(64)}], notRecovered: ['completedAt de las acciones docker kill y docker start']};
+    writeSeries(root, {snapshot, rounds: [
+        {...availabilityRound('raft-1', () => undefined), attemptStatus: 'failed', restoration, reconstruction},
+        {...availabilityRound('raft-1', () => undefined), meta: {...availabilityRound('raft-1', () => undefined).meta, repetition: 2}, attemptStatus: 'failed'},
+    ]});
+    const {output} = run(root, {snapshots: [snapshot.directory]});
+    const entries = JSON.parse(fs.readFileSync(path.join(output, 'availability.json'), 'utf8'));
+    assert.deepEqual(entries.map((entry) => entry.repetition), [1]);
+    assert.equal(entries[0].restoration.reason, restoration.reason);
+    assert.equal(entries[0].reconstruction.executionCommit, 'f'.repeat(40));
+    const report = fs.readFileSync(path.join(output, 'report.md'), 'utf8');
+    assert.match(report, /fallida \(evidencia reconstruida\)/u);
+    assert.match(report, /### Restauraciones fallidas/u);
+    assert.match(report, /failed to read WAL/u);
+    assert.match(exclusionReasons(output).join('\n'), /intento failed en el indice/u);
 });
 
 test('peer-fault figures show the operation classes and are not exported when blocked', () => {

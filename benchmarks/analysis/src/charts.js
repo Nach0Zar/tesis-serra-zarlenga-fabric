@@ -68,13 +68,17 @@ ${body}
 `;
 }
 
+// Cada entrada empieza donde termina la anterior: la muestra (30 px), el texto
+// (unos 7 px por caracter a 12 px) y 24 px de separacion.
 function legend(x, y, entries) {
-    return entries.map((entry, index) => {
+    let left = x;
+    return entries.map((entry) => {
         const series = typeof entry === 'string' ? SERIES[entry] : entry;
-        const left = x + index * (series.label.length > 10 ? 260 : 110);
-        return `<line x1="${left}" y1="${y}" x2="${left + 22}" y2="${y}" stroke="${series.color}" stroke-width="2" stroke-dasharray="${series.dash}"/>
-${marker(series.marker, left + 11, y, series.color)}
-<text x="${left + 30}" y="${y + 4}">${series.label}</text>`;
+        const start = left;
+        left += 30 + series.label.length * 7 + 24;
+        return `<line x1="${start}" y1="${y}" x2="${start + 22}" y2="${y}" stroke="${series.color}" stroke-width="2" stroke-dasharray="${series.dash}"/>
+${marker(series.marker, start + 11, y, series.color)}
+<text x="${start + 30}" y="${y + 4}">${series.label}</text>`;
     }).join('\n');
 }
 
