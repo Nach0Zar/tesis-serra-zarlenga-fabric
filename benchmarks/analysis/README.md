@@ -150,6 +150,17 @@ oculto en el promedio. Si alguna operación no trae clase, el resultado se marca
 bloqueado y no se exporta ninguna figura. El runner de disponibilidad de EVAL-4
 (#44) emite ese campo, derivado del plan determinístico.
 
+Una **restauración fallida** se informa en lugar de excluirse. Si el componente
+no volvió sano después de la ronda, el intento sigue `failed` en el índice de
+su serie, pero su resumen declara `availability.restoration` con estado
+`failed`. El procesamiento admite esa ronda con las demás condiciones de
+acreditación y la incluye en la tabla de disponibilidad con la columna
+**Restauración** en «fallida». La lista aparte «Restauraciones fallidas» da el
+motivo y las líneas de pánico del componente. Si la evidencia se reconstruyó
+después (`reconstruction.json`), la lista declara herramienta, commits, fecha,
+insumos con su hash y lo que no pudo recuperarse. Un intento `failed` sin ese
+registro sigue excluido.
+
 ## Salidas
 
 | Archivo | Contenido |
