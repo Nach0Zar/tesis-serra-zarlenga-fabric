@@ -1,0 +1,90 @@
+{
+  "scenario": "mixed",
+  "operationCount": 2400,
+  "successfulOperations": 2400,
+  "expectedRejections": 0,
+  "unexpectedFailures": 0,
+  "transactionCount": 3720,
+  "successfulTransactions": 3720,
+  "failedTransactions": 0,
+  "retryAttempts": 0,
+  "retryTimeMs": 0,
+  "retryByCause": {},
+  "transferPairs": 1320,
+  "retriedTransferPairs": 0,
+  "retriedTransferPairRate": 0,
+  "observedErrorCodes": {},
+  "rate": {
+    "operation": "mixed",
+    "targetOperationsPerSecond": 20,
+    "targetTransactionsPerSecond": 31,
+    "offeredOperationsPerSecond": 20,
+    "effectiveOperationsPerSecond": 20,
+    "effectiveTransactionsPerSecond": 31
+  },
+  "operationLatency": {
+    "count": 2400,
+    "minimumMs": 0,
+    "maximumMs": 25,
+    "meanMs": 5.381666666666667,
+    "standardDeviationMs": 3.270218732066051,
+    "p50Ms": 7,
+    "p95Ms": 9,
+    "p99Ms": 12
+  },
+  "transactionLatencyByFunction": {
+    "ReadUnit": {
+      "count": 600,
+      "minimumMs": 0,
+      "maximumMs": 6,
+      "meanMs": 1.0083333333333333,
+      "standardDeviationMs": 0.5582089413671416,
+      "p50Ms": 1,
+      "p95Ms": 2,
+      "p99Ms": 3
+    },
+    "DispatchTransfer": {
+      "count": 1320,
+      "minimumMs": 3,
+      "maximumMs": 16,
+      "meanMs": 4.249242424242424,
+      "standardDeviationMs": 1.0287530118606276,
+      "p50Ms": 4,
+      "p95Ms": 6,
+      "p99Ms": 8
+    },
+    "ReceiveTransfer": {
+      "count": 1320,
+      "minimumMs": 3,
+      "maximumMs": 17,
+      "meanMs": 3.728787878787879,
+      "standardDeviationMs": 0.9132468137822236,
+      "p50Ms": 4,
+      "p95Ms": 5,
+      "p99Ms": 6
+    },
+    "RegisterUnit": {
+      "count": 240,
+      "minimumMs": 2,
+      "maximumMs": 8,
+      "meanMs": 3.5375,
+      "standardDeviationMs": 0.8001627438631878,
+      "p50Ms": 3,
+      "p95Ms": 5,
+      "p99Ms": 6
+    },
+    "Dispense": {
+      "count": 240,
+      "minimumMs": 2,
+      "maximumMs": 10,
+      "meanMs": 3.625,
+      "standardDeviationMs": 0.9134412953222555,
+      "p50Ms": 3,
+      "p95Ms": 5,
+      "p99Ms": 8
+    }
+  },
+  "startedAt": "2026-10-22T07:30:27.324Z",
+  "endedAt": "2026-10-22T07:32:27.324Z",
+  "observedDurationSeconds": 120
+}

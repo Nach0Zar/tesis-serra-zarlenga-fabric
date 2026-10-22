@@ -1,0 +1,101 @@
+{
+  "repositoryCommit": "389ca160b2a490cd66bb0194f012e2b75b3598e8",
+  "dataset": {
+    "seed": 20260727,
+    "sha256": "de523ee8fafeed0a39f8518b501fce4692192869030762816de353654385163d",
+    "manifestSHA256": "e316f7f64148c919680a0edaec8b7bf881a58ea85602edeb0c9f1e3c301a6887",
+    "units": 50000
+  },
+  "profile": {
+    "operation": "transfer",
+    "workers": 2,
+    "durationSeconds": 120,
+    "rates": [
+      5,
+      10,
+      20
+    ],
+    "module": "transfer-unit",
+    "scenario": "write-transfer",
+    "phase": "measurement",
+    "repetition": 1,
+    "rate": 10,
+    "transactionsPerOperation": 2
+  },
+  "snapshot": {
+    "id": "851f3bd43c2a39b4db1ffc5458bab235bdb903ac0485600d6590d3ab66a814ce",
+    "directory": "/home/nacho/pfi/tesis-serra-zarlenga-fabric/build/benchmarks/baseline/snapshots/eval67-389ca16-20261021b",
+    "manifestSHA256": "40269fcd2a9526e8a6859efa776570eb691d2e4536add4d34ebf38c425313eb5",
+    "logicalPlanSHA256": "de887e31483b8bb3d1a214172054e6f457f1179bcb77284b1a3dc567abeda820"
+  },
+  "referenceArtifacts": {
+    "contractVersion": "2.11.2",
+    "packageID": "snt_1.0:a4d9315a304ac10b467c096f37f4960f86e4ce2d828310aed58d5ad34082d9a9",
+    "fabric": "2.5.16"
+  },
+  "credentials": [
+    {
+      "mspId": "AnmatMSP",
+      "role": "regulatory-admin"
+    },
+    {
+      "mspId": "LabMSP",
+      "role": "operator"
+    },
+    {
+      "mspId": "DrogueriaMSP",
+      "role": "operator"
+    },
+    {
+      "mspId": "DistribuidorMSP",
+      "role": "operator"
+    },
+    {
+      "mspId": "FarmaciaMSP",
+      "role": "operator"
+    },
+    {
+      "mspId": "CentroMedicoMSP",
+      "role": "operator"
+    },
+    {
+      "mspId": "FinanciadorMSP",
+      "role": "financier-auditor"
+    }
+  ],
+  "host": {
+    "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "cpuCores": 6,
+    "memoryGB": 7.756,
+    "os": "Ubuntu 24.04.4 LTS",
+    "kernel": "6.18.33.2-microsoft-standard-WSL2",
+    "wsl": "WSL2 Ubuntu-24.04"
+  },
+  "resources": {
+    "api": {
+      "NanoCpus": 0,
+      "CpuQuota": 0,
+      "CpuPeriod": 0,
+      "CpuShares": 0,
+      "CpusetCpus": "",
+      "Memory": 0,
+      "MemorySwap": 0
+    },
+    "postgres": {
+      "NanoCpus": 0,
+      "CpuQuota": 0,
+      "CpuPeriod": 0,
+      "CpuShares": 0,
+      "CpusetCpus": "",
+      "Memory": 0,
+      "MemorySwap": 0
+    }
+  },
+  "environment": {
+    "docker": "29.7.2",
+    "dockerCompose": "5.4.0",
+    "baselineCommit": "389ca160b2a490cd66bb0194f012e2b75b3598e8",
+    "baselineImage": "snt-baseline:local@sha256:c9dc6ed2e16e61bd0e5cca5582f7069b1657c32741ee86d118cc9f71ef30be09",
+    "postgres": "16.15-alpine"
+  }
+}

@@ -1,0 +1,247 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1018" height="612" viewBox="0 0 1018 612" role="img" aria-label="Latencia por operación: p95 (marcador) y rango p50–p99 (media entre repeticiones, escala logarítmica)">
+<title>Latencia por operación: p95 (marcador) y rango p50–p99 (media entre repeticiones, escala logarítmica)</title>
+<rect width="100%" height="100%" fill="#fcfcfb"/>
+<g font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#0b0b0b">
+<text x="16" y="24" font-size="15" font-weight="600">Latencia por operación: p95 (marcador) y rango p50–p99 (media entre repeticiones, escala logarítmica)</text>
+<line x1="16" y1="46" x2="38" y2="46" stroke="#2a78d6" stroke-width="2" stroke-dasharray=""/>
+<circle cx="27" cy="46" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="46" y="50">Fabric</text>
+<line x1="112" y1="46" x2="134" y2="46" stroke="#eb6834" stroke-width="2" stroke-dasharray="6 4"/>
+<rect x="119" y="42" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="142" y="50">Baseline</text>
+<text x="74" y="84" font-size="13" font-weight="600">Registro</text>
+<line x1="74" y1="298" x2="334" y2="298" stroke="#e4e3df" stroke-width="1"/>
+<text x="68" y="302" text-anchor="end" fill="#52514e" font-size="11">1 ms</text>
+<line x1="74" y1="248" x2="334" y2="248" stroke="#e4e3df" stroke-width="1"/>
+<text x="68" y="252" text-anchor="end" fill="#52514e" font-size="11">10 ms</text>
+<line x1="74" y1="198" x2="334" y2="198" stroke="#e4e3df" stroke-width="1"/>
+<text x="68" y="202" text-anchor="end" fill="#52514e" font-size="11">100 ms</text>
+<line x1="74" y1="148" x2="334" y2="148" stroke="#e4e3df" stroke-width="1"/>
+<text x="68" y="152" text-anchor="end" fill="#52514e" font-size="11">1 s</text>
+<line x1="74" y1="98" x2="334" y2="98" stroke="#e4e3df" stroke-width="1"/>
+<text x="68" y="102" text-anchor="end" fill="#52514e" font-size="11">10 s</text>
+<line x1="74" y1="298" x2="334" y2="298" stroke="#9b9a95" stroke-width="1"/>
+<text x="117.33333333333333" y="314" text-anchor="middle" fill="#52514e" font-size="11">5</text>
+<text x="204" y="314" text-anchor="middle" fill="#52514e" font-size="11">10</text>
+<text x="290.6666666666667" y="314" text-anchor="middle" fill="#52514e" font-size="11">20</text>
+<text x="204" y="330" text-anchor="middle" fill="#52514e" font-size="11">tasa objetivo (op/s)</text>
+<text transform="translate(30 198) rotate(-90)" text-anchor="middle" fill="#52514e" font-size="11">latencia</text>
+<polyline points="112.33333333333333,131.8044095501994 199,131.90843207039563 285.6666666666667,130.34989608264652" fill="none" stroke="#2a78d6" stroke-width="2" stroke-dasharray=""/>
+<line x1="112.33333333333333" y1="142.5582236032697" x2="112.33333333333333" y2="131.5728655943604" stroke="#2a78d6" stroke-width="2"/>
+<line x1="108.33333333333333" y1="142.5582236032697" x2="116.33333333333333" y2="142.5582236032697" stroke="#2a78d6" stroke-width="2"/>
+<line x1="108.33333333333333" y1="131.5728655943604" x2="116.33333333333333" y2="131.5728655943604" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="112.33333333333333" cy="131.8044095501994" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="199" y1="145.54637063887407" x2="199" y2="130.79267187425899" stroke="#2a78d6" stroke-width="2"/>
+<line x1="195" y1="145.54637063887407" x2="203" y2="145.54637063887407" stroke="#2a78d6" stroke-width="2"/>
+<line x1="195" y1="130.79267187425899" x2="203" y2="130.79267187425899" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="199" cy="131.90843207039563" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="285.6666666666667" y1="143.3595831672753" x2="285.6666666666667" y2="126.54874216442406" stroke="#2a78d6" stroke-width="2"/>
+<line x1="281.6666666666667" y1="143.3595831672753" x2="289.6666666666667" y2="143.3595831672753" stroke="#2a78d6" stroke-width="2"/>
+<line x1="281.6666666666667" y1="126.54874216442406" x2="289.6666666666667" y2="126.54874216442406" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="285.6666666666667" cy="130.34989608264652" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<polyline points="122.33333333333333,252.8455006504028 209,255.36075656597262 295.6666666666667,257.35433216785725" fill="none" stroke="#eb6834" stroke-width="2" stroke-dasharray="6 4"/>
+<line x1="122.33333333333333" y1="263.9379381312207" x2="122.33333333333333" y2="236.73453591370685" stroke="#eb6834" stroke-width="2"/>
+<line x1="118.33333333333333" y1="263.9379381312207" x2="126.33333333333333" y2="263.9379381312207" stroke="#eb6834" stroke-width="2"/>
+<line x1="118.33333333333333" y1="236.73453591370685" x2="126.33333333333333" y2="236.73453591370685" stroke="#eb6834" stroke-width="2"/>
+<rect x="118.33333333333333" y="248.8455006504028" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="209" y1="265.3393743112328" x2="209" y2="241.4833115752497" stroke="#eb6834" stroke-width="2"/>
+<line x1="205" y1="265.3393743112328" x2="213" y2="265.3393743112328" stroke="#eb6834" stroke-width="2"/>
+<line x1="205" y1="241.4833115752497" x2="213" y2="241.4833115752497" stroke="#eb6834" stroke-width="2"/>
+<rect x="205" y="251.36075656597262" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="295.6666666666667" y1="266.5805534974844" x2="295.6666666666667" y2="241.28317445256602" stroke="#eb6834" stroke-width="2"/>
+<line x1="291.6666666666667" y1="266.5805534974844" x2="299.6666666666667" y2="266.5805534974844" stroke="#eb6834" stroke-width="2"/>
+<line x1="291.6666666666667" y1="241.28317445256602" x2="299.6666666666667" y2="241.28317445256602" stroke="#eb6834" stroke-width="2"/>
+<rect x="291.6666666666667" y="253.35433216785725" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="408" y="84" font-size="13" font-weight="600">Transferencia (pares/s)</text>
+<line x1="408" y1="298" x2="668" y2="298" stroke="#e4e3df" stroke-width="1"/>
+<text x="402" y="302" text-anchor="end" fill="#52514e" font-size="11">1 ms</text>
+<line x1="408" y1="248" x2="668" y2="248" stroke="#e4e3df" stroke-width="1"/>
+<text x="402" y="252" text-anchor="end" fill="#52514e" font-size="11">10 ms</text>
+<line x1="408" y1="198" x2="668" y2="198" stroke="#e4e3df" stroke-width="1"/>
+<text x="402" y="202" text-anchor="end" fill="#52514e" font-size="11">100 ms</text>
+<line x1="408" y1="148" x2="668" y2="148" stroke="#e4e3df" stroke-width="1"/>
+<text x="402" y="152" text-anchor="end" fill="#52514e" font-size="11">1 s</text>
+<line x1="408" y1="98" x2="668" y2="98" stroke="#e4e3df" stroke-width="1"/>
+<text x="402" y="102" text-anchor="end" fill="#52514e" font-size="11">10 s</text>
+<line x1="408" y1="298" x2="668" y2="298" stroke="#9b9a95" stroke-width="1"/>
+<text x="451.3333333333333" y="314" text-anchor="middle" fill="#52514e" font-size="11">5</text>
+<text x="538" y="314" text-anchor="middle" fill="#52514e" font-size="11">10</text>
+<text x="624.6666666666667" y="314" text-anchor="middle" fill="#52514e" font-size="11">20</text>
+<text x="538" y="330" text-anchor="middle" fill="#52514e" font-size="11">tasa objetivo (op/s)</text>
+<text transform="translate(364 198) rotate(-90)" text-anchor="middle" fill="#52514e" font-size="11">latencia</text>
+<polyline points="446.3333333333333,115.93522016818446 533,115.07367412702288 619.6666666666667,114.08500944485061" fill="none" stroke="#2a78d6" stroke-width="2" stroke-dasharray=""/>
+<line x1="446.3333333333333" y1="121.56573212064882" x2="446.3333333333333" y2="115.20371998124793" stroke="#2a78d6" stroke-width="2"/>
+<line x1="442.3333333333333" y1="121.56573212064882" x2="450.3333333333333" y2="121.56573212064882" stroke="#2a78d6" stroke-width="2"/>
+<line x1="442.3333333333333" y1="115.20371998124793" x2="450.3333333333333" y2="115.20371998124793" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="446.3333333333333" cy="115.93522016818446" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="533" y1="120.44580674071099" x2="533" y2="114.32959982357309" stroke="#2a78d6" stroke-width="2"/>
+<line x1="529" y1="120.44580674071099" x2="537" y2="120.44580674071099" stroke="#2a78d6" stroke-width="2"/>
+<line x1="529" y1="114.32959982357309" x2="537" y2="114.32959982357309" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="533" cy="115.07367412702288" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="619.6666666666667" y1="119.54067137978123" x2="619.6666666666667" y2="112.12146731435195" stroke="#2a78d6" stroke-width="2"/>
+<line x1="615.6666666666667" y1="119.54067137978123" x2="623.6666666666667" y2="119.54067137978123" stroke="#2a78d6" stroke-width="2"/>
+<line x1="615.6666666666667" y1="112.12146731435195" x2="623.6666666666667" y2="112.12146731435195" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="619.6666666666667" cy="114.08500944485061" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<polyline points="456.3333333333333,238.62396395817683 543,240.6935982160881 629.6666666666667,243.32891574188824" fill="none" stroke="#eb6834" stroke-width="2" stroke-dasharray="6 4"/>
+<line x1="456.3333333333333" y1="248" x2="456.3333333333333" y2="227.58800173440753" stroke="#eb6834" stroke-width="2"/>
+<line x1="452.3333333333333" y1="248" x2="460.3333333333333" y2="248" stroke="#eb6834" stroke-width="2"/>
+<line x1="452.3333333333333" y1="227.58800173440753" x2="460.3333333333333" y2="227.58800173440753" stroke="#eb6834" stroke-width="2"/>
+<rect x="452.3333333333333" y="234.62396395817683" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="543" y1="248.88643834802158" x2="543" y2="231.68320695356243" stroke="#eb6834" stroke-width="2"/>
+<line x1="539" y1="248.88643834802158" x2="547" y2="248.88643834802158" stroke="#eb6834" stroke-width="2"/>
+<line x1="539" y1="231.68320695356243" x2="547" y2="231.68320695356243" stroke="#eb6834" stroke-width="2"/>
+<rect x="539" y="236.6935982160881" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="629.6666666666667" y1="251.7860356969059" x2="629.6666666666667" y2="232.51849162870508" stroke="#eb6834" stroke-width="2"/>
+<line x1="625.6666666666667" y1="251.7860356969059" x2="633.6666666666667" y2="251.7860356969059" stroke="#eb6834" stroke-width="2"/>
+<line x1="625.6666666666667" y1="232.51849162870508" x2="633.6666666666667" y2="232.51849162870508" stroke="#eb6834" stroke-width="2"/>
+<rect x="625.6666666666667" y="239.32891574188824" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="742" y="84" font-size="13" font-weight="600">Dispensación</text>
+<line x1="742" y1="298" x2="1002" y2="298" stroke="#e4e3df" stroke-width="1"/>
+<text x="736" y="302" text-anchor="end" fill="#52514e" font-size="11">1 ms</text>
+<line x1="742" y1="248" x2="1002" y2="248" stroke="#e4e3df" stroke-width="1"/>
+<text x="736" y="252" text-anchor="end" fill="#52514e" font-size="11">10 ms</text>
+<line x1="742" y1="198" x2="1002" y2="198" stroke="#e4e3df" stroke-width="1"/>
+<text x="736" y="202" text-anchor="end" fill="#52514e" font-size="11">100 ms</text>
+<line x1="742" y1="148" x2="1002" y2="148" stroke="#e4e3df" stroke-width="1"/>
+<text x="736" y="152" text-anchor="end" fill="#52514e" font-size="11">1 s</text>
+<line x1="742" y1="98" x2="1002" y2="98" stroke="#e4e3df" stroke-width="1"/>
+<text x="736" y="102" text-anchor="end" fill="#52514e" font-size="11">10 s</text>
+<line x1="742" y1="298" x2="1002" y2="298" stroke="#9b9a95" stroke-width="1"/>
+<text x="785.3333333333334" y="314" text-anchor="middle" fill="#52514e" font-size="11">5</text>
+<text x="872" y="314" text-anchor="middle" fill="#52514e" font-size="11">10</text>
+<text x="958.6666666666667" y="314" text-anchor="middle" fill="#52514e" font-size="11">20</text>
+<text x="872" y="330" text-anchor="middle" fill="#52514e" font-size="11">tasa objetivo (op/s)</text>
+<text transform="translate(698 198) rotate(-90)" text-anchor="middle" fill="#52514e" font-size="11">latencia</text>
+<polyline points="780.3333333333334,132.1030980181972 867,131.88283194256618 953.6666666666667,131.46916663527807" fill="none" stroke="#2a78d6" stroke-width="2" stroke-dasharray=""/>
+<line x1="780.3333333333334" y1="142.967689992726" x2="780.3333333333334" y2="131.7324281097227" stroke="#2a78d6" stroke-width="2"/>
+<line x1="776.3333333333334" y1="142.967689992726" x2="784.3333333333334" y2="142.967689992726" stroke="#2a78d6" stroke-width="2"/>
+<line x1="776.3333333333334" y1="131.7324281097227" x2="784.3333333333334" y2="131.7324281097227" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="780.3333333333334" cy="132.1030980181972" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="867" y1="145.54297684205176" x2="867" y2="130.40632116895497" stroke="#2a78d6" stroke-width="2"/>
+<line x1="863" y1="145.54297684205176" x2="871" y2="145.54297684205176" stroke="#2a78d6" stroke-width="2"/>
+<line x1="863" y1="130.40632116895497" x2="871" y2="130.40632116895497" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="867" cy="131.88283194256618" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="953.6666666666667" y1="143.88946416993787" x2="953.6666666666667" y2="128.05961348983678" stroke="#2a78d6" stroke-width="2"/>
+<line x1="949.6666666666667" y1="143.88946416993787" x2="957.6666666666667" y2="143.88946416993787" stroke="#2a78d6" stroke-width="2"/>
+<line x1="949.6666666666667" y1="128.05961348983678" x2="957.6666666666667" y2="128.05961348983678" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="953.6666666666667" cy="131.46916663527807" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<polyline points="790.3333333333334,257.6910013008056 877,257.02280322290653 963.6666666666667,259.8286003218531" fill="none" stroke="#eb6834" stroke-width="2" stroke-dasharray="6 4"/>
+<line x1="790.3333333333334" y1="263.05149978319906" x2="790.3333333333334" y2="249.81060863272222" stroke="#eb6834" stroke-width="2"/>
+<line x1="786.3333333333334" y1="263.05149978319906" x2="794.3333333333334" y2="263.05149978319906" stroke="#eb6834" stroke-width="2"/>
+<line x1="786.3333333333334" y1="249.81060863272222" x2="794.3333333333334" y2="249.81060863272222" stroke="#eb6834" stroke-width="2"/>
+<rect x="786.3333333333334" y="253.69100130080562" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="877" y1="267.8970004336019" x2="877" y2="241.6447600817596" stroke="#eb6834" stroke-width="2"/>
+<line x1="873" y1="267.8970004336019" x2="881" y2="267.8970004336019" stroke="#eb6834" stroke-width="2"/>
+<line x1="873" y1="241.6447600817596" x2="881" y2="241.6447600817596" stroke="#eb6834" stroke-width="2"/>
+<rect x="873" y="253.02280322290653" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="963.6666666666667" y1="267.8970004336019" x2="963.6666666666667" y2="240.3855827808472" stroke="#eb6834" stroke-width="2"/>
+<line x1="959.6666666666667" y1="267.8970004336019" x2="967.6666666666667" y2="267.8970004336019" stroke="#eb6834" stroke-width="2"/>
+<line x1="959.6666666666667" y1="240.3855827808472" x2="967.6666666666667" y2="240.3855827808472" stroke="#eb6834" stroke-width="2"/>
+<rect x="959.6666666666667" y="255.82860032185312" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="74" y="358" font-size="13" font-weight="600">Consulta de unidad</text>
+<line x1="74" y1="572" x2="334" y2="572" stroke="#e4e3df" stroke-width="1"/>
+<text x="68" y="576" text-anchor="end" fill="#52514e" font-size="11">0,1 ms</text>
+<line x1="74" y1="505.33333333333337" x2="334" y2="505.33333333333337" stroke="#e4e3df" stroke-width="1"/>
+<text x="68" y="509.33333333333337" text-anchor="end" fill="#52514e" font-size="11">1 ms</text>
+<line x1="74" y1="438.6666666666667" x2="334" y2="438.6666666666667" stroke="#e4e3df" stroke-width="1"/>
+<text x="68" y="442.6666666666667" text-anchor="end" fill="#52514e" font-size="11">10 ms</text>
+<line x1="74" y1="372" x2="334" y2="372" stroke="#e4e3df" stroke-width="1"/>
+<text x="68" y="376" text-anchor="end" fill="#52514e" font-size="11">100 ms</text>
+<line x1="74" y1="572" x2="334" y2="572" stroke="#9b9a95" stroke-width="1"/>
+<text x="117.33333333333333" y="588" text-anchor="middle" fill="#52514e" font-size="11">10</text>
+<text x="204" y="588" text-anchor="middle" fill="#52514e" font-size="11">25</text>
+<text x="290.6666666666667" y="588" text-anchor="middle" fill="#52514e" font-size="11">50</text>
+<text x="204" y="604" text-anchor="middle" fill="#52514e" font-size="11">tasa objetivo (op/s)</text>
+<text transform="translate(30 472) rotate(-90)" text-anchor="middle" fill="#52514e" font-size="11">latencia</text>
+<polyline points="112.33333333333333,443.0334365837622 199,457.5997770910134 285.6666666666667,455.97582070038374" fill="none" stroke="#2a78d6" stroke-width="2" stroke-dasharray=""/>
+<line x1="112.33333333333333" y1="462.43648823425417" x2="112.33333333333333" y2="431.9752969921625" stroke="#2a78d6" stroke-width="2"/>
+<line x1="108.33333333333333" y1="462.43648823425417" x2="116.33333333333333" y2="462.43648823425417" stroke="#2a78d6" stroke-width="2"/>
+<line x1="108.33333333333333" y1="431.9752969921625" x2="116.33333333333333" y2="431.9752969921625" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="112.33333333333333" cy="443.0334365837622" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="199" y1="469.9014055305163" x2="199" y2="442.3678218566554" stroke="#2a78d6" stroke-width="2"/>
+<line x1="195" y1="469.9014055305163" x2="203" y2="469.9014055305163" stroke="#2a78d6" stroke-width="2"/>
+<line x1="195" y1="442.3678218566554" x2="203" y2="442.3678218566554" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="199" cy="457.5997770910134" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="285.6666666666667" y1="471.2077759347417" x2="285.6666666666667" y2="442.1221092181912" stroke="#2a78d6" stroke-width="2"/>
+<line x1="281.6666666666667" y1="471.2077759347417" x2="289.6666666666667" y2="471.2077759347417" stroke="#2a78d6" stroke-width="2"/>
+<line x1="281.6666666666667" y1="442.1221092181912" x2="289.6666666666667" y2="442.1221092181912" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="285.6666666666667" cy="455.97582070038374" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<polyline points="122.33333333333333,473.52524968535585 209,485.2646669557346 295.6666666666667,485.2646669557346" fill="none" stroke="#eb6834" stroke-width="2" stroke-dasharray="6 4"/>
+<line x1="122.33333333333333" y1="485.2646669557346" x2="122.33333333333333" y2="453.4565833077571" stroke="#eb6834" stroke-width="2"/>
+<line x1="118.33333333333333" y1="485.2646669557346" x2="126.33333333333333" y2="485.2646669557346" stroke="#eb6834" stroke-width="2"/>
+<line x1="118.33333333333333" y1="453.4565833077571" x2="126.33333333333333" y2="453.4565833077571" stroke="#eb6834" stroke-width="2"/>
+<rect x="118.33333333333333" y="469.52524968535585" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="209" y1="505.33333333333337" x2="209" y2="465.19600057813585" stroke="#eb6834" stroke-width="2"/>
+<line x1="205" y1="505.33333333333337" x2="213" y2="505.33333333333337" stroke="#eb6834" stroke-width="2"/>
+<line x1="205" y1="465.19600057813585" x2="213" y2="465.19600057813585" stroke="#eb6834" stroke-width="2"/>
+<rect x="205" y="481.2646669557346" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="295.6666666666667" y1="505.33333333333337" x2="295.6666666666667" y2="466.1152195438447" stroke="#eb6834" stroke-width="2"/>
+<line x1="291.6666666666667" y1="505.33333333333337" x2="299.6666666666667" y2="505.33333333333337" stroke="#eb6834" stroke-width="2"/>
+<line x1="291.6666666666667" y1="466.1152195438447" x2="299.6666666666667" y2="466.1152195438447" stroke="#eb6834" stroke-width="2"/>
+<rect x="291.6666666666667" y="481.2646669557346" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="408" y="358" font-size="13" font-weight="600">Consulta de historial</text>
+<line x1="408" y1="572" x2="668" y2="572" stroke="#e4e3df" stroke-width="1"/>
+<text x="402" y="576" text-anchor="end" fill="#52514e" font-size="11">0,1 ms</text>
+<line x1="408" y1="505.33333333333337" x2="668" y2="505.33333333333337" stroke="#e4e3df" stroke-width="1"/>
+<text x="402" y="509.33333333333337" text-anchor="end" fill="#52514e" font-size="11">1 ms</text>
+<line x1="408" y1="438.6666666666667" x2="668" y2="438.6666666666667" stroke="#e4e3df" stroke-width="1"/>
+<text x="402" y="442.6666666666667" text-anchor="end" fill="#52514e" font-size="11">10 ms</text>
+<line x1="408" y1="372" x2="668" y2="372" stroke="#e4e3df" stroke-width="1"/>
+<text x="402" y="376" text-anchor="end" fill="#52514e" font-size="11">100 ms</text>
+<line x1="408" y1="572" x2="668" y2="572" stroke="#9b9a95" stroke-width="1"/>
+<text x="451.3333333333333" y="588" text-anchor="middle" fill="#52514e" font-size="11">10</text>
+<text x="538" y="588" text-anchor="middle" fill="#52514e" font-size="11">25</text>
+<text x="624.6666666666667" y="588" text-anchor="middle" fill="#52514e" font-size="11">50</text>
+<text x="538" y="604" text-anchor="middle" fill="#52514e" font-size="11">tasa objetivo (op/s)</text>
+<text transform="translate(364 472) rotate(-90)" text-anchor="middle" fill="#52514e" font-size="11">latencia</text>
+<polyline points="446.3333333333333,441.0808115102963 533,447.9774662286004 619.6666666666667,449.8327391529176" fill="none" stroke="#2a78d6" stroke-width="2" stroke-dasharray=""/>
+<line x1="446.3333333333333" y1="458.7353330442654" x2="446.3333333333333" y2="427.7098096143709" stroke="#2a78d6" stroke-width="2"/>
+<line x1="442.3333333333333" y1="458.7353330442654" x2="450.3333333333333" y2="458.7353330442654" stroke="#2a78d6" stroke-width="2"/>
+<line x1="442.3333333333333" y1="427.7098096143709" x2="450.3333333333333" y2="427.7098096143709" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="446.3333333333333" cy="441.0808115102963" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="533" y1="462.6014628427779" x2="533" y2="432.4969861596262" stroke="#2a78d6" stroke-width="2"/>
+<line x1="529" y1="462.6014628427779" x2="537" y2="462.6014628427779" stroke="#2a78d6" stroke-width="2"/>
+<line x1="529" y1="432.4969861596262" x2="537" y2="432.4969861596262" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="533" cy="447.9774662286004" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="619.6666666666667" y1="465.19600057813585" x2="619.6666666666667" y2="435.907154322785" stroke="#2a78d6" stroke-width="2"/>
+<line x1="615.6666666666667" y1="465.19600057813585" x2="623.6666666666667" y2="465.19600057813585" stroke="#2a78d6" stroke-width="2"/>
+<line x1="615.6666666666667" y1="435.907154322785" x2="623.6666666666667" y2="435.907154322785" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="619.6666666666667" cy="449.8327391529176" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<polyline points="456.3333333333333,473.52524968535585 543,481.85449879257584 629.6666666666667,485.2646669557346" fill="none" stroke="#eb6834" stroke-width="2" stroke-dasharray="6 4"/>
+<line x1="456.3333333333333" y1="485.2646669557346" x2="456.3333333333333" y2="454.43813376247084" stroke="#eb6834" stroke-width="2"/>
+<line x1="452.3333333333333" y1="485.2646669557346" x2="460.3333333333333" y2="485.2646669557346" stroke="#eb6834" stroke-width="2"/>
+<line x1="452.3333333333333" y1="454.43813376247084" x2="460.3333333333333" y2="454.43813376247084" stroke="#eb6834" stroke-width="2"/>
+<rect x="452.3333333333333" y="469.52524968535585" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="543" y1="505.33333333333337" x2="543" y2="464.3050698076038" stroke="#eb6834" stroke-width="2"/>
+<line x1="539" y1="505.33333333333337" x2="547" y2="505.33333333333337" stroke="#eb6834" stroke-width="2"/>
+<line x1="539" y1="464.3050698076038" x2="547" y2="464.3050698076038" stroke="#eb6834" stroke-width="2"/>
+<rect x="539" y="477.85449879257584" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="629.6666666666667" y1="505.33333333333337" x2="629.6666666666667" y2="466.6810935588793" stroke="#eb6834" stroke-width="2"/>
+<line x1="625.6666666666667" y1="505.33333333333337" x2="633.6666666666667" y2="505.33333333333337" stroke="#eb6834" stroke-width="2"/>
+<line x1="625.6666666666667" y1="466.6810935588793" x2="633.6666666666667" y2="466.6810935588793" stroke="#eb6834" stroke-width="2"/>
+<rect x="625.6666666666667" y="481.2646669557346" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="742" y="358" font-size="13" font-weight="600">Carga mixta</text>
+<line x1="742" y1="572" x2="1002" y2="572" stroke="#e4e3df" stroke-width="1"/>
+<text x="736" y="576" text-anchor="end" fill="#52514e" font-size="11">1 ms</text>
+<line x1="742" y1="522" x2="1002" y2="522" stroke="#e4e3df" stroke-width="1"/>
+<text x="736" y="526" text-anchor="end" fill="#52514e" font-size="11">10 ms</text>
+<line x1="742" y1="472" x2="1002" y2="472" stroke="#e4e3df" stroke-width="1"/>
+<text x="736" y="476" text-anchor="end" fill="#52514e" font-size="11">100 ms</text>
+<line x1="742" y1="422" x2="1002" y2="422" stroke="#e4e3df" stroke-width="1"/>
+<text x="736" y="426" text-anchor="end" fill="#52514e" font-size="11">1 s</text>
+<line x1="742" y1="372" x2="1002" y2="372" stroke="#e4e3df" stroke-width="1"/>
+<text x="736" y="376" text-anchor="end" fill="#52514e" font-size="11">10 s</text>
+<line x1="742" y1="572" x2="1002" y2="572" stroke="#9b9a95" stroke-width="1"/>
+<text x="872" y="588" text-anchor="middle" fill="#52514e" font-size="11">20</text>
+<text x="872" y="604" text-anchor="middle" fill="#52514e" font-size="11">tasa objetivo (op/s)</text>
+<text transform="translate(698 472) rotate(-90)" text-anchor="middle" fill="#52514e" font-size="11">latencia</text>
+<line x1="867" y1="401.2029460127064" x2="867" y2="389.06223679676935" stroke="#2a78d6" stroke-width="2"/>
+<line x1="863" y1="401.2029460127064" x2="871" y2="401.2029460127064" stroke="#2a78d6" stroke-width="2"/>
+<line x1="863" y1="389.06223679676935" x2="871" y2="389.06223679676935" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="867" cy="390.1455363234835" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<line x1="877" y1="527.3952698654759" x2="877" y2="512.0671456522789" stroke="#eb6834" stroke-width="2"/>
+<line x1="873" y1="527.3952698654759" x2="881" y2="527.3952698654759" stroke="#eb6834" stroke-width="2"/>
+<line x1="873" y1="512.0671456522789" x2="881" y2="512.0671456522789" stroke="#eb6834" stroke-width="2"/>
+<rect x="873" y="515.5390988664909" width="8" height="8" rx="1" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+</g>
+</svg>

@@ -1,0 +1,132 @@
+{
+  "at": "2026-10-21T15:15:38.061Z",
+  "state": [
+    {
+      "id": "b936a76ecad7",
+      "name": "dev-peer0.distribuidor.snt.local-snt_1.0-a4d9315a304ac10b467c096f37f4960f86e4ce2d828310aed58d5ad34082d9a9",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "18fc87157f27",
+      "name": "dev-peer0.lab.snt.local-snt_1.0-a4d9315a304ac10b467c096f37f4960f86e4ce2d828310aed58d5ad34082d9a9",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "0edc10e925a1",
+      "name": "dev-peer0.financiador.snt.local-snt_1.0-a4d9315a304ac10b467c096f37f4960f86e4ce2d828310aed58d5ad34082d9a9",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "38bef0e20a23",
+      "name": "dev-peer0.drogueria.snt.local-snt_1.0-a4d9315a304ac10b467c096f37f4960f86e4ce2d828310aed58d5ad34082d9a9",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "36f47738ff64",
+      "name": "dev-peer0.anmat.snt.local-snt_1.0-a4d9315a304ac10b467c096f37f4960f86e4ce2d828310aed58d5ad34082d9a9",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "527fdc1e6596",
+      "name": "dev-peer0.farmacia.snt.local-snt_1.0-a4d9315a304ac10b467c096f37f4960f86e4ce2d828310aed58d5ad34082d9a9",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "098683317ea8",
+      "name": "dev-peer0.centromedico.snt.local-snt_1.0-a4d9315a304ac10b467c096f37f4960f86e4ce2d828310aed58d5ad34082d9a9",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "55e55005b271",
+      "name": "orderer.lab.snt.local",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "af02b7224be9",
+      "name": "peer0.centromedico.snt.local",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "fcc5b19d28ac",
+      "name": "peer0.farmacia.snt.local",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "fd8dd09f1305",
+      "name": "peer0.financiador.snt.local",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "989ac6d28821",
+      "name": "peer0.anmat.snt.local",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "af8c617a1c97",
+      "name": "orderer.anmat.snt.local",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "4c0145a1bff9",
+      "name": "fabric-ca.snt.local",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "b50cabbef13d",
+      "name": "peer0.lab.snt.local",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "1b4cb0a881c2",
+      "name": "orderer.drogueria.snt.local",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "a4e6ffedec5d",
+      "name": "peer0.drogueria.snt.local",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    },
+    {
+      "id": "e1a02359be24",
+      "name": "peer0.distribuidor.snt.local",
+      "restarts": 0,
+      "status": "running",
+      "oom": false
+    }
+  ],
+  "unchanged": true
+}
