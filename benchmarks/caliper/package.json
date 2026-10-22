@@ -35,6 +35,7 @@
     "include": [
       "rate-controllers/conceptual-fixed-rate.js",
       "src/artifacts.js",
+      "src/availability.js",
       "src/contract-errors.js",
       "src/credentials.js",
       "src/dataset.js",
@@ -54,12 +55,14 @@
       "src/gateway-bridge.js": "cliente gRPC del Gateway: se ejercita contra la red real en el smoke y las rondas",
       "src/host.js": "lee CPU, memoria y sistema operativo del host",
       "src/network-config.js": "inspecciona contenedores y material criptografico de la red levantada",
+      "src/reconstruct-availability-round.js": "reconstruye evidencia de una ronda real a partir de sus archivos; sus parsers se testean",
+      "src/run-availability.js": "inyecta fallas con docker kill y start sobre la red real",
       "src/run-round.js": "orquesta Caliper contra la red real",
       "src/run-series.js": "orquesta restauraciones, smoke y rondas con Docker",
       "src/run-smoke.js": "corrida de comprobacion contra la red real",
-      "src/snapshot.js": "construye y restaura volumenes de Docker",
       "src/snapshot-preconditions.js": "consulta el ledger de la red levantada",
       "src/snapshot-volumes.js": "copia volumenes de Docker",
+      "src/snapshot.js": "construye y restaura volumenes de Docker",
       "src/warm-peers.js": "consultas de calentamiento contra los peers"
     }
   }

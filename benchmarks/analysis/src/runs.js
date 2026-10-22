@@ -113,6 +113,10 @@ function failureListing(operations) {
     return {unexpected, timeouts};
 }
 
+function readOptionalJSON(file) {
+    return fs.existsSync(file) ? readJSON(file) : undefined;
+}
+
 function loadRun(metadataPath, options = {}) {
     const directory = path.dirname(metadataPath);
     const metadata = readJSON(metadataPath);
@@ -142,6 +146,8 @@ function loadRun(metadataPath, options = {}) {
         notes: metadata.notes,
         participationMarkers: metadata.participationMarkers,
         discardReason: metadata.discarded?.reason ?? summary?.discardReason,
+        restoration: summary?.availability?.restoration,
+        reconstruction: readOptionalJSON(path.join(directory, 'reconstruction.json')),
         summary,
         raw,
     };

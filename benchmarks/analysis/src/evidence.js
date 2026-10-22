@@ -203,11 +203,18 @@ function accreditRun(run, {manifests, roots}) {
     if (!attempt) return {reason: 'la ronda no figura en el indice de su serie'};
     if (attempt.kind !== 'measurement') return {reason: `intento ${attempt.kind} en el indice`};
     if (attempt.repetition !== run.repetition) return {reason: 'la repeticion no coincide con el indice'};
-    if (attempt.status !== 'completed') return {reason: `intento ${attempt.status} en el indice${attempt.reason ? `: ${attempt.reason}` : ''}`};
+    // Una restauracion fallida es un resultado del escenario de disponibilidad:
+    // el intento sigue `failed` en el indice, pero la carga medida se informa
+    // con esa condicion en lugar de quedar fuera del balance.
+    const restorationFailed = attempt.status === 'failed' && run.faultInjection && run.restoration?.status === 'failed';
+    if (attempt.status !== 'completed' && !restorationFailed) {
+        return {reason: `intento ${attempt.status} en el indice${attempt.reason ? `: ${attempt.reason}` : ''}`};
+    }
     const seriesInfo = {token: series.index.seriesToken, plan: series.index.plan, citable: series.index.citable,
         status: series.index.status, indexPath: series.path};
-    if (!series.index.citable) return {snapshot, series: seriesInfo, nonCitable: `serie ${series.index.plan} no citable`};
-    return {snapshot, series: seriesInfo};
+    const observed = restorationFailed ? {restorationFailed: attempt.reason} : {};
+    if (!series.index.citable) return {snapshot, series: seriesInfo, nonCitable: `serie ${series.index.plan} no citable`, ...observed};
+    return {snapshot, series: seriesInfo, ...observed};
 }
 
 module.exports = {

@@ -13,10 +13,30 @@ function succeeded(operation) {
     return operation.outcome === 'success';
 }
 
+// Instante con el que una operacion se asigna a una ventana. Un exito cuenta
+// cuando se completo: es el momento en que el sistema presto el servicio. Una
+// falla cuenta cuando se pidio, salvo que estuviera en vuelo al inyectar la
+// falla, en cuyo caso cuenta desde la inyeccion. Asi:
+// - las que fallan por haber quedado en vuelo al caer el componente (unas 50 en
+//   Raft-1) quedan en la ventana de falla y no rebajan la previa;
+// - las pedidas durante la falla que vencen por timeout despues de la
+//   restauracion (db-1, con 30 s de timeout) no rebajan la recuperacion;
+// - las pedidas durante la falla que la API retuvo y completo al volver la base
+//   (db-1) cuentan en la recuperacion y no como servicio durante la falla.
+function attributionTime(operation, injectedAt) {
+    const {started, ended} = operationTimes(operation);
+    if (succeeded(operation)) return ended;
+    return injectedAt !== undefined && started < injectedAt && ended >= injectedAt ? injectedAt : started;
+}
+
+function attributed(operations, injectedAt) {
+    return operations.map((operation) => ({...operation, attributedAt: attributionTime(operation, injectedAt)}));
+}
+
 function windowSummary(operations, from, to) {
     const inside = operations.filter((operation) => {
-        const {started} = operationTimes(operation);
-        return started >= from && started < to;
+        const at = operation.attributedAt ?? operationTimes(operation).started;
+        return at >= from && at < to;
     });
     const successes = inside.filter(succeeded);
     const seconds = Math.max((to - from) / 1000, Number.EPSILON);
@@ -42,9 +62,14 @@ function windowSummary(operations, from, to) {
 // estable de 30 s cuya tasa de exito vuelve al 95 % de la previa a la falla.
 function recoveryTime(operations, injectedAt, preFaultRate, endAt) {
     if (!Number.isFinite(preFaultRate)) return undefined;
-    const starts = operations.map((operation) => operationTimes(operation).started)
-        .filter((started) => started >= injectedAt).sort((left, right) => left - right);
-    for (const candidate of starts) {
+    // El tramo estable sólo puede empezar cuando el sistema vuelve a completar
+    // un pedido con exito: si empezara en una falla, unos pocos fallos y los
+    // exitos posteriores a la restauracion podrian llegar al umbral antes de que
+    // el componente volviera.
+    const instants = operations.filter(succeeded)
+        .map((operation) => operation.attributedAt ?? operationTimes(operation).ended)
+        .filter((at) => at >= injectedAt).sort((left, right) => left - right);
+    for (const candidate of instants) {
         const to = candidate + STABLE_SECONDS * 1000;
         if (to > endAt) break;
         const stretch = windowSummary(operations, candidate, to);
@@ -84,9 +109,9 @@ function availabilityWindows(run) {
 
 function availabilityWindowsFor(run) {
     const fault = run.faultInjection;
-    const operations = run.raw ?? [];
-    if (!fault || operations.length === 0) return undefined;
+    if (!fault || (run.raw ?? []).length === 0) return undefined;
     const injectedAt = Date.parse(fault.injectedAt);
+    const operations = attributed(run.raw, injectedAt);
     const startAt = injectedAt - fault.preFaultSeconds * 1000;
     const recoveredAt = fault.recoveredAt ? Date.parse(fault.recoveredAt) : undefined;
     const faultEnd = recoveredAt ?? injectedAt + fault.faultSeconds * 1000;
@@ -110,12 +135,13 @@ function availabilityWindowsFor(run) {
 
 // Serie temporal de la tasa de exito por intervalo, para el grafico.
 function successTimeline(run, bucketSeconds = 5) {
-    const operations = run.raw ?? [];
-    if (operations.length === 0) return [];
-    const starts = operations.map((operation) => operationTimes(operation).started);
-    const origin = run.faultInjection ? Date.parse(run.faultInjection.injectedAt) : Math.min(...starts);
-    const first = Math.min(...starts);
-    const last = Math.max(...starts);
+    if ((run.raw ?? []).length === 0) return [];
+    const injectedAt = run.faultInjection ? Date.parse(run.faultInjection.injectedAt) : undefined;
+    const operations = attributed(run.raw, injectedAt);
+    const instants = operations.map((operation) => operation.attributedAt);
+    const origin = injectedAt ?? Math.min(...instants);
+    const first = Math.min(...instants);
+    const last = Math.max(...instants);
     const buckets = [];
     const firstIndex = Math.floor((first - origin) / (bucketSeconds * 1000));
     const lastIndex = Math.floor((last - origin) / (bucketSeconds * 1000));

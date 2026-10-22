@@ -41,10 +41,14 @@ class GatewayPool {
         const configuration = this.organizations.get(mspId);
         if (!configuration) throw new Error(`network config has no organization ${mspId}`);
         const {identity, organization, peer} = configuration;
+        // Las opciones grpc.* de la configuracion de red se respetan igual que en
+        // el conector de Caliper; sin ellas el cliente usa los valores de grpc-js.
+        const grpcOptions = Object.fromEntries(Object.entries(peer.grpcOptions ?? {})
+            .filter(([name]) => name.startsWith('grpc.')));
         const client = new grpc.Client(
             peer.endpoint,
             grpc.credentials.createSsl(fs.readFileSync(peer.tlsCACerts.path)),
-            {'grpc.ssl_target_name_override': peer.grpcOptions?.['ssl-target-name-override']},
+            {...grpcOptions, 'grpc.ssl_target_name_override': peer.grpcOptions?.['ssl-target-name-override']},
         );
         const privateKey = crypto.createPrivateKey(fs.readFileSync(identity.clientPrivateKey.path));
         const gateway = connect({

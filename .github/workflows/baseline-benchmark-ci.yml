@@ -13,6 +13,13 @@ on:
     paths:
       - "benchmarks/baseline/**"
       - "scripts/coverage/**"
+      # El orquestador de series y la disponibilidad de la baseline reutilizan
+      # estos modulos de Caliper y sus dependencias (#45).
+      - "benchmarks/caliper/package.json"
+      - "benchmarks/caliper/package-lock.json"
+      - "benchmarks/caliper/src/artifacts.js"
+      - "benchmarks/caliper/src/availability.js"
+      - "benchmarks/caliper/src/run-series.js"
       - "benchmarks/caliper/src/metadata.js"
       - "benchmarks/caliper/src/planner.js"
       - "benchmarks/caliper/src/profiles.js"
@@ -59,7 +66,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: benchmarks/baseline/package-lock.json
+          cache-dependency-path: |
+            benchmarks/baseline/package-lock.json
+            benchmarks/caliper/package-lock.json
 
       - name: Set up pinned npm
         run: npm install --global npm@11.6.2
@@ -75,6 +84,10 @@ jobs:
 
       - name: Install locked dependencies
         working-directory: benchmarks/baseline
+        run: npm ci
+
+      - name: Install shared Caliper dependencies
+        working-directory: benchmarks/caliper
         run: npm ci
 
       - name: Generate canonical dataset

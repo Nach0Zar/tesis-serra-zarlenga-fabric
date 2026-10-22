@@ -102,6 +102,18 @@ guardan bajo `build/benchmarks/caliper/`, que está ignorado por Git. Los
 prerrequisitos y comandos reproducibles están documentados en
 [`caliper/README.md`](caliper/README.md).
 
+## Disponibilidad de Fabric
+
+El mismo proyecto ejecuta los seis escenarios de disponibilidad de la sección
+8.1 (EVAL-4, #44): caída del líder Raft, pérdida de quórum y caída del peer del
+custodio, de una parte de un tránsito, del regulador y del laboratorio. Cada
+ronda corre la carga mixta de referencia durante tres ventanas de 60 s, inyecta
+la falla desde fuera de los workloads y conserva los logs de Raft y de los peers
+que la explican. En las caídas de peer, cada operación queda clasificada como
+objetivo o control. Son fallas de contenedor en un único host, no la caída de
+una organización completa. El detalle está en
+[`caliper/README.md`](caliper/README.md#disponibilidad-eval-4).
+
 ## Carga equivalente sobre la baseline
 
 El proyecto aislado [`baseline/`](baseline/) reutiliza directamente los
@@ -116,6 +128,15 @@ Las credenciales permanecen sólo en memoria y los resultados se guardan bajo
 `build/benchmarks/baseline/`, ignorado por Git. Los comandos, conteos del
 snapshot, perfiles, rechazos separados y asimetrías metodológicas están
 documentados en [`baseline/README.md`](baseline/README.md).
+
+## Disponibilidad y series de la baseline
+
+El proyecto de la baseline ejecuta los dos escenarios de disponibilidad de la
+sección 8.2 (EVAL-5, #45), caída de PostgreSQL y caída de la API, con la misma
+carga, el mismo plan y el mismo nivel de simulación que EVAL-4. También tiene
+su orquestador de series, que escribe el mismo índice que Fabric: sin él, el
+procesamiento no podía acreditar rondas de la baseline como citables. El
+detalle está en [`baseline/README.md`](baseline/README.md#disponibilidad-eval-5).
 
 ## Procesamiento comparativo
 

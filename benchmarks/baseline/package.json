@@ -17,7 +17,9 @@
     "snapshot:build": "node src/build-snapshot.js",
     "snapshot:restore": "node src/restore-snapshot.js",
     "smoke": "node src/run-smoke.js",
-    "round": "node src/run-round.js"
+    "round": "node src/run-round.js",
+    "availability": "node src/run-availability.js",
+    "series": "node src/run-series.js"
   },
   "coverage": {
     "minimum": 85,
@@ -30,6 +32,8 @@
     ],
     "excluded": {
       "src/paths.js": "rutas de salida del host",
+      "src/run-availability.js": "inyecta fallas con docker compose kill y start sobre la baseline",
+      "src/run-series.js": "orquesta series reales con el orquestador de Caliper",
       "src/runtime.js": "levanta y detiene el proyecto Docker Compose de la baseline",
       "src/snapshot.js": "construye y restaura el snapshot con pg_dump y Docker"
     }
