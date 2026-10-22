@@ -1,0 +1,95 @@
+{
+  "scenario": "mixed",
+  "operationCount": 2402,
+  "successfulOperations": 2402,
+  "expectedRejections": 0,
+  "unexpectedFailures": 0,
+  "transactionCount": 3753,
+  "successfulTransactions": 3723,
+  "failedTransactions": 30,
+  "retryAttempts": 30,
+  "retryTimeMs": 20560,
+  "retryByCause": {
+    "NOT_IN_TRANSIT": {
+      "attempts": 30,
+      "accumulatedTimeMs": 20560
+    }
+  },
+  "transferPairs": 1321,
+  "retriedTransferPairs": 30,
+  "retriedTransferPairRate": 0.022710068130204392,
+  "observedErrorCodes": {},
+  "rate": {
+    "operation": "mixed",
+    "targetOperationsPerSecond": 20,
+    "targetTransactionsPerSecond": 31,
+    "offeredOperationsPerSecond": 20.016666666666666,
+    "effectiveOperationsPerSecond": 19.3141157077956,
+    "effectiveTransactionsPerSecond": 30.177300687492462
+  },
+  "operationLatency": {
+    "count": 2402,
+    "minimumMs": 2,
+    "maximumMs": 4711,
+    "meanMs": 2173.442964196503,
+    "standardDeviationMs": 1575.8704163028126,
+    "p50Ms": 2593,
+    "p95Ms": 4315,
+    "p99Ms": 4528
+  },
+  "transactionLatencyByFunction": {
+    "ReadUnit": {
+      "count": 601,
+      "minimumMs": 2,
+      "maximumMs": 139,
+      "meanMs": 14.1846921797005,
+      "standardDeviationMs": 24.411287969152713,
+      "p50Ms": 3,
+      "p95Ms": 73,
+      "p99Ms": 91
+    },
+    "DispatchTransfer": {
+      "count": 1321,
+      "minimumMs": 199,
+      "maximumMs": 2588,
+      "meanMs": 1377.0628311884936,
+      "standardDeviationMs": 608.5236162304863,
+      "p50Ms": 1372,
+      "p95Ms": 2324,
+      "p99Ms": 2440
+    },
+    "ReceiveTransfer": {
+      "count": 1351,
+      "minimumMs": 28,
+      "maximumMs": 2344,
+      "meanMs": 2017.139156180607,
+      "standardDeviationMs": 310.5746826212632,
+      "p50Ms": 2063,
+      "p95Ms": 2245,
+      "p99Ms": 2280
+    },
+    "RegisterUnit": {
+      "count": 240,
+      "minimumMs": 297,
+      "maximumMs": 2500,
+      "meanMs": 1368.6333333333334,
+      "standardDeviationMs": 602.905865141667,
+      "p50Ms": 1405,
+      "p95Ms": 2303,
+      "p99Ms": 2414
+    },
+    "Dispense": {
+      "count": 240,
+      "minimumMs": 227,
+      "maximumMs": 2406,
+      "meanMs": 1347.9458333333334,
+      "standardDeviationMs": 636.0255311169818,
+      "p50Ms": 1390,
+      "p95Ms": 2284,
+      "p99Ms": 2365
+    }
+  },
+  "startedAt": "2026-10-22T08:14:39.856Z",
+  "endedAt": "2026-10-22T08:16:44.221Z",
+  "observedDurationSeconds": 124.365
+}

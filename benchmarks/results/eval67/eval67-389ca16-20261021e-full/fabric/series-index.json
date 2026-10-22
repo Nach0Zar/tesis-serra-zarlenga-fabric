@@ -1,0 +1,1695 @@
+{
+  "$schema": "urn:pfi-snt:fabric-series-index:schema:1.0.0",
+  "schemaVersion": "1.0.0",
+  "seriesToken": "eval67-389ca16-20261021e-full-fabric",
+  "plan": "full",
+  "citable": true,
+  "snapshot": {
+    "id": "178e51e9ab43094d3cefa076828d032d6c55b576f35eb2a2b2d54fe9889d6fde",
+    "directory": "build/benchmarks/fabric/snapshots/178e51e9ab43094d3cefa076828d032d6c55b576f35eb2a2b2d54fe9889d6fde",
+    "manifestSHA256": "975f9ac77e59309d4ac6b66ddd14d1563253a58476a9cac1f3dd9d23c6eb9483"
+  },
+  "startedAt": "2026-10-21T15:18:02.829Z",
+  "status": "completed",
+  "scenarios": [
+    {
+      "key": "write-register-5",
+      "scenario": "write-register",
+      "rate": 5,
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T15:18:02.946Z",
+          "endedAt": "2026-10-21T15:24:08.159Z",
+          "directory": "write-register-5/warmup/try-1",
+          "resources": "write-register-5/warmup/try-1/resources.txt",
+          "summary": "write-register-5/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T15:27:08.361Z",
+          "endedAt": "2026-10-21T15:33:14.009Z",
+          "directory": "write-register-5/measurements/run-01",
+          "resources": "write-register-5/measurements/run-01/resources.txt",
+          "summary": "write-register-5/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T15:39:04.147Z",
+          "endedAt": "2026-10-21T15:45:13.565Z",
+          "directory": "write-register-5/measurements/run-02",
+          "resources": "write-register-5/measurements/run-02/resources.txt",
+          "summary": "write-register-5/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T15:45:14.279Z",
+          "endedAt": "2026-10-21T15:51:32.228Z",
+          "directory": "write-register-5/measurements/run-03",
+          "resources": "write-register-5/measurements/run-03/resources.txt",
+          "summary": "write-register-5/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T15:57:31.866Z",
+          "endedAt": "2026-10-21T16:03:40.239Z",
+          "directory": "write-register-5/measurements/run-04",
+          "resources": "write-register-5/measurements/run-04/resources.txt",
+          "summary": "write-register-5/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T16:03:40.942Z",
+          "endedAt": "2026-10-21T16:09:52.142Z",
+          "directory": "write-register-5/measurements/run-05",
+          "resources": "write-register-5/measurements/run-05/resources.txt",
+          "summary": "write-register-5/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.0024298116738634347,
+      "p95CV": 0.006457972649698326
+    },
+    {
+      "key": "write-register-10",
+      "scenario": "write-register",
+      "rate": 10,
+      "status": "completed",
+      "extended": true,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T16:12:53.006Z",
+          "endedAt": "2026-10-21T16:19:15.238Z",
+          "directory": "write-register-10/warmup/try-1",
+          "resources": "write-register-10/warmup/try-1/resources.txt",
+          "summary": "write-register-10/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T16:22:16.987Z",
+          "endedAt": "2026-10-21T16:28:35.767Z",
+          "directory": "write-register-10/measurements/run-01",
+          "resources": "write-register-10/measurements/run-01/resources.txt",
+          "summary": "write-register-10/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T16:34:31.049Z",
+          "endedAt": "2026-10-21T16:40:43.074Z",
+          "directory": "write-register-10/measurements/run-02",
+          "resources": "write-register-10/measurements/run-02/resources.txt",
+          "summary": "write-register-10/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T16:40:43.748Z",
+          "endedAt": "2026-10-21T16:47:01.122Z",
+          "directory": "write-register-10/measurements/run-03",
+          "resources": "write-register-10/measurements/run-03/resources.txt",
+          "summary": "write-register-10/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T16:52:52.952Z",
+          "endedAt": "2026-10-21T16:58:59.186Z",
+          "directory": "write-register-10/measurements/run-04",
+          "resources": "write-register-10/measurements/run-04/resources.txt",
+          "summary": "write-register-10/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T16:58:59.869Z",
+          "endedAt": "2026-10-21T17:05:17.539Z",
+          "directory": "write-register-10/measurements/run-05",
+          "resources": "write-register-10/measurements/run-05/resources.txt",
+          "summary": "write-register-10/measurements/run-05/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 6,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T17:11:08.813Z",
+          "endedAt": "2026-10-21T17:17:27.040Z",
+          "directory": "write-register-10/measurements/run-06",
+          "resources": "write-register-10/measurements/run-06/resources.txt",
+          "summary": "write-register-10/measurements/run-06/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 7,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T17:17:27.688Z",
+          "endedAt": "2026-10-21T17:23:40.598Z",
+          "directory": "write-register-10/measurements/run-07",
+          "resources": "write-register-10/measurements/run-07/resources.txt",
+          "summary": "write-register-10/measurements/run-07/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 8,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T17:29:38.567Z",
+          "endedAt": "2026-10-21T17:35:48.758Z",
+          "directory": "write-register-10/measurements/run-08",
+          "resources": "write-register-10/measurements/run-08/resources.txt",
+          "summary": "write-register-10/measurements/run-08/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.003908744264975735,
+      "p95CV": 0.0077766863387155665
+    },
+    {
+      "key": "write-register-20",
+      "scenario": "write-register",
+      "rate": 20,
+      "status": "completed",
+      "extended": true,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T17:35:49.633Z",
+          "endedAt": "2026-10-21T17:42:03.585Z",
+          "directory": "write-register-20/warmup/try-1",
+          "resources": "write-register-20/warmup/try-1/resources.txt",
+          "summary": "write-register-20/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T17:45:08.114Z",
+          "endedAt": "2026-10-21T17:51:39.202Z",
+          "directory": "write-register-20/measurements/run-01",
+          "resources": "write-register-20/measurements/run-01/resources.txt",
+          "summary": "write-register-20/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T17:57:39.178Z",
+          "endedAt": "2026-10-21T18:03:54.015Z",
+          "directory": "write-register-20/measurements/run-02",
+          "resources": "write-register-20/measurements/run-02/resources.txt",
+          "summary": "write-register-20/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T18:03:54.711Z",
+          "endedAt": "2026-10-21T18:10:09.600Z",
+          "directory": "write-register-20/measurements/run-03",
+          "resources": "write-register-20/measurements/run-03/resources.txt",
+          "summary": "write-register-20/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T18:16:06.535Z",
+          "endedAt": "2026-10-21T18:22:14.572Z",
+          "directory": "write-register-20/measurements/run-04",
+          "resources": "write-register-20/measurements/run-04/resources.txt",
+          "summary": "write-register-20/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T18:22:15.279Z",
+          "endedAt": "2026-10-21T18:28:32.300Z",
+          "directory": "write-register-20/measurements/run-05",
+          "resources": "write-register-20/measurements/run-05/resources.txt",
+          "summary": "write-register-20/measurements/run-05/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 6,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T18:34:28.411Z",
+          "endedAt": "2026-10-21T18:40:41.786Z",
+          "directory": "write-register-20/measurements/run-06",
+          "resources": "write-register-20/measurements/run-06/resources.txt",
+          "summary": "write-register-20/measurements/run-06/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 7,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T18:40:42.470Z",
+          "endedAt": "2026-10-21T18:47:10.985Z",
+          "directory": "write-register-20/measurements/run-07",
+          "resources": "write-register-20/measurements/run-07/resources.txt",
+          "summary": "write-register-20/measurements/run-07/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 8,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T18:53:13.849Z",
+          "endedAt": "2026-10-21T18:59:25.019Z",
+          "directory": "write-register-20/measurements/run-08",
+          "resources": "write-register-20/measurements/run-08/resources.txt",
+          "summary": "write-register-20/measurements/run-08/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.003397077189833099,
+      "p95CV": 0.015883756538725088
+    },
+    {
+      "key": "write-transfer-5",
+      "scenario": "write-transfer",
+      "rate": 5,
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T18:59:26.108Z",
+          "endedAt": "2026-10-21T19:05:41.944Z",
+          "directory": "write-transfer-5/warmup/try-1",
+          "resources": "write-transfer-5/warmup/try-1/resources.txt",
+          "summary": "write-transfer-5/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T19:08:40.623Z",
+          "endedAt": "2026-10-21T19:14:53.486Z",
+          "directory": "write-transfer-5/measurements/run-01",
+          "resources": "write-transfer-5/measurements/run-01/resources.txt",
+          "summary": "write-transfer-5/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T19:20:42.396Z",
+          "endedAt": "2026-10-21T19:26:51.307Z",
+          "directory": "write-transfer-5/measurements/run-02",
+          "resources": "write-transfer-5/measurements/run-02/resources.txt",
+          "summary": "write-transfer-5/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T19:26:52.136Z",
+          "endedAt": "2026-10-21T19:33:10.750Z",
+          "directory": "write-transfer-5/measurements/run-03",
+          "resources": "write-transfer-5/measurements/run-03/resources.txt",
+          "summary": "write-transfer-5/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T19:39:02.098Z",
+          "endedAt": "2026-10-21T19:45:12.890Z",
+          "directory": "write-transfer-5/measurements/run-04",
+          "resources": "write-transfer-5/measurements/run-04/resources.txt",
+          "summary": "write-transfer-5/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T19:45:13.699Z",
+          "endedAt": "2026-10-21T19:51:31.752Z",
+          "directory": "write-transfer-5/measurements/run-05",
+          "resources": "write-transfer-5/measurements/run-05/resources.txt",
+          "summary": "write-transfer-5/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.0049422541673544654,
+      "p95CV": 0.006629867089315879
+    },
+    {
+      "key": "write-transfer-10",
+      "scenario": "write-transfer",
+      "rate": 10,
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T19:54:30.873Z",
+          "endedAt": "2026-10-21T20:00:45.781Z",
+          "directory": "write-transfer-10/warmup/try-1",
+          "resources": "write-transfer-10/warmup/try-1/resources.txt",
+          "summary": "write-transfer-10/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T20:03:46.095Z",
+          "endedAt": "2026-10-21T20:10:05.418Z",
+          "directory": "write-transfer-10/measurements/run-01",
+          "resources": "write-transfer-10/measurements/run-01/resources.txt",
+          "summary": "write-transfer-10/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T20:15:57.761Z",
+          "endedAt": "2026-10-21T20:22:15.181Z",
+          "directory": "write-transfer-10/measurements/run-02",
+          "resources": "write-transfer-10/measurements/run-02/resources.txt",
+          "summary": "write-transfer-10/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T20:22:15.910Z",
+          "endedAt": "2026-10-21T20:28:37.636Z",
+          "directory": "write-transfer-10/measurements/run-03",
+          "resources": "write-transfer-10/measurements/run-03/resources.txt",
+          "summary": "write-transfer-10/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T20:34:30.134Z",
+          "endedAt": "2026-10-21T20:40:46.790Z",
+          "directory": "write-transfer-10/measurements/run-04",
+          "resources": "write-transfer-10/measurements/run-04/resources.txt",
+          "summary": "write-transfer-10/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T20:40:47.451Z",
+          "endedAt": "2026-10-21T20:47:15.195Z",
+          "directory": "write-transfer-10/measurements/run-05",
+          "resources": "write-transfer-10/measurements/run-05/resources.txt",
+          "summary": "write-transfer-10/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.005028547733992351,
+      "p95CV": 0.00361401688146054
+    },
+    {
+      "key": "write-transfer-20",
+      "scenario": "write-transfer",
+      "rate": 20,
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T20:50:15.105Z",
+          "endedAt": "2026-10-21T20:56:34.567Z",
+          "directory": "write-transfer-20/warmup/try-1",
+          "resources": "write-transfer-20/warmup/try-1/resources.txt",
+          "summary": "write-transfer-20/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T20:59:36.783Z",
+          "endedAt": "2026-10-21T21:05:55.805Z",
+          "directory": "write-transfer-20/measurements/run-01",
+          "resources": "write-transfer-20/measurements/run-01/resources.txt",
+          "summary": "write-transfer-20/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T21:11:51.336Z",
+          "endedAt": "2026-10-21T21:18:20.121Z",
+          "directory": "write-transfer-20/measurements/run-02",
+          "resources": "write-transfer-20/measurements/run-02/resources.txt",
+          "summary": "write-transfer-20/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T21:18:20.693Z",
+          "endedAt": "2026-10-21T21:24:53.114Z",
+          "directory": "write-transfer-20/measurements/run-03",
+          "resources": "write-transfer-20/measurements/run-03/resources.txt",
+          "summary": "write-transfer-20/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T21:30:50.456Z",
+          "endedAt": "2026-10-21T21:37:09.325Z",
+          "directory": "write-transfer-20/measurements/run-04",
+          "resources": "write-transfer-20/measurements/run-04/resources.txt",
+          "summary": "write-transfer-20/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T21:37:10.118Z",
+          "endedAt": "2026-10-21T21:43:36.435Z",
+          "directory": "write-transfer-20/measurements/run-05",
+          "resources": "write-transfer-20/measurements/run-05/resources.txt",
+          "summary": "write-transfer-20/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.0025211725169229943,
+      "p95CV": 0.027403097013907456
+    },
+    {
+      "key": "write-dispense-5",
+      "scenario": "write-dispense",
+      "rate": 5,
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T21:46:37.940Z",
+          "endedAt": "2026-10-21T21:52:42.733Z",
+          "directory": "write-dispense-5/warmup/try-1",
+          "resources": "write-dispense-5/warmup/try-1/resources.txt",
+          "summary": "write-dispense-5/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T21:55:39.087Z",
+          "endedAt": "2026-10-21T22:01:56.464Z",
+          "directory": "write-dispense-5/measurements/run-01",
+          "resources": "write-dispense-5/measurements/run-01/resources.txt",
+          "summary": "write-dispense-5/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T22:07:46.373Z",
+          "endedAt": "2026-10-21T22:13:54.727Z",
+          "directory": "write-dispense-5/measurements/run-02",
+          "resources": "write-dispense-5/measurements/run-02/resources.txt",
+          "summary": "write-dispense-5/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T22:13:55.493Z",
+          "endedAt": "2026-10-21T22:20:13.533Z",
+          "directory": "write-dispense-5/measurements/run-03",
+          "resources": "write-dispense-5/measurements/run-03/resources.txt",
+          "summary": "write-dispense-5/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T22:26:02.221Z",
+          "endedAt": "2026-10-21T22:32:13.210Z",
+          "directory": "write-dispense-5/measurements/run-04",
+          "resources": "write-dispense-5/measurements/run-04/resources.txt",
+          "summary": "write-dispense-5/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T22:32:13.948Z",
+          "endedAt": "2026-10-21T22:38:26.248Z",
+          "directory": "write-dispense-5/measurements/run-05",
+          "resources": "write-dispense-5/measurements/run-05/resources.txt",
+          "summary": "write-dispense-5/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.006371435508366786,
+      "p95CV": 0.007071800113360315
+    },
+    {
+      "key": "write-dispense-10",
+      "scenario": "write-dispense",
+      "rate": 10,
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T22:41:25.398Z",
+          "endedAt": "2026-10-21T22:47:51.996Z",
+          "directory": "write-dispense-10/warmup/try-1",
+          "resources": "write-dispense-10/warmup/try-1/resources.txt",
+          "summary": "write-dispense-10/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T22:50:50.538Z",
+          "endedAt": "2026-10-21T22:57:21.816Z",
+          "directory": "write-dispense-10/measurements/run-01",
+          "resources": "write-dispense-10/measurements/run-01/resources.txt",
+          "summary": "write-dispense-10/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T23:03:18.737Z",
+          "endedAt": "2026-10-21T23:09:31.071Z",
+          "directory": "write-dispense-10/measurements/run-02",
+          "resources": "write-dispense-10/measurements/run-02/resources.txt",
+          "summary": "write-dispense-10/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T23:09:31.803Z",
+          "endedAt": "2026-10-21T23:15:54.914Z",
+          "directory": "write-dispense-10/measurements/run-03",
+          "resources": "write-dispense-10/measurements/run-03/resources.txt",
+          "summary": "write-dispense-10/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T23:21:46.135Z",
+          "endedAt": "2026-10-21T23:28:09.861Z",
+          "directory": "write-dispense-10/measurements/run-04",
+          "resources": "write-dispense-10/measurements/run-04/resources.txt",
+          "summary": "write-dispense-10/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T23:28:10.713Z",
+          "endedAt": "2026-10-21T23:34:43.307Z",
+          "directory": "write-dispense-10/measurements/run-05",
+          "resources": "write-dispense-10/measurements/run-05/resources.txt",
+          "summary": "write-dispense-10/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.003974746900548404,
+      "p95CV": 0.010078872320532967
+    },
+    {
+      "key": "write-dispense-20",
+      "scenario": "write-dispense",
+      "rate": 20,
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T23:37:43.334Z",
+          "endedAt": "2026-10-21T23:44:15.900Z",
+          "directory": "write-dispense-20/warmup/try-1",
+          "resources": "write-dispense-20/warmup/try-1/resources.txt",
+          "summary": "write-dispense-20/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-21T23:47:17.022Z",
+          "endedAt": "2026-10-21T23:53:58.261Z",
+          "directory": "write-dispense-20/measurements/run-01",
+          "resources": "write-dispense-20/measurements/run-01/resources.txt",
+          "summary": "write-dispense-20/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T00:00:02.005Z",
+          "endedAt": "2026-10-22T00:06:24.793Z",
+          "directory": "write-dispense-20/measurements/run-02",
+          "resources": "write-dispense-20/measurements/run-02/resources.txt",
+          "summary": "write-dispense-20/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T00:06:25.526Z",
+          "endedAt": "2026-10-22T00:13:29.921Z",
+          "directory": "write-dispense-20/measurements/run-03",
+          "resources": "write-dispense-20/measurements/run-03/resources.txt",
+          "summary": "write-dispense-20/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T00:19:33.038Z",
+          "endedAt": "2026-10-22T00:26:19.708Z",
+          "directory": "write-dispense-20/measurements/run-04",
+          "resources": "write-dispense-20/measurements/run-04/resources.txt",
+          "summary": "write-dispense-20/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T00:26:20.517Z",
+          "endedAt": "2026-10-22T00:32:57.597Z",
+          "directory": "write-dispense-20/measurements/run-05",
+          "resources": "write-dispense-20/measurements/run-05/resources.txt",
+          "summary": "write-dispense-20/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.003271064265603222,
+      "p95CV": 0.02554842471962138
+    },
+    {
+      "key": "read-unit-10",
+      "scenario": "read-unit",
+      "rate": 10,
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T00:35:57.383Z",
+          "endedAt": "2026-10-22T00:42:17.513Z",
+          "directory": "read-unit-10/warmup/try-1",
+          "resources": "read-unit-10/warmup/try-1/resources.txt",
+          "summary": "read-unit-10/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T00:45:14.289Z",
+          "endedAt": "2026-10-22T00:51:29.058Z",
+          "directory": "read-unit-10/measurements/run-01",
+          "resources": "read-unit-10/measurements/run-01/resources.txt",
+          "summary": "read-unit-10/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T00:57:22.682Z",
+          "endedAt": "2026-10-22T01:03:53.672Z",
+          "directory": "read-unit-10/measurements/run-02",
+          "resources": "read-unit-10/measurements/run-02/resources.txt",
+          "summary": "read-unit-10/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T01:03:54.463Z",
+          "endedAt": "2026-10-22T01:10:18.082Z",
+          "directory": "read-unit-10/measurements/run-03",
+          "resources": "read-unit-10/measurements/run-03/resources.txt",
+          "summary": "read-unit-10/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T01:16:14.513Z",
+          "endedAt": "2026-10-22T01:22:47.685Z",
+          "directory": "read-unit-10/measurements/run-04",
+          "resources": "read-unit-10/measurements/run-04/resources.txt",
+          "summary": "read-unit-10/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T01:22:48.566Z",
+          "endedAt": "2026-10-22T01:29:10.949Z",
+          "directory": "read-unit-10/measurements/run-05",
+          "resources": "read-unit-10/measurements/run-05/resources.txt",
+          "summary": "read-unit-10/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.000031354819424634454,
+      "p95CV": 0.05696487773914368
+    },
+    {
+      "key": "read-unit-25",
+      "scenario": "read-unit",
+      "rate": 25,
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T01:32:11.236Z",
+          "endedAt": "2026-10-22T01:38:48.201Z",
+          "directory": "read-unit-25/warmup/try-1",
+          "resources": "read-unit-25/warmup/try-1/resources.txt",
+          "summary": "read-unit-25/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T01:41:50.474Z",
+          "endedAt": "2026-10-22T01:48:16.325Z",
+          "directory": "read-unit-25/measurements/run-01",
+          "resources": "read-unit-25/measurements/run-01/resources.txt",
+          "summary": "read-unit-25/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T01:54:14.273Z",
+          "endedAt": "2026-10-22T02:00:49.097Z",
+          "directory": "read-unit-25/measurements/run-02",
+          "resources": "read-unit-25/measurements/run-02/resources.txt",
+          "summary": "read-unit-25/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T02:00:49.951Z",
+          "endedAt": "2026-10-22T02:07:22.962Z",
+          "directory": "read-unit-25/measurements/run-03",
+          "resources": "read-unit-25/measurements/run-03/resources.txt",
+          "summary": "read-unit-25/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T02:13:20.233Z",
+          "endedAt": "2026-10-22T02:19:51.458Z",
+          "directory": "read-unit-25/measurements/run-04",
+          "resources": "read-unit-25/measurements/run-04/resources.txt",
+          "summary": "read-unit-25/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T02:19:52.163Z",
+          "endedAt": "2026-10-22T02:26:34.643Z",
+          "directory": "read-unit-25/measurements/run-05",
+          "resources": "read-unit-25/measurements/run-05/resources.txt",
+          "summary": "read-unit-25/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.000021342017548463794,
+      "p95CV": 0.07692307692307691
+    },
+    {
+      "key": "read-unit-50",
+      "scenario": "read-unit",
+      "rate": 50,
+      "status": "completed",
+      "extended": true,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T02:29:39.705Z",
+          "endedAt": "2026-10-22T02:36:44.995Z",
+          "directory": "read-unit-50/warmup/try-1",
+          "resources": "read-unit-50/warmup/try-1/resources.txt",
+          "summary": "read-unit-50/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T02:39:50.415Z",
+          "endedAt": "2026-10-22T02:46:40.539Z",
+          "directory": "read-unit-50/measurements/run-01",
+          "resources": "read-unit-50/measurements/run-01/resources.txt",
+          "summary": "read-unit-50/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T02:52:46.433Z",
+          "endedAt": "2026-10-22T02:59:46.015Z",
+          "directory": "read-unit-50/measurements/run-02",
+          "resources": "read-unit-50/measurements/run-02/resources.txt",
+          "summary": "read-unit-50/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T02:59:46.723Z",
+          "endedAt": "2026-10-22T03:06:41.767Z",
+          "directory": "read-unit-50/measurements/run-03",
+          "resources": "read-unit-50/measurements/run-03/resources.txt",
+          "summary": "read-unit-50/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T03:12:48.414Z",
+          "endedAt": "2026-10-22T03:19:37.495Z",
+          "directory": "read-unit-50/measurements/run-04",
+          "resources": "read-unit-50/measurements/run-04/resources.txt",
+          "summary": "read-unit-50/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T03:19:38.346Z",
+          "endedAt": "2026-10-22T03:27:06.835Z",
+          "directory": "read-unit-50/measurements/run-05",
+          "resources": "read-unit-50/measurements/run-05/resources.txt",
+          "summary": "read-unit-50/measurements/run-05/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 6,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T03:33:11.737Z",
+          "endedAt": "2026-10-22T03:39:59.223Z",
+          "directory": "read-unit-50/measurements/run-06",
+          "resources": "read-unit-50/measurements/run-06/resources.txt",
+          "summary": "read-unit-50/measurements/run-06/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 7,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T03:39:59.971Z",
+          "endedAt": "2026-10-22T03:47:06.241Z",
+          "directory": "read-unit-50/measurements/run-07",
+          "resources": "read-unit-50/measurements/run-07/resources.txt",
+          "summary": "read-unit-50/measurements/run-07/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 8,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T03:53:13.972Z",
+          "endedAt": "2026-10-22T04:00:10.072Z",
+          "directory": "read-unit-50/measurements/run-08",
+          "resources": "read-unit-50/measurements/run-08/resources.txt",
+          "summary": "read-unit-50/measurements/run-08/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.000091054210535433,
+      "p95CV": 0.20106730671880346
+    },
+    {
+      "key": "read-history-10",
+      "scenario": "read-history",
+      "rate": 10,
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T04:00:11.081Z",
+          "endedAt": "2026-10-22T04:06:30.031Z",
+          "directory": "read-history-10/warmup/try-1",
+          "resources": "read-history-10/warmup/try-1/resources.txt",
+          "summary": "read-history-10/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T04:09:29.539Z",
+          "endedAt": "2026-10-22T04:15:56.613Z",
+          "directory": "read-history-10/measurements/run-01",
+          "resources": "read-history-10/measurements/run-01/resources.txt",
+          "summary": "read-history-10/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T04:21:48.629Z",
+          "endedAt": "2026-10-22T04:28:09.261Z",
+          "directory": "read-history-10/measurements/run-02",
+          "resources": "read-history-10/measurements/run-02/resources.txt",
+          "summary": "read-history-10/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T04:28:10.107Z",
+          "endedAt": "2026-10-22T04:34:32.131Z",
+          "directory": "read-history-10/measurements/run-03",
+          "resources": "read-history-10/measurements/run-03/resources.txt",
+          "summary": "read-history-10/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T04:40:24.897Z",
+          "endedAt": "2026-10-22T04:46:49.780Z",
+          "directory": "read-history-10/measurements/run-04",
+          "resources": "read-history-10/measurements/run-04/resources.txt",
+          "summary": "read-history-10/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T04:46:50.645Z",
+          "endedAt": "2026-10-22T04:53:10.164Z",
+          "directory": "read-history-10/measurements/run-05",
+          "resources": "read-history-10/measurements/run-05/resources.txt",
+          "summary": "read-history-10/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.000035972925496957494,
+      "p95CV": 0.08134037797334656
+    },
+    {
+      "key": "read-history-25",
+      "scenario": "read-history",
+      "rate": 25,
+      "status": "completed",
+      "extended": true,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T04:56:08.787Z",
+          "endedAt": "2026-10-22T05:03:00.138Z",
+          "directory": "read-history-25/warmup/try-1",
+          "resources": "read-history-25/warmup/try-1/resources.txt",
+          "summary": "read-history-25/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T05:06:00.905Z",
+          "endedAt": "2026-10-22T05:12:37.179Z",
+          "directory": "read-history-25/measurements/run-01",
+          "resources": "read-history-25/measurements/run-01/resources.txt",
+          "summary": "read-history-25/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T05:18:34.379Z",
+          "endedAt": "2026-10-22T05:25:01.372Z",
+          "directory": "read-history-25/measurements/run-02",
+          "resources": "read-history-25/measurements/run-02/resources.txt",
+          "summary": "read-history-25/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T05:25:02.118Z",
+          "endedAt": "2026-10-22T05:31:38.752Z",
+          "directory": "read-history-25/measurements/run-03",
+          "resources": "read-history-25/measurements/run-03/resources.txt",
+          "summary": "read-history-25/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T05:37:35.708Z",
+          "endedAt": "2026-10-22T05:44:08.755Z",
+          "directory": "read-history-25/measurements/run-04",
+          "resources": "read-history-25/measurements/run-04/resources.txt",
+          "summary": "read-history-25/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T05:44:10.265Z",
+          "endedAt": "2026-10-22T05:50:41.046Z",
+          "directory": "read-history-25/measurements/run-05",
+          "resources": "read-history-25/measurements/run-05/resources.txt",
+          "summary": "read-history-25/measurements/run-05/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 6,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T05:56:36.071Z",
+          "endedAt": "2026-10-22T06:03:04.310Z",
+          "directory": "read-history-25/measurements/run-06",
+          "resources": "read-history-25/measurements/run-06/resources.txt",
+          "summary": "read-history-25/measurements/run-06/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 7,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T06:03:05.079Z",
+          "endedAt": "2026-10-22T06:09:48.002Z",
+          "directory": "read-history-25/measurements/run-07",
+          "resources": "read-history-25/measurements/run-07/resources.txt",
+          "summary": "read-history-25/measurements/run-07/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 8,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T06:15:44.939Z",
+          "endedAt": "2026-10-22T06:22:10.289Z",
+          "directory": "read-history-25/measurements/run-08",
+          "resources": "read-history-25/measurements/run-08/resources.txt",
+          "summary": "read-history-25/measurements/run-08/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.00002837956236701736,
+      "p95CV": 0.161970885967925
+    },
+    {
+      "key": "read-history-50",
+      "scenario": "read-history",
+      "rate": 50,
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T06:22:11.584Z",
+          "endedAt": "2026-10-22T06:29:14.771Z",
+          "directory": "read-history-50/warmup/try-1",
+          "resources": "read-history-50/warmup/try-1/resources.txt",
+          "summary": "read-history-50/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T06:32:22.417Z",
+          "endedAt": "2026-10-22T06:39:25.279Z",
+          "directory": "read-history-50/measurements/run-01",
+          "resources": "read-history-50/measurements/run-01/resources.txt",
+          "summary": "read-history-50/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T06:45:36.478Z",
+          "endedAt": "2026-10-22T06:52:34.565Z",
+          "directory": "read-history-50/measurements/run-02",
+          "resources": "read-history-50/measurements/run-02/resources.txt",
+          "summary": "read-history-50/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T06:52:35.448Z",
+          "endedAt": "2026-10-22T06:59:38.233Z",
+          "directory": "read-history-50/measurements/run-03",
+          "resources": "read-history-50/measurements/run-03/resources.txt",
+          "summary": "read-history-50/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T07:05:46.647Z",
+          "endedAt": "2026-10-22T07:12:35.332Z",
+          "directory": "read-history-50/measurements/run-04",
+          "resources": "read-history-50/measurements/run-04/resources.txt",
+          "summary": "read-history-50/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T07:12:36.176Z",
+          "endedAt": "2026-10-22T07:19:40.042Z",
+          "directory": "read-history-50/measurements/run-05",
+          "resources": "read-history-50/measurements/run-05/resources.txt",
+          "summary": "read-history-50/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.00002549351132624465,
+      "p95CV": 0.1100487466698218
+    },
+    {
+      "key": "mixed-20",
+      "scenario": "mixed",
+      "rate": 20,
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T07:22:48.214Z",
+          "endedAt": "2026-10-22T07:29:24.770Z",
+          "directory": "mixed-20/warmup/try-1",
+          "resources": "mixed-20/warmup/try-1/resources.txt",
+          "summary": "mixed-20/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T07:32:29.183Z",
+          "endedAt": "2026-10-22T07:38:50.740Z",
+          "directory": "mixed-20/measurements/run-01",
+          "resources": "mixed-20/measurements/run-01/resources.txt",
+          "summary": "mixed-20/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T07:44:49.860Z",
+          "endedAt": "2026-10-22T07:51:20.944Z",
+          "directory": "mixed-20/measurements/run-02",
+          "resources": "mixed-20/measurements/run-02/resources.txt",
+          "summary": "mixed-20/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T07:51:21.855Z",
+          "endedAt": "2026-10-22T07:57:58.052Z",
+          "directory": "mixed-20/measurements/run-03",
+          "resources": "mixed-20/measurements/run-03/resources.txt",
+          "summary": "mixed-20/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T08:03:51.867Z",
+          "endedAt": "2026-10-22T08:10:10.225Z",
+          "directory": "mixed-20/measurements/run-04",
+          "resources": "mixed-20/measurements/run-04/resources.txt",
+          "summary": "mixed-20/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T08:10:11.037Z",
+          "endedAt": "2026-10-22T08:16:51.008Z",
+          "directory": "mixed-20/measurements/run-05",
+          "resources": "mixed-20/measurements/run-05/resources.txt",
+          "summary": "mixed-20/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.004136783430384829,
+      "p95CV": 0.007144236883044879
+    },
+    {
+      "key": "expected-rejections-unauthorized_transfer-5",
+      "scenario": "expected-rejections",
+      "rate": 5,
+      "family": "UNAUTHORIZED_TRANSFER",
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T08:19:52.447Z",
+          "endedAt": "2026-10-22T08:25:17.803Z",
+          "directory": "expected-rejections-unauthorized_transfer-5/warmup/try-1",
+          "resources": "expected-rejections-unauthorized_transfer-5/warmup/try-1/resources.txt",
+          "summary": "expected-rejections-unauthorized_transfer-5/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T08:27:15.823Z",
+          "endedAt": "2026-10-22T08:32:17.306Z",
+          "directory": "expected-rejections-unauthorized_transfer-5/measurements/run-01",
+          "resources": "expected-rejections-unauthorized_transfer-5/measurements/run-01/resources.txt",
+          "summary": "expected-rejections-unauthorized_transfer-5/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T08:36:06.909Z",
+          "endedAt": "2026-10-22T08:41:12.726Z",
+          "directory": "expected-rejections-unauthorized_transfer-5/measurements/run-02",
+          "resources": "expected-rejections-unauthorized_transfer-5/measurements/run-02/resources.txt",
+          "summary": "expected-rejections-unauthorized_transfer-5/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T08:41:13.591Z",
+          "endedAt": "2026-10-22T08:46:30.435Z",
+          "directory": "expected-rejections-unauthorized_transfer-5/measurements/run-03",
+          "resources": "expected-rejections-unauthorized_transfer-5/measurements/run-03/resources.txt",
+          "summary": "expected-rejections-unauthorized_transfer-5/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T08:50:19.021Z",
+          "endedAt": "2026-10-22T08:55:45.172Z",
+          "directory": "expected-rejections-unauthorized_transfer-5/measurements/run-04",
+          "resources": "expected-rejections-unauthorized_transfer-5/measurements/run-04/resources.txt",
+          "summary": "expected-rejections-unauthorized_transfer-5/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T08:55:46.074Z",
+          "endedAt": "2026-10-22T09:01:19.970Z",
+          "directory": "expected-rejections-unauthorized_transfer-5/measurements/run-05",
+          "resources": "expected-rejections-unauthorized_transfer-5/measurements/run-05/resources.txt",
+          "summary": "expected-rejections-unauthorized_transfer-5/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.000006666200032695915,
+      "p95CV": 0.1062295731998497
+    },
+    {
+      "key": "expected-rejections-duplicate_identity-5",
+      "scenario": "expected-rejections",
+      "rate": 5,
+      "family": "DUPLICATE_IDENTITY",
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T09:03:19.889Z",
+          "endedAt": "2026-10-22T09:08:38.530Z",
+          "directory": "expected-rejections-duplicate_identity-5/warmup/try-1",
+          "resources": "expected-rejections-duplicate_identity-5/warmup/try-1/resources.txt",
+          "summary": "expected-rejections-duplicate_identity-5/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T09:10:35.689Z",
+          "endedAt": "2026-10-22T09:15:42.110Z",
+          "directory": "expected-rejections-duplicate_identity-5/measurements/run-01",
+          "resources": "expected-rejections-duplicate_identity-5/measurements/run-01/resources.txt",
+          "summary": "expected-rejections-duplicate_identity-5/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T09:19:38.112Z",
+          "endedAt": "2026-10-22T09:24:50.090Z",
+          "directory": "expected-rejections-duplicate_identity-5/measurements/run-02",
+          "resources": "expected-rejections-duplicate_identity-5/measurements/run-02/resources.txt",
+          "summary": "expected-rejections-duplicate_identity-5/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T09:24:50.830Z",
+          "endedAt": "2026-10-22T09:30:02.538Z",
+          "directory": "expected-rejections-duplicate_identity-5/measurements/run-03",
+          "resources": "expected-rejections-duplicate_identity-5/measurements/run-03/resources.txt",
+          "summary": "expected-rejections-duplicate_identity-5/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T09:33:49.388Z",
+          "endedAt": "2026-10-22T09:38:58.966Z",
+          "directory": "expected-rejections-duplicate_identity-5/measurements/run-04",
+          "resources": "expected-rejections-duplicate_identity-5/measurements/run-04/resources.txt",
+          "summary": "expected-rejections-duplicate_identity-5/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T09:38:59.827Z",
+          "endedAt": "2026-10-22T09:44:22.979Z",
+          "directory": "expected-rejections-duplicate_identity-5/measurements/run-05",
+          "resources": "expected-rejections-duplicate_identity-5/measurements/run-05/resources.txt",
+          "summary": "expected-rejections-duplicate_identity-5/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.000006666311130023113,
+      "p95CV": 0.09035079029052513
+    },
+    {
+      "key": "expected-rejections-blocking_state-transfer-5",
+      "scenario": "expected-rejections",
+      "rate": 5,
+      "family": "BLOCKING_STATE",
+      "operation": "transfer",
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T09:46:19.457Z",
+          "endedAt": "2026-10-22T09:51:25.418Z",
+          "directory": "expected-rejections-blocking_state-transfer-5/warmup/try-1",
+          "resources": "expected-rejections-blocking_state-transfer-5/warmup/try-1/resources.txt",
+          "summary": "expected-rejections-blocking_state-transfer-5/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T09:53:21.319Z",
+          "endedAt": "2026-10-22T09:58:31.385Z",
+          "directory": "expected-rejections-blocking_state-transfer-5/measurements/run-01",
+          "resources": "expected-rejections-blocking_state-transfer-5/measurements/run-01/resources.txt",
+          "summary": "expected-rejections-blocking_state-transfer-5/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T10:02:18.515Z",
+          "endedAt": "2026-10-22T10:07:22.576Z",
+          "directory": "expected-rejections-blocking_state-transfer-5/measurements/run-02",
+          "resources": "expected-rejections-blocking_state-transfer-5/measurements/run-02/resources.txt",
+          "summary": "expected-rejections-blocking_state-transfer-5/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T10:07:23.318Z",
+          "endedAt": "2026-10-22T10:13:07.171Z",
+          "directory": "expected-rejections-blocking_state-transfer-5/measurements/run-03",
+          "resources": "expected-rejections-blocking_state-transfer-5/measurements/run-03/resources.txt",
+          "summary": "expected-rejections-blocking_state-transfer-5/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T10:16:53.702Z",
+          "endedAt": "2026-10-22T10:21:56.773Z",
+          "directory": "expected-rejections-blocking_state-transfer-5/measurements/run-04",
+          "resources": "expected-rejections-blocking_state-transfer-5/measurements/run-04/resources.txt",
+          "summary": "expected-rejections-blocking_state-transfer-5/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T10:21:57.541Z",
+          "endedAt": "2026-10-22T10:27:50.292Z",
+          "directory": "expected-rejections-blocking_state-transfer-5/measurements/run-05",
+          "resources": "expected-rejections-blocking_state-transfer-5/measurements/run-05/resources.txt",
+          "summary": "expected-rejections-blocking_state-transfer-5/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.000022605509345254916,
+      "p95CV": 0.13953488372093023
+    },
+    {
+      "key": "expected-rejections-blocking_state-dispense-5",
+      "scenario": "expected-rejections",
+      "rate": 5,
+      "family": "BLOCKING_STATE",
+      "operation": "dispense",
+      "status": "completed",
+      "extended": false,
+      "attempts": [
+        {
+          "kind": "warmup",
+          "repetition": 0,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T10:29:46.623Z",
+          "endedAt": "2026-10-22T10:35:05.591Z",
+          "directory": "expected-rejections-blocking_state-dispense-5/warmup/try-1",
+          "resources": "expected-rejections-blocking_state-dispense-5/warmup/try-1/resources.txt",
+          "summary": "expected-rejections-blocking_state-dispense-5/warmup/try-1/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 1,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T10:37:01.882Z",
+          "endedAt": "2026-10-22T10:42:07.823Z",
+          "directory": "expected-rejections-blocking_state-dispense-5/measurements/run-01",
+          "resources": "expected-rejections-blocking_state-dispense-5/measurements/run-01/resources.txt",
+          "summary": "expected-rejections-blocking_state-dispense-5/measurements/run-01/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 2,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T10:45:55.564Z",
+          "endedAt": "2026-10-22T10:51:02.047Z",
+          "directory": "expected-rejections-blocking_state-dispense-5/measurements/run-02",
+          "resources": "expected-rejections-blocking_state-dispense-5/measurements/run-02/resources.txt",
+          "summary": "expected-rejections-blocking_state-dispense-5/measurements/run-02/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 3,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T10:51:02.825Z",
+          "endedAt": "2026-10-22T10:56:30.254Z",
+          "directory": "expected-rejections-blocking_state-dispense-5/measurements/run-03",
+          "resources": "expected-rejections-blocking_state-dispense-5/measurements/run-03/resources.txt",
+          "summary": "expected-rejections-blocking_state-dispense-5/measurements/run-03/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 4,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T11:00:17.819Z",
+          "endedAt": "2026-10-22T11:05:17.088Z",
+          "directory": "expected-rejections-blocking_state-dispense-5/measurements/run-04",
+          "resources": "expected-rejections-blocking_state-dispense-5/measurements/run-04/resources.txt",
+          "summary": "expected-rejections-blocking_state-dispense-5/measurements/run-04/round/summary.json"
+        },
+        {
+          "kind": "measurement",
+          "repetition": 5,
+          "try": 1,
+          "status": "completed",
+          "startedAt": "2026-10-22T11:05:17.867Z",
+          "endedAt": "2026-10-22T11:11:02.041Z",
+          "directory": "expected-rejections-blocking_state-dispense-5/measurements/run-05",
+          "resources": "expected-rejections-blocking_state-dispense-5/measurements/run-05/resources.txt",
+          "summary": "expected-rejections-blocking_state-dispense-5/measurements/run-05/round/summary.json"
+        }
+      ],
+      "throughputCV": 0.000008164339876592014,
+      "p95CV": 0
+    }
+  ],
+  "endedAt": "2026-10-22T11:12:59.667Z"
+}

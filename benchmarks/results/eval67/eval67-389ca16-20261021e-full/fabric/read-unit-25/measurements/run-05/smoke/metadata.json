@@ -1,0 +1,46 @@
+{
+  "$schema": "urn:pfi-snt:run-metadata:schema:1.0.0",
+  "schemaVersion": "1.0.0",
+  "protocol": "measurement-protocol",
+  "repositoryCommit": "389ca160b2a490cd66bb0194f012e2b75b3598e8",
+  "sut": "fabric",
+  "scenario": "smoke",
+  "phase": "measurement",
+  "repetition": 1,
+  "dataset": {
+    "seed": 20260727,
+    "sha256": "de523ee8fafeed0a39f8518b501fce4692192869030762816de353654385163d",
+    "manifestSHA256": "e316f7f64148c919680a0edaec8b7bf881a58ea85602edeb0c9f1e3c301a6887",
+    "units": 50000
+  },
+  "workers": 1,
+  "transactions": 30,
+  "rate": {
+    "operation": "query-unit",
+    "transactionsPerOperation": 1,
+    "targetOperationsPerSecond": 1,
+    "targetTransactionsPerSecond": 1,
+    "effectiveTransactionsPerSecond": 0.99647910715472,
+    "rateController": "fixed-rate"
+  },
+  "startedAt": "2026-10-22T02:23:09.258Z",
+  "endedAt": "2026-10-22T02:23:39.364Z",
+  "host": {
+    "cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "cpuCores": 6,
+    "memoryGB": 7.756,
+    "os": "Ubuntu 24.04.4 LTS",
+    "kernel": "6.18.33.2-microsoft-standard-WSL2",
+    "wsl": "WSL2 Ubuntu-24.04"
+  },
+  "environment": {
+    "docker": "29.7.2",
+    "dockerCompose": "5.4.0",
+    "contractVersion": "2.11.2",
+    "packageID": "snt_1.0:a4d9315a304ac10b467c096f37f4960f86e4ce2d828310aed58d5ad34082d9a9",
+    "fabric": "2.5.16",
+    "fabricCA": "1.5.17",
+    "caliper": "0.7.1"
+  },
+  "notes": "Smoke diagnóstico: una ronda ReadUnit; no corresponde a una corrida experimental final."
+}
