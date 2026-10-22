@@ -552,79 +552,48 @@ func writeDataset(path string, units int, plan generationPlan) (string, error) {
 		return "", fmt.Errorf("crear dataset: %w", err)
 	}
 	hasher := sha256.New()
-	writer := bufio.NewWriterSize(io.MultiWriter(file, hasher), 256*1024)
-
-	writeLine := func(value string) error {
-		_, err := fmt.Fprintln(writer, value)
-		return err
-	}
-	if err := writeLine("{"); err != nil {
+	if err := encodeDataset(io.MultiWriter(file, hasher), units, plan); err != nil {
 		_ = file.Close()
-		return "", fmt.Errorf("escribir cabecera del dataset: %w", err)
-	}
-	if _, err := fmt.Fprintf(writer, "  %q: %q,%c", "$schema", DatasetSchemaID, byte(10)); err != nil {
-		_ = file.Close()
-		return "", fmt.Errorf("escribir schema del dataset: %w", err)
-	}
-	if _, err := fmt.Fprintf(writer, "  %q: %q,%c", "schemaVersion", SchemaVersion, byte(10)); err != nil {
-		_ = file.Close()
-		return "", fmt.Errorf("escribir version del dataset: %w", err)
-	}
-	if err := writeLine("  \"units\": ["); err != nil {
-		_ = file.Close()
-		return "", fmt.Errorf("escribir lista del dataset: %w", err)
-	}
-
-	for index := 0; index < units; index++ {
-		unit, err := buildUnitScenario(index, plan)
-		if err != nil {
-			_ = file.Close()
-			return "", err
-		}
-		encoded, err := json.Marshal(unit)
-		if err != nil {
-			_ = file.Close()
-			return "", fmt.Errorf("serializar unidad %d: %w", index+1, err)
-		}
-		if index > 0 {
-			if err := writer.WriteByte(','); err != nil {
-				_ = file.Close()
-				return "", fmt.Errorf("escribir separador de unidad: %w", err)
-			}
-			if err := writer.WriteByte(byte(10)); err != nil {
-				_ = file.Close()
-				return "", fmt.Errorf("escribir separador de unidad: %w", err)
-			}
-		}
-		if _, err := writer.WriteString("    "); err != nil {
-			_ = file.Close()
-			return "", fmt.Errorf("escribir unidad: %w", err)
-		}
-		if _, err := writer.Write(encoded); err != nil {
-			_ = file.Close()
-			return "", fmt.Errorf("escribir unidad %d: %w", index+1, err)
-		}
-	}
-	if err := writer.WriteByte(byte(10)); err != nil {
-		_ = file.Close()
-		return "", fmt.Errorf("cerrar lista del dataset: %w", err)
-	}
-	if err := writeLine("  ]"); err != nil {
-		_ = file.Close()
-		return "", fmt.Errorf("cerrar lista del dataset: %w", err)
-	}
-	if err := writeLine("}"); err != nil {
-		_ = file.Close()
-		return "", fmt.Errorf("cerrar dataset: %w", err)
-	}
-	if err := writer.Flush(); err != nil {
-		_ = file.Close()
-		return "", fmt.Errorf("flush del dataset: %w", err)
+		return "", err
 	}
 	if err := file.Close(); err != nil {
 		return "", fmt.Errorf("cerrar archivo del dataset: %w", err)
 	}
 	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+// encodeDataset escribe el dataset en out a traves de un buffer. bufio.Writer
+// conserva el primer error de escritura, ignora las siguientes y lo devuelve
+// en Flush: por eso las escrituras intermedias no se comprueban una por una.
+func encodeDataset(out io.Writer, units int, plan generationPlan) error {
+	writer := bufio.NewWriterSize(out, 256*1024)
+	_, _ = fmt.Fprintln(writer, "{")
+	_, _ = fmt.Fprintf(writer, "  %q: %q,%c", "$schema", DatasetSchemaID, byte(10))
+	_, _ = fmt.Fprintf(writer, "  %q: %q,%c", "schemaVersion", SchemaVersion, byte(10))
+	_, _ = fmt.Fprintln(writer, "  \"units\": [")
+	for index := 0; index < units; index++ {
+		unit, err := buildUnitScenario(index, plan)
+		if err != nil {
+			return err
+		}
+		encoded, err := json.Marshal(unit)
+		if err != nil {
+			return fmt.Errorf("serializar unidad %d: %w", index+1, err)
+		}
+		if index > 0 {
+			_ = writer.WriteByte(',')
+			_ = writer.WriteByte(byte(10))
+		}
+		_, _ = writer.WriteString("    ")
+		_, _ = writer.Write(encoded)
+	}
+	_ = writer.WriteByte(byte(10))
+	_, _ = fmt.Fprintln(writer, "  ]")
+	_, _ = fmt.Fprintln(writer, "}")
+	if err := writer.Flush(); err != nil {
+		return fmt.Errorf("escribir dataset: %w", err)
+	}
+	return nil
 }
 
 func buildUnitScenario(index int, plan generationPlan) (UnitScenario, error) {
