@@ -52,12 +52,20 @@ desarrollo.
 ## Instalación y controles rápidos
 
 ```bash
+npm ci --prefix benchmarks/caliper
 cd benchmarks/baseline
 npm ci
 npm run check
 npm test
 npm run test:metadata
 ```
+
+La baseline reutiliza módulos del proyecto hermano `benchmarks/caliper`: el
+plan determinístico, la agregación y, para las series, el orquestador, que
+valida el índice con `ajv`. Node resuelve esas dependencias desde
+`benchmarks/caliper/node_modules`, así que hay que instalarlas ahí. Instalarlas
+sólo en la baseline no alcanza. Si faltan, `npm run series` termina con un
+mensaje que indica el comando.
 
 `npm test` requiere el dataset canónico. Se genera desde su fuente única con:
 
@@ -195,6 +203,57 @@ digest inmutable de la imagen para respetar el límite del schema; la referencia
 completa con tag y digest permanece en el manifiesto y el contexto.
 Todo `build/` está ignorado por Git.
 
+## Series reproducibles
+
+`npm run series` le da a la baseline el mismo índice de serie que Fabric
+(`benchmarks/schema/fabric-series-index.schema.json`). Sin ese índice el
+procesamiento no puede acreditar sus rondas como citables. Reutiliza el
+orquestador de Caliper: un warm-up por escenario, que se reintenta una vez si se
+descarta; cinco mediciones, que se extienden a ocho por CV en `full`; y los
+intentos fallidos o descartados quedan registrados con su motivo. Cada intento
+es una ronda de la baseline, que ya restaura el snapshot, verifica las
+precondiciones y corre su smoke, y se guarda dentro del directorio de la serie.
+
+```bash
+npm run series -- --plan full --snapshot-dir <snapshot>
+npm run series -- --plan availability --snapshot-dir <snapshot>
+```
+
+| Plan | Escenarios | Citable |
+|---|---|---|
+| `full` | Las 20 combinaciones de rendimiento | sí |
+| `trial` | `read-unit` 50, `write-transfer` 20 y `mixed` 20, dos mediciones | no |
+| `availability` | `db-1` y `api-1`, cinco mediciones, extendidas a ocho por CV como en `full` | sí |
+| `availability-trial` | `db-1` y `api-1`, una medición | no |
+
+El índice queda en `build/benchmarks/baseline/series/<token>/series-index.json`.
+
+## Disponibilidad (EVAL-5)
+
+`npm run availability` ejecuta los dos escenarios de la sección 8.2 de forma
+simétrica a EVAL-4 (#44). Usa la misma carga mixta de 20 operaciones
+conceptuales/s durante 180 s, con el mismo plan determinístico, y las mismas
+tres ventanas de 60 s. A los 60 s de iniciada la carga hace `docker compose
+kill` del servicio y a los 120 s lo vuelve a levantar con `docker compose
+start`.
+
+| Escenario | Servicio dado de baja |
+|---|---|
+| `db-1` | `postgres`: la única base de datos del sistema |
+| `api-1` | `api`: el único punto de entrada de los clientes |
+
+Las fallas se simulan con el mismo nivel que en Fabric: un contenedor caído en
+un único host. Lo que se demuestra no depende de ese nivel. En la baseline no
+hay componente redundante, de modo que cualquiera de los dos deja sin servicio a
+todos los actores; es una propiedad de la topología centralizada, no del montaje.
+La metadata y las notas de cada ronda lo declaran.
+
+Como en EVAL-4, la ronda sólo se descarta si alguna operación terminó fallando
+antes de la falla, y conserva `fault-events.json`, los logs de `postgres` y
+`api` acotados a la ronda y `faultInjection` en la metadata. No hay clases de
+operación: todas dependen de los dos servicios. Estas rondas no entran en las
+estadísticas de rendimiento estable.
+
 ## Asimetrías preservadas
 
 - La identidad REST se emula con API keys; no existen MSP, PKI ni certificados.
@@ -211,8 +270,8 @@ Todo `build/` está ignorado por Git.
   un ledger distribuido.
 - `lab_intervention_events` no participa en ninguna ruta medida y debe
   permanecer sin escrituras en el snapshot y las rondas.
-- El runner no mide operaciones incorporadas posteriormente ni disponibilidad,
-  y no orquesta repeticiones o procesamiento estadístico.
+- El runner de rondas no mide operaciones incorporadas posteriormente. La
+  disponibilidad y las series tienen sus propios comandos (ver abajo).
 
 Los límites efectivos de CPU/memoria de API y PostgreSQL se registran en el
 manifiesto y el contexto, fuera del schema de metadata. Este Compose no impone
