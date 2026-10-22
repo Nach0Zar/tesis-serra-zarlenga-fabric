@@ -217,8 +217,10 @@ function attemptRecord(seriesDirectory, kind, repetition, tryNumber, attemptDire
     };
     // Cada ejecutor indica donde dejo los recursos del host; por defecto, el
     // resources.txt que mide el de Fabric.
+    // Si el intento terminó antes de medirlos, el índice no apunta a un
+    // archivo inexistente.
     const resourcesPath = result.resourcesPath ?? path.join(attemptDirectory, 'resources.txt');
-    record.resources = path.relative(seriesDirectory, resourcesPath).split(path.sep).join('/');
+    if (fs.existsSync(resourcesPath)) record.resources = path.relative(seriesDirectory, resourcesPath).split(path.sep).join('/');
     if (result.reason) record.reason = result.reason;
     if (result.summaryPath) record.summary = path.relative(seriesDirectory, result.summaryPath).split(path.sep).join('/');
     return record;

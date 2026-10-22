@@ -352,10 +352,18 @@ test('reconstruction reads the fault instants, the abort reason and per-containe
 
 test('series attempts point at the resources file each executor actually wrote', () => {
     const {attemptRecord} = require('../src/run-series');
-    const series = path.join(os.tmpdir(), 'series');
-    const attempt = path.join(series, 'db-1', 'measurements', 'run-01');
-    const base = ['measurement', 1, 1, attempt, '2026-10-21T10:00:00.000Z', '2026-10-21T10:03:00.000Z'];
-    assert.equal(attemptRecord(series, ...base, {status: 'completed'}).resources, 'db-1/measurements/run-01/resources.txt');
-    assert.equal(attemptRecord(series, ...base, {status: 'completed', resourcesPath: path.join(attempt, 'round', 'run-context.json')}).resources,
-        'db-1/measurements/run-01/round/run-context.json');
+    const series = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-series-'));
+    try {
+        const attempt = path.join(series, 'db-1', 'measurements', 'run-01');
+        fs.mkdirSync(path.join(attempt, 'round'), {recursive: true});
+        const base = ['measurement', 1, 1, attempt, '2026-10-21T10:00:00.000Z', '2026-10-21T10:03:00.000Z'];
+        assert.equal(attemptRecord(series, ...base, {status: 'failed'}).resources, undefined, 'no reference to a file that does not exist');
+        fs.writeFileSync(path.join(attempt, 'resources.txt'), 'cpu');
+        assert.equal(attemptRecord(series, ...base, {status: 'completed'}).resources, 'db-1/measurements/run-01/resources.txt');
+        fs.writeFileSync(path.join(attempt, 'round', 'run-context.json'), '{}');
+        assert.equal(attemptRecord(series, ...base, {status: 'completed', resourcesPath: path.join(attempt, 'round', 'run-context.json')}).resources,
+            'db-1/measurements/run-01/round/run-context.json');
+    } finally {
+        fs.rmSync(series, {recursive: true, force: true});
+    }
 });
