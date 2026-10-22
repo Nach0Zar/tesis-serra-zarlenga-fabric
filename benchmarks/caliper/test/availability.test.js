@@ -274,3 +274,96 @@ test('the availability summary counts every observed attempt, probe included, wi
         effectiveOperationsPerSecond: 1 / 180, effectiveTransactionsPerSecond: 1 / 180,
     });
 });
+
+test('a component that does not come back is recorded as a failed restoration instead of aborting', async () => {
+    const {restoreNetwork, restorationEvidence} = require('../src/run-availability');
+    const unhealthy = () => {
+        throw new Error('docker compose up failed: Container orderer.anmat.snt.local  Started\ncontainer orderer.anmat.snt.local is unhealthy');
+    };
+    const timeouts = [];
+    const leader = ORDERERS[1];
+    const faultEvents = {};
+    const restoration = await restoreNetwork(repoRoot, scenarioDefinition('raft-1'), faultEvents, {
+        ensureNetworkRunning: unhealthy,
+        electedLeader: async (timeoutMs) => {
+            timeouts.push(timeoutMs);
+            return leader;
+        },
+    });
+    assert.equal(restoration.status, 'failed');
+    assert.equal(restoration.reason, 'container orderer.anmat.snt.local is unhealthy');
+    assert.deepEqual(faultEvents.restoration, restoration);
+    assert.deepEqual(faultEvents.leaderAfter, leader);
+    assert.deepEqual(timeouts, [10_000], 'a failed restoration does not wait the full election timeout');
+
+    const healthy = await restoreNetwork(repoRoot, scenarioDefinition('peer-1a'), {}, {
+        ensureNetworkRunning: () => {},
+        electedLeader: async () => assert.fail('peer scenarios do not look for a leader'),
+    });
+    assert.equal(healthy.status, 'restored');
+
+    const logs = [
+        '2026-10-21T01:56:50.000Z INFO starting',
+        '2026-10-21T01:56:53.009Z 2026-10-21 01:56:53.009 UTC 0010 \u001b[35mPANI\u001b[0m failed to read WAL and cannot repair',
+        '2026-10-21T01:56:53.009Z panic: failed to read WAL and cannot repair',
+    ].join('\n');
+    const evidence = restorationEvidence(['orderer.anmat.snt.local'], '2026-10-21T01:56:49.689Z', (container, {since}) => {
+        assert.equal(since, '2026-10-21T01:56:49.689Z');
+        return logs;
+    });
+    assert.equal(evidence.length, 2);
+    assert.match(evidence[0], /^orderer\.anmat\.snt\.local: .*PANI failed to read WAL/u);
+    assert.match(evidence[1], /panic: failed to read WAL/u);
+});
+
+test('reconstruction reads the fault instants, the abort reason and per-container logs a failed round kept', () => {
+    const {abortReason, composeLogsByContainer, faultActions} = require('../src/reconstruct-availability-round');
+    const roundLog = [
+        'Discovery ready: {}',
+        'Fault injected: docker kill orderer.anmat.snt.local at 2026-10-21T01:55:49.687Z',
+        'Fault recovered: docker start orderer.anmat.snt.local at 2026-10-21T01:56:49.689Z',
+        'Benchmark successfully finished!',
+        'Fabric availability round failed: docker compose up failed: Container orderer.anmat.snt.local  Started',
+        'container orderer.anmat.snt.local is unhealthy',
+    ].join('\n');
+    assert.deepEqual(faultActions(roundLog), [
+        {action: 'kill', containers: ['orderer.anmat.snt.local'], issuedAt: '2026-10-21T01:55:49.687Z'},
+        {action: 'start', containers: ['orderer.anmat.snt.local'], issuedAt: '2026-10-21T01:56:49.689Z'},
+    ]);
+    assert.equal(abortReason(roundLog), 'container orderer.anmat.snt.local is unhealthy');
+    assert.throws(() => faultActions('Discovery ready: {}'), /does not record the fault injection/u);
+    assert.throws(() => abortReason('Fabric availability round completed: x'), /does not record a failed round/u);
+
+    const sutLog = [
+        'orderer.anmat.snt.local       | \u001b[34m2026-10-21 01:56:53.009 UTC 0010 PANI\u001b[0m [multichannel] failed to read WAL',
+        'orderer.anmat.snt.local       | panic: failed to read WAL and cannot repair',
+        'orderer.lab.snt.local         | 2026-10-21 01:55:55.100 UTC 0042 INFO Raft leader changed: 0 -> 2 channel=snt-channel',
+        'peer0.lab.snt.local           | 2026-10-21 01:59:00.000 UTC 0001 INFO outside the window',
+    ].join('\n');
+    const logsFor = composeLogsByContainer(sutLog);
+    assert.deepEqual(logsFor('orderer.anmat.snt.local').split('\n'), [
+        '2026-10-21T01:56:53.009Z 2026-10-21 01:56:53.009 UTC 0010 PANI [multichannel] failed to read WAL',
+        '2026-10-21T01:56:53.009Z panic: failed to read WAL and cannot repair',
+    ], 'lines without their own timestamp inherit the previous one');
+    assert.equal(logsFor('peer0.lab.snt.local', {until: '2026-10-21T01:58:00.000Z'}), '');
+    assert.equal(eventLines(logsFor('orderer.lab.snt.local'), RAFT_EVENT, Date.parse('2026-10-21T01:55:00Z'),
+        Date.parse('2026-10-21T01:56:00Z')).length, 1);
+});
+
+test('series attempts point at the resources file each executor actually wrote', () => {
+    const {attemptRecord} = require('../src/run-series');
+    const series = fs.mkdtempSync(path.join(os.tmpdir(), 'snt-series-'));
+    try {
+        const attempt = path.join(series, 'db-1', 'measurements', 'run-01');
+        fs.mkdirSync(path.join(attempt, 'round'), {recursive: true});
+        const base = ['measurement', 1, 1, attempt, '2026-10-21T10:00:00.000Z', '2026-10-21T10:03:00.000Z'];
+        assert.equal(attemptRecord(series, ...base, {status: 'failed'}).resources, undefined, 'no reference to a file that does not exist');
+        fs.writeFileSync(path.join(attempt, 'resources.txt'), 'cpu');
+        assert.equal(attemptRecord(series, ...base, {status: 'completed'}).resources, 'db-1/measurements/run-01/resources.txt');
+        fs.writeFileSync(path.join(attempt, 'round', 'run-context.json'), '{}');
+        assert.equal(attemptRecord(series, ...base, {status: 'completed', resourcesPath: path.join(attempt, 'round', 'run-context.json')}).resources,
+            'db-1/measurements/run-01/round/run-context.json');
+    } finally {
+        fs.rmSync(series, {recursive: true, force: true});
+    }
+});

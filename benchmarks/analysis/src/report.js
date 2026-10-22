@@ -66,6 +66,36 @@ function seriesRows(entry) {
     return rows;
 }
 
+// El componente se restaura salvo en Raft-2, que lo hace fuera de la ronda.
+function restorationLabel(entry) {
+    if (entry.restoration?.status === 'failed') return entry.reconstruction ? 'fallida (evidencia reconstruida)' : 'fallida';
+    return entry.windows?.recovery ? 'correcta' : 'fuera de la ronda';
+}
+
+function restorationSection(availability) {
+    const failed = availability.filter((entry) => entry.restoration?.status === 'failed');
+    if (failed.length === 0) return [];
+    const blocks = failed.map((entry) => {
+        const lines = [
+            `- **${entry.sut} ${entry.scenario}, repetición ${entry.repetition}.** ${entry.restoration.reason}. `
+            + 'La carga y sus ventanas se informan arriba: el servicio se midió completo; lo que falló fue el reingreso del componente.',
+            ...entry.restoration.evidence.map((line) => `  - \`${line.slice(0, 400)}\``),
+        ];
+        if (entry.reconstruction) {
+            const record = entry.reconstruction;
+            lines.push(`  - Evidencia reconstruida el ${record.reconstructedAt} con \`${record.tool}\` (commit \`${record.toolCommit.slice(0, 7)}\`); `
+                + `la ronda se ejecutó en \`${record.executionCommit.slice(0, 7)}\`. No se recuperaron: ${record.notRecovered.join('; ')}.`);
+            lines.push(`  - Insumos: ${record.inputs.map((input) => `\`${input.path}\` (${input.sha256.slice(0, 12)}…)`).join(', ')}.`);
+        }
+        return lines.join('\n');
+    });
+    return [
+        '### Restauraciones fallidas\n',
+        'El intento figura como `failed` en el índice de su serie y se informa como resultado observado del escenario, dentro del balance de sus repeticiones.\n',
+        `${blocks.join('\n')}\n`,
+    ];
+}
+
 function availabilityRows(entry) {
     const row = (label, result) => [
         entry.sut, entry.scenario, entry.repetition, label, entry.target,
@@ -73,8 +103,9 @@ function availabilityRows(entry) {
         percent(result.windows.recovery?.successRate),
         [result.windows.preFault.p95Ms, result.windows.fault.p95Ms, result.windows.recovery?.p95Ms].map((value) => format(value, 0)).join(' / '),
         result.recoverySeconds === undefined ? 'sin recuperación estable' : format(result.recoverySeconds, 1),
+        restorationLabel(entry),
     ];
-    if (entry.blocked) return [[entry.sut, entry.scenario, entry.repetition, 'bloqueado', entry.target, entry.blocked, '', '', '', '']];
+    if (entry.blocked) return [[entry.sut, entry.scenario, entry.repetition, 'bloqueado', entry.target, entry.blocked, '', '', '', '', '']];
     const rows = [row('global', entry)];
     for (const [name, result] of Object.entries(entry.byClass ?? {})) {
         if (result) rows.push(row(name === 'target' ? 'objetivo' : 'control', result));
@@ -161,9 +192,10 @@ function buildReport({aggregates, comparisons, unpaired, excluded, failures, pre
     ];
     if (availability.length) {
         sections.push('## Disponibilidad\n', table(
-            ['SUT', 'Escenario', 'Repetición', 'Clase', 'Componente', 'Éxito pre-falla', 'Éxito en falla', 'Éxito post', 'p95 pre / falla / post (ms)', 'Recuperación (s)'],
+            ['SUT', 'Escenario', 'Repetición', 'Clase', 'Componente', 'Éxito pre-falla', 'Éxito en falla', 'Éxito post', 'p95 pre / falla / post (ms)', 'Recuperación (s)', 'Restauración'],
             availability.flatMap(availabilityRows),
-        ), 'En las caídas de peer (sección 8.1) la disponibilidad se informa por clase: operaciones que requieren el peer caído (objetivo) y de control. Sin esa clasificación en el crudo el resultado se bloquea. Los escenarios simulan fallas de contenedor en un host único: no demuestran la caída física ni administrativa de una organización (#44, ADR-007).\n');
+        ), 'En las caídas de peer (sección 8.1) la disponibilidad se informa por clase: operaciones que requieren el peer caído (objetivo) y de control. Sin esa clasificación en el crudo el resultado se bloquea. Los escenarios simulan fallas de contenedor en un host único: no demuestran la caída física ni administrativa de una organización (#44, ADR-007).\n',
+            ...restorationSection(availability));
     }
     sections.push(
         '## Errores inesperados y timeouts\n',
