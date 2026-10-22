@@ -9,6 +9,7 @@ Este directorio agrupa documentos de diseño, decisiones de arquitectura y proto
 | [`organizations-roles-endorsement.md`](organizations-roles-endorsement.md) | Diseno DES-6 de organizaciones Fabric, MSP, roles, ABAC y politicas de endoso. |
 | [`alcance-prototipo.md`](alcance-prototipo.md) | Registro de exclusiones y simplificaciones conscientes del alcance del prototipo. |
 | [`measurement-protocol.md`](measurement-protocol.md) | Protocolo de medición para comparar Hyperledger Fabric y la baseline centralizada bajo condiciones equivalentes. |
+| [`eval8-final-analysis.md`](eval8-final-analysis.md) | Análisis cualitativo y estructural EVAL-8 con resultados finales EVAL-6/7, disponibilidad EVAL-4/5 y límites del trade-off. |
 | [`modelo-datos.md`](modelo-datos.md) | Clave compuesta y struct de estado público del activo de trazabilidad, y justificación de datos excluidos por Ley 25.326. |
 | [`api-contract.md`](api-contract.md) | Contrato congelado de la interfaz pública del chaincode `snt`: firmas, JSON de request/response y formato de errores. |
 | [`anmat-event-listener.md`](anmat-event-listener.md) | Operación, semántica observable y demo reproducible del listener de eventos para ANMAT. |
