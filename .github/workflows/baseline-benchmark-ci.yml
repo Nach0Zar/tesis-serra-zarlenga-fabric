@@ -12,6 +12,7 @@ on:
       - ready_for_review
     paths:
       - "benchmarks/baseline/**"
+      - "scripts/coverage/**"
       - "benchmarks/caliper/src/metadata.js"
       - "benchmarks/caliper/src/planner.js"
       - "benchmarks/caliper/src/profiles.js"
@@ -83,9 +84,11 @@ jobs:
         working-directory: benchmarks/baseline
         run: npm run check
 
-      - name: Test benchmark tooling
+      # Exige 85 % de cobertura de lineas sobre la logica declarada en
+      # coverage.include del package.json.
+      - name: Test benchmark tooling with coverage gate
         working-directory: benchmarks/baseline
-        run: npm test
+        run: npm run test:coverage
 
       - name: Validate metadata variants
         working-directory: benchmarks/baseline

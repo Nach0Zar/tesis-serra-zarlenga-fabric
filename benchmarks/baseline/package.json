@@ -11,11 +11,27 @@
   "scripts": {
     "check": "node scripts/check-syntax.js",
     "test": "node --test test/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude='test/**' --test-coverage-exclude='../**' --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage.lcov test/*.test.js && node ../../scripts/coverage/check-lcov.js coverage.lcov",
     "test:canonical": "node --test test/canonical-dataset.test.js",
     "test:metadata": "node scripts/verify-metadata.js",
     "snapshot:build": "node src/build-snapshot.js",
     "snapshot:restore": "node src/restore-snapshot.js",
     "smoke": "node src/run-smoke.js",
     "round": "node src/run-round.js"
+  },
+  "coverage": {
+    "minimum": 85,
+    "include": [
+      "src/credentials.js",
+      "src/execution.js",
+      "src/http-client.js",
+      "src/metadata.js",
+      "src/snapshot-plan.js"
+    ],
+    "excluded": {
+      "src/paths.js": "rutas de salida del host",
+      "src/runtime.js": "levanta y detiene el proyecto Docker Compose de la baseline",
+      "src/snapshot.js": "construye y restaura el snapshot con pg_dump y Docker"
+    }
   }
 }

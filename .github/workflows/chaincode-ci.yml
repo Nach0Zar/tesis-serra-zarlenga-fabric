@@ -15,6 +15,7 @@ on:
       - "domain/**"
       - "go.work"
       - "go.work.sum"
+      - "scripts/coverage/**"
       - ".github/workflows/chaincode-ci.yml"
 
 permissions:
@@ -160,7 +161,11 @@ jobs:
       # network/organizations-manifest.json.
       - name: Run shared domain package tests
         working-directory: domain
-        run: go test -v -race ./...
+        run: go test -v -race -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Domain coverage gate
+        working-directory: domain
+        run: ../scripts/coverage/check-go.sh coverage.out 85
 
       - name: Run unit tests
         working-directory: chaincode
@@ -169,9 +174,16 @@ jobs:
             -v \
             -race \
             -covermode=atomic \
+            -coverpkg=./internal/... \
             -coverprofile=coverage.out \
             ./...
 
       - name: Show coverage summary
         working-directory: chaincode
         run: go tool cover -func=coverage.out
+
+      # El minimo aplica a la logica del contrato (internal/...); el main solo
+      # arranca el servidor de chaincode.
+      - name: Coverage gate
+        working-directory: chaincode
+        run: ../scripts/coverage/check-go.sh coverage.out 85

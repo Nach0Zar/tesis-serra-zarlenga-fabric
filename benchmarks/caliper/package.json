@@ -12,6 +12,7 @@
     "bind:fabric": "caliper bind --caliper-bind-sut fabric:fabric-gateway --caliper-bind-args=\"--save-dev --save-exact\"",
     "check": "node scripts/check-syntax.js && node scripts/verify-setup.js",
     "test": "node --test test/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude='test/**' --test-coverage-exclude='../**' --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage.lcov test/*.test.js && node ../../scripts/coverage/check-lcov.js coverage.lcov",
     "test:metadata": "node scripts/verify-round-metadata.js",
     "snapshot:build": "node src/build-snapshot.js",
     "snapshot:verify": "node src/verify-snapshot.js",
@@ -28,5 +29,38 @@
     "@hyperledger/fabric-gateway": "1.7.1",
     "@hyperledger/fabric-protos": "0.3.7",
     "ajv": "8.17.1"
+  },
+  "coverage": {
+    "minimum": 85,
+    "include": [
+      "rate-controllers/conceptual-fixed-rate.js",
+      "src/artifacts.js",
+      "src/contract-errors.js",
+      "src/credentials.js",
+      "src/dataset.js",
+      "src/discovery-readiness.js",
+      "src/metadata.js",
+      "src/planner.js",
+      "src/profiles.js",
+      "src/raw-results.js",
+      "src/requests.js",
+      "src/rwset.js",
+      "src/snapshot-plan.js",
+      "src/snapshot-state.js",
+      "src/sources.js",
+      "workloads/core-workload.js"
+    ],
+    "excluded": {
+      "src/gateway-bridge.js": "cliente gRPC del Gateway: se ejercita contra la red real en el smoke y las rondas",
+      "src/host.js": "lee CPU, memoria y sistema operativo del host",
+      "src/network-config.js": "inspecciona contenedores y material criptografico de la red levantada",
+      "src/run-round.js": "orquesta Caliper contra la red real",
+      "src/run-series.js": "orquesta restauraciones, smoke y rondas con Docker",
+      "src/run-smoke.js": "corrida de comprobacion contra la red real",
+      "src/snapshot.js": "construye y restaura volumenes de Docker",
+      "src/snapshot-preconditions.js": "consulta el ledger de la red levantada",
+      "src/snapshot-volumes.js": "copia volumenes de Docker",
+      "src/warm-peers.js": "consultas de calentamiento contra los peers"
+    }
   }
 }
