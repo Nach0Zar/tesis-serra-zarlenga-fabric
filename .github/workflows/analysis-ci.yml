@@ -13,6 +13,7 @@ on:
     paths:
       - "benchmarks/analysis/**"
       - "benchmarks/schema/**"
+      - "scripts/coverage/**"
       - ".github/workflows/analysis-ci.yml"
 
 permissions:
@@ -47,6 +48,8 @@ jobs:
         working-directory: benchmarks/analysis
         run: npm run check
 
-      - name: Test
+      # Corre los tests y exige 85 % de cobertura de lineas sobre la logica
+      # declarada en coverage.include del package.json.
+      - name: Test with coverage gate
         working-directory: benchmarks/analysis
-        run: npm test
+        run: npm run test:coverage

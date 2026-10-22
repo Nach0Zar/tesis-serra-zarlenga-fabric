@@ -16,6 +16,7 @@ AGENTS.md
 *.test
 *.out
 coverage.out
+coverage.lcov
 
 # Python validation caches
 __pycache__/

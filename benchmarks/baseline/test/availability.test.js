@@ -84,6 +84,7 @@ test('the baseline series uses the same plans, arguments and index as Fabric', a
         const output = path.join(repoRoot, args[args.indexOf('--output-root') + 1], 'round');
         fs.mkdirSync(output, {recursive: true});
         const discarded = calls.length === 1;
+        fs.writeFileSync(path.join(output, 'run-context.json'), JSON.stringify({resources: {}}));
         fs.writeFileSync(path.join(output, 'summary.json'), JSON.stringify({
             discardReason: discarded ? 'operaciones fallaron antes de inyectar la falla' : undefined,
             rate: {effectiveOperationsPerSecond: 20}, operationLatency: {p95Ms: 10},
@@ -111,6 +112,10 @@ test('the baseline series uses the same plans, arguments and index as Fabric', a
         assert.ok(calls.every((args) => args.includes('--snapshot-dir') && args.includes('--run-token')));
         const roundDirectory = path.join(result.directory, 'db-1', 'measurements', 'run-01', 'round');
         assert.ok(fs.existsSync(path.join(roundDirectory, 'summary.json')), 'rounds live inside the series index tree');
+        for (const attempt of result.index.scenarios.flatMap((scenario) => scenario.attempts)) {
+            assert.match(attempt.resources, /\/round\/run-context\.json$/u);
+            assert.ok(fs.existsSync(path.join(result.directory, attempt.resources)), 'the index points at the resources the round recorded');
+        }
     } finally {
         fs.rmSync(root, {recursive: true, force: true});
     }

@@ -312,3 +312,17 @@ func TestStateCatalogMatchesADR001(t *testing.T) {
 		t.Fatal("States() no debe exponer el catalogo interno")
 	}
 }
+
+// TestTransitionsReturnsACopy: la tabla de ADR-001 no puede alterarse desde
+// un consumidor.
+func TestTransitionsReturnsACopy(t *testing.T) {
+	first := Transitions()
+	if len(first) == 0 {
+		t.Fatal("Transitions() vacia")
+	}
+	originalEvent := first[0].Event
+	first[0].Event = "ALTERADO"
+	if Transitions()[0].Event != originalEvent {
+		t.Fatal("Transitions() expone la tabla interna")
+	}
+}

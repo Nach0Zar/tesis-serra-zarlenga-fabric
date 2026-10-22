@@ -90,15 +90,18 @@ function attemptExecutor(options = {}) {
             cwd: root, env: process.env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 128 * 1024 * 1024,
         });
         fs.writeFileSync(path.join(attempt.attemptDirectory, 'round.log'), `${result.stdout ?? ''}${result.stderr ?? ''}`, {mode: 0o600});
+        // La ronda de la baseline registra los recursos del host en su
+        // run-context.json; no hay un resources.txt aparte como en Fabric.
+        const resourcesPath = path.join(attempt.attemptDirectory, 'round', 'run-context.json');
         const summaryPath = path.join(attempt.attemptDirectory, 'round', 'summary.json');
         if (!fs.existsSync(summaryPath)) {
-            return {status: 'failed', reason: result.error?.message ?? `round exited with code ${result.status} before writing summary.json`};
+            return {status: 'failed', reason: result.error?.message ?? `round exited with code ${result.status} before writing summary.json`, resourcesPath};
         }
         const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
         if (summary.discardReason || result.status !== 0) {
-            return {status: 'discarded', reason: summary.discardReason ?? `round exited with code ${result.status}`, summaryPath, summary};
+            return {status: 'discarded', reason: summary.discardReason ?? `round exited with code ${result.status}`, summaryPath, summary, resourcesPath};
         }
-        return {status: 'completed', summaryPath, summary};
+        return {status: 'completed', summaryPath, summary, resourcesPath};
     };
 }
 

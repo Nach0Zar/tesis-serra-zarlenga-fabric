@@ -12,6 +12,7 @@ on:
       - ready_for_review
     paths:
       - "benchmarks/baseline/**"
+      - "scripts/coverage/**"
       # El orquestador de series y la disponibilidad de la baseline reutilizan
       # estos modulos de Caliper y sus dependencias (#45).
       - "benchmarks/caliper/package.json"
@@ -96,9 +97,11 @@ jobs:
         working-directory: benchmarks/baseline
         run: npm run check
 
-      - name: Test benchmark tooling
+      # Exige 85 % de cobertura de lineas sobre la logica declarada en
+      # coverage.include del package.json.
+      - name: Test benchmark tooling with coverage gate
         working-directory: benchmarks/baseline
-        run: npm test
+        run: npm run test:coverage
 
       - name: Validate metadata variants
         working-directory: benchmarks/baseline

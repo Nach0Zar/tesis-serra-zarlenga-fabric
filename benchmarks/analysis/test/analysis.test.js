@@ -147,7 +147,9 @@ function writeSeries(root, {sut = 'fabric', plan = 'full', snapshot, rounds, ind
         const roundDirectory = path.join(directory, attemptDirectory, 'round');
         const operations = round.raw ?? raw();
         writeJSON(path.join(roundDirectory, 'metadata.json'), metadata({sut, ...round.meta}));
-        writeJSON(path.join(roundDirectory, 'summary.json'), summary(round.sum));
+        writeJSON(path.join(roundDirectory, 'summary.json'),
+            round.restoration ? {...summary(round.sum), availability: {restoration: round.restoration}} : summary(round.sum));
+        if (round.reconstruction) writeJSON(path.join(roundDirectory, 'reconstruction.json'), round.reconstruction);
         if (round.raw !== null) writeJSON(path.join(roundDirectory, 'raw.json'), operations);
         if (snapshot) writeJSON(path.join(roundDirectory, 'snapshot-context.json'), contextFor(sut, snapshot, operations, context));
         const scenario = scenarios.get(key) ?? {key, scenario: round.meta.scenario ?? 'read-unit', rate: round.meta.rate ?? 10,
@@ -541,6 +543,30 @@ test('availability outputs follow the same accreditation and citability as perfo
     assert.match(fs.readFileSync(path.join(diagnostic.output, 'report.md'), 'utf8'), /^# NO CITABLE/u);
     const figure = fs.readdirSync(path.join(diagnostic.output, 'figures')).find((name) => name.startsWith('availability-'));
     assert.match(fs.readFileSync(path.join(diagnostic.output, 'figures', figure), 'utf8'), /NO CITABLE/u);
+});
+
+test('a failed restoration stays failed in the index but its measured load is reported', () => {
+    const root = temporary('snt-analysis-');
+    const snapshot = writeSnapshot(root);
+    const restoration = {status: 'failed', reason: 'container orderer.anmat.snt.local is unhealthy',
+        evidence: ['orderer.anmat.snt.local: panic: failed to read WAL and cannot repair']};
+    const reconstruction = {tool: 'benchmarks/caliper/src/reconstruct-availability-round.js', toolCommit: 'a'.repeat(40),
+        reconstructedAt: '2026-10-22T03:00:00.000Z', executionCommit: 'f'.repeat(40),
+        inputs: [{path: 'round.log', sha256: 'b'.repeat(64)}], notRecovered: ['completedAt de las acciones docker kill y docker start']};
+    writeSeries(root, {snapshot, rounds: [
+        {...availabilityRound('raft-1', () => undefined), attemptStatus: 'failed', restoration, reconstruction},
+        {...availabilityRound('raft-1', () => undefined), meta: {...availabilityRound('raft-1', () => undefined).meta, repetition: 2}, attemptStatus: 'failed'},
+    ]});
+    const {output} = run(root, {snapshots: [snapshot.directory]});
+    const entries = JSON.parse(fs.readFileSync(path.join(output, 'availability.json'), 'utf8'));
+    assert.deepEqual(entries.map((entry) => entry.repetition), [1]);
+    assert.equal(entries[0].restoration.reason, restoration.reason);
+    assert.equal(entries[0].reconstruction.executionCommit, 'f'.repeat(40));
+    const report = fs.readFileSync(path.join(output, 'report.md'), 'utf8');
+    assert.match(report, /fallida \(evidencia reconstruida\)/u);
+    assert.match(report, /### Restauraciones fallidas/u);
+    assert.match(report, /failed to read WAL/u);
+    assert.match(exclusionReasons(output).join('\n'), /intento failed en el indice/u);
 });
 
 test('peer-fault figures show the operation classes and are not exported when blocked', () => {

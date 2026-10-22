@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -575,4 +576,57 @@ func validGS1CheckDigit(value string) bool {
 	data := value[:len(value)-1]
 	check := value[len(value)-1]
 	return check >= '0' && check <= '9' && byte(check-'0') == gs1CheckDigit(data)
+}
+
+// TestGenerateValidatesBeforeWriting: Generate rechaza la configuracion antes
+// de tocar el disco, y generateBundle no escribe un bundle que no alcance para
+// los casos de rechazo derivados ni sobre una ruta inutilizable.
+func TestGenerateValidatesBeforeWriting(t *testing.T) {
+	t.Parallel()
+
+	outputDir := filepath.Join(t.TempDir(), "bundle")
+	if _, err := Generate(Config{Units: MinimumUnits - 1, OutputDir: outputDir}); err == nil {
+		t.Fatalf("Generate deberia rechazar menos de %d unidades", MinimumUnits)
+	}
+	if _, err := os.Stat(outputDir); !os.IsNotExist(err) {
+		t.Fatalf("una configuracion invalida no debe crear %s: %v", outputDir, err)
+	}
+
+	if _, err := generateBundle(outputDir, 1); err == nil || !strings.Contains(err.Error(), "casos de rechazo") {
+		t.Fatalf("un volumen menor que los rechazos derivados deberia rechazarse: %v", err)
+	}
+
+	blocker := filepath.Join(t.TempDir(), "archivo")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := generateBundle(filepath.Join(blocker, "bundle"), 200); err == nil || !strings.Contains(err.Error(), "crear output-dir") {
+		t.Fatalf("un output-dir bajo un archivo deberia fallar al crearse: %v", err)
+	}
+
+	plan, err := newGenerationPlan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeDataset(t.TempDir(), 200, plan); err == nil || !strings.Contains(err.Error(), "crear dataset") {
+		t.Fatalf("un dataset sobre un directorio deberia fallar al crearse: %v", err)
+	}
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("disco lleno") }
+
+// TestEncodeDatasetReportsTheFirstWriteError: un error de escritura no se
+// pierde aunque las escrituras intermedias pasen por el buffer.
+func TestEncodeDatasetReportsTheFirstWriteError(t *testing.T) {
+	t.Parallel()
+
+	plan, err := newGenerationPlan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := encodeDataset(failingWriter{}, 200, plan); err == nil || !strings.Contains(err.Error(), "disco lleno") {
+		t.Fatalf("encodeDataset deberia devolver el error de escritura: %v", err)
+	}
 }

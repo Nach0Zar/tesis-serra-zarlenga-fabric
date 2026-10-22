@@ -16,6 +16,7 @@ type fakeTransactionClient struct {
 	queryErr      error
 	invokePayload []byte
 	invokeErr     error
+	closeErr      error
 
 	calledCommand   string
 	calledFunction  string
@@ -46,7 +47,7 @@ func (client *fakeTransactionClient) Invoke(
 
 func (client *fakeTransactionClient) Close() error {
 	client.closed = true
-	return nil
+	return client.closeErr
 }
 
 func (client *fakeTransactionClient) capture(
