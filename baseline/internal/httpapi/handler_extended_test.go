@@ -13,82 +13,82 @@ import (
 
 func (f *fakeService) QueryUnitsByState(context.Context, domain.State) ([]core.MedicationUnit, error) {
 	f.called = "query-state"
-	return []core.MedicationUnit{}, nil
+	return []core.MedicationUnit{}, f.err
 }
 
 func (f *fakeService) Quarantine(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error) {
 	f.called = "quarantine"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 
 func (f *fakeService) ReleaseQuarantine(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error) {
 	f.called = "release-quarantine"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 
 func (f *fakeService) ReportExpired(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error) {
 	f.called = "report-expired"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 
 func (f *fakeService) ReportStolen(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error) {
 	f.called = "report-stolen"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 
 func (f *fakeService) ReportLost(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error) {
 	f.called = "report-lost"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 
 func (f *fakeService) ReportDamaged(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error) {
 	f.called = "report-damaged"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 
 func (f *fakeService) ReturnProduct(context.Context, core.Credential, string, string, core.ReturnProductRequest) (core.MedicationUnit, error) {
 	f.called = "return"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 
 func (f *fakeService) Restock(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error) {
 	f.called = "restock"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 
 func (f *fakeService) WithdrawFromMarket(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error) {
 	f.called = "withdraw-from-market"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 
 func (f *fakeService) ProhibitProduct(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error) {
 	f.called = "prohibit-product"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 
 func (f *fakeService) FinalDisposition(context.Context, core.Credential, string, string, core.UnitEventRequest) (core.MedicationUnit, error) {
 	f.called = "final-disposition"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 
 func (f *fakeService) AuthorizeLabIntervention(context.Context, core.Credential, string, string, core.AuthorizeLabInterventionRequest) (core.LabInterventionView, error) {
 	f.called = "authorize-lab-intervention"
-	return core.LabInterventionView{}, nil
+	return core.LabInterventionView{}, f.err
 }
 
 func (f *fakeService) RevokeLabIntervention(context.Context, core.Credential, string, string, core.RevokeLabInterventionRequest) (core.LabInterventionView, error) {
 	f.called = "revoke-lab-intervention"
-	return core.LabInterventionView{}, nil
+	return core.LabInterventionView{}, f.err
 }
 
 func (f *fakeService) VerifyUnit(context.Context, core.Credential, string, string) (core.UnitVerdict, error) {
 	f.called = "verify-unit"
-	return core.UnitVerdict{}, nil
+	return core.UnitVerdict{}, f.err
 }
 
 func (f *fakeService) VerifyTrace(context.Context, core.Credential, string, string) (core.TraceVerdict, error) {
 	f.called = "verify-trace"
-	return core.TraceVerdict{}, nil
+	return core.TraceVerdict{}, f.err
 }
 
 func TestExtendedEndpointsAreWired(t *testing.T) {
