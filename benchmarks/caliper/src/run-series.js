@@ -188,6 +188,12 @@ function executeAttempt(repoRoot, options) {
         const summaryPath = path.join(attemptDirectory, 'round', 'summary.json');
         if (fs.existsSync(summaryPath)) {
             const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+            // Una restauracion fallida no descarta la carga medida: el intento
+            // falla, pero conserva su resumen como resultado del escenario.
+            const restoration = summary.availability?.restoration;
+            if (restoration?.status === 'failed') {
+                return {status: 'failed', reason: `restauracion fallida: ${restoration.reason}`, summaryPath, summary};
+            }
             return {status: 'discarded', reason: summary.discardReason ?? error.message, summaryPath, summary};
         }
         return {status: 'failed', reason: error.message};
@@ -208,8 +214,11 @@ function attemptRecord(seriesDirectory, kind, repetition, tryNumber, attemptDire
         startedAt,
         endedAt,
         directory: path.relative(seriesDirectory, attemptDirectory).split(path.sep).join('/'),
-        resources: path.relative(seriesDirectory, path.join(attemptDirectory, 'resources.txt')).split(path.sep).join('/'),
     };
+    // Cada ejecutor indica donde dejo los recursos del host; por defecto, el
+    // resources.txt que mide el de Fabric.
+    const resourcesPath = result.resourcesPath ?? path.join(attemptDirectory, 'resources.txt');
+    record.resources = path.relative(seriesDirectory, resourcesPath).split(path.sep).join('/');
     if (result.reason) record.reason = result.reason;
     if (result.summaryPath) record.summary = path.relative(seriesDirectory, result.summaryPath).split(path.sep).join('/');
     return record;

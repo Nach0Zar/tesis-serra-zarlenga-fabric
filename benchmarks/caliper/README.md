@@ -401,6 +401,29 @@ de inyectar la falla, porque entonces el estado previo no era estable. Las que
 estaban en vuelo al inyectarla y fallan por ella no cuentan: en Raft-1 son unas
 50 operaciones iniciadas en los últimos segundos antes de la caída del líder.
 
+**Restauración fallida.** Que el componente no vuelva sano después del
+`docker start` no descarta la carga ya medida: es un resultado del escenario.
+La ronda escribe toda su evidencia y después falla. `summary.json` y
+`fault-events.json` registran `restoration` con el motivo y las primeras líneas
+de pánico del componente, y la serie marca el intento como `failed` conservando
+su resumen. Ocurrió en la serie citable: el líder de Raft-1, detenido con
+`SIGKILL`, no pudo releer su WAL (`failed to read WAL and cannot repair`).
+
+El runner de `f471793` abortaba en ese caso antes de escribir la evidencia.
+`src/reconstruct-availability-round.js` la reconstruye sólo con lo que la ronda
+conservó: los crudos de los workers, `work-plan.json`, `round.log` (instantes de
+la falla y motivo), `sut.log` (logs de la red) y la metadata del smoke del mismo
+intento (host y entorno). No modifica el índice de la serie y escribe
+`reconstruction.json` con la herramienta, su commit, el commit de ejecución, la
+fecha, el hash de cada insumo y lo que no pudo recuperarse:
+
+```bash
+node src/reconstruct-availability-round.js \
+  --attempt-dir <serie>/raft-1/measurements/run-02 \
+  --scenario raft-1 --phase measurement --repetition 2 \
+  --execution-commit <commit-de-la-ronda>
+```
+
 **Evidencia por ronda.** Además de las salidas de una ronda normal:
 
 | Archivo | Contenido |
