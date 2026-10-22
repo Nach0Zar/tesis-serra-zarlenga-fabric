@@ -12,6 +12,7 @@ on:
       - ready_for_review
     paths:
       - "baseline/**"
+      - "scripts/coverage/**"
       - "client/cmd/datasetgen/**"
       - "domain/**"
       - ".github/workflows/baseline-ci.yml"

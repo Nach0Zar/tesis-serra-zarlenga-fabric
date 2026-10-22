@@ -11,34 +11,38 @@ import (
 	"github.com/Nach0Zar/tesis-serra-zarlenga-fabric/baseline/internal/core"
 )
 
-type fakeService struct{ called string }
+type fakeService struct {
+	called  string
+	authErr error
+	err     error
+}
 
 func (f *fakeService) Authenticate(string) (core.Credential, error) {
-	return core.Credential{MSPID: "TestMSP", Role: core.RoleOperator}, nil
+	return core.Credential{MSPID: "TestMSP", Role: core.RoleOperator}, f.authErr
 }
 func (f *fakeService) RegisterUnit(context.Context, core.Credential, core.RegisterUnitRequest) (core.MedicationUnit, error) {
 	f.called = "register"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 func (f *fakeService) QueryUnitsByGTIN(context.Context, string) ([]core.MedicationUnit, error) {
 	f.called = "query"
-	return []core.MedicationUnit{}, nil
+	return []core.MedicationUnit{}, f.err
 }
 func (f *fakeService) ReadUnit(context.Context, string, string) (core.MedicationUnit, error) {
 	f.called = "read"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 func (f *fakeService) GetUnitHistory(context.Context, string, string) ([]core.HistoryEntry, error) {
 	f.called = "history"
-	return []core.HistoryEntry{}, nil
+	return []core.HistoryEntry{}, f.err
 }
 func (f *fakeService) GetLabInterventionHistory(context.Context, string, string) ([]core.LabInterventionHistoryEntry, error) {
 	f.called = "lab-history"
-	return []core.LabInterventionHistoryEntry{}, nil
+	return []core.LabInterventionHistoryEntry{}, f.err
 }
 func (f *fakeService) Dispatch(context.Context, core.Credential, string, string, core.DispatchRequest) (core.MedicationUnit, error) {
 	f.called = "dispatch"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 func (f *fakeService) Receive(_ context.Context, _ core.Credential, _, _ string, data *core.CommercialData) (core.MedicationUnit, error) {
 	if data != nil {
@@ -46,23 +50,23 @@ func (f *fakeService) Receive(_ context.Context, _ core.Credential, _, _ string,
 	} else {
 		f.called = "receive"
 	}
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 func (f *fakeService) Reject(context.Context, core.Credential, string, string, core.RejectRequest) (core.MedicationUnit, error) {
 	f.called = "reject"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 func (f *fakeService) Dispense(context.Context, core.Credential, string, string) (core.MedicationUnit, error) {
 	f.called = "dispense"
-	return core.MedicationUnit{}, nil
+	return core.MedicationUnit{}, f.err
 }
 func (f *fakeService) RegisterOrganization(context.Context, core.Credential, core.RegisterOrganizationRequest) (core.Organization, error) {
 	f.called = "register-org"
-	return core.Organization{}, nil
+	return core.Organization{}, f.err
 }
 func (f *fakeService) SetOrganizationActive(context.Context, core.Credential, string, bool) (core.Organization, error) {
 	f.called = "set-org"
-	return core.Organization{}, nil
+	return core.Organization{}, f.err
 }
 
 func TestEveryCoreEndpointIsWired(t *testing.T) {

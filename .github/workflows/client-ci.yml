@@ -20,6 +20,7 @@ on:
       - "benchmarks/examples/**"
       # demo/demo.sh arranca el servidor de la demo de la defensa (DEMO-4).
       - "demo/**"
+      - "scripts/coverage/**"
       - ".github/workflows/client-ci.yml"
 
 permissions:
@@ -79,7 +80,17 @@ jobs:
 
       - name: Test
         working-directory: client
-        run: go test -v -count=1 -race ./...
+        run: |
+          go test -v -count=1 -race \
+            -coverpkg=./internal/app/...,./internal/config/...,./internal/contracterr/...,./internal/runmeta/... \
+            -coverprofile=coverage.out ./...
+
+      # La logica del cliente debe mantener 85 % de cobertura. Quedan fuera el
+      # adaptador gRPC de internal/fabric, que solo opera contra la red real,
+      # y los main de cmd/.
+      - name: Coverage gate
+        working-directory: client
+        run: ../scripts/coverage/check-go.sh coverage.out 85
 
       - name: Shellcheck demo script
         run: shellcheck demo/demo.sh

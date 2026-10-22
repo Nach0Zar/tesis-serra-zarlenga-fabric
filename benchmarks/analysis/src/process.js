@@ -195,6 +195,19 @@ function availabilityTimelines(entry, run) {
     return [{sut: run.sut, points: successTimeline(run), recoveredOffset}];
 }
 
+// Estado de la restauracion del componente: sólo se informa cuando falló.
+function restorationOf(run) {
+    if (run.restoration?.status !== 'failed') return undefined;
+    return {status: 'failed', reason: run.restoration.reason, evidence: run.restoration.evidence ?? []};
+}
+
+// Una ronda reconstruida declara herramienta, commits, fecha e insumos.
+function reconstructionOf(run) {
+    if (!run.reconstruction) return undefined;
+    const {tool, toolCommit, reconstructedAt, executionCommit, inputs, notRecovered} = run.reconstruction;
+    return {tool, toolCommit, reconstructedAt, executionCommit, inputs, notRecovered};
+}
+
 function processResults(options) {
     const runs = loadRuns(options.inputs.map((input) => path.resolve(input)));
     if (runs.length === 0) throw new Error('no metadata.json found under the inputs');
@@ -221,7 +234,8 @@ function processResults(options) {
     const availabilityRuns = runs.filter((run) => run.faultInjection && admitted(run));
     const availability = availabilityRuns.map((run) => ({
         run, entry: {sut: run.sut, scenario: run.scenario, repetition: run.repetition, directory: run.directory,
-            nonCitable: run.nonCitable, ...availabilityWindows(run)},
+            nonCitable: run.nonCitable, restoration: restorationOf(run), reconstruction: reconstructionOf(run),
+            ...availabilityWindows(run)},
     })).filter(({entry}) => entry.windows);
     const nonCitable = [...included, ...availabilityRuns].some((run) => run.nonCitable);
 

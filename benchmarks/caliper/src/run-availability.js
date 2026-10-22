@@ -217,14 +217,14 @@ function ensureNetworkRunning(repoRoot) {
     docker(['compose', '-f', path.join(repoRoot, 'network', 'compose.yaml'), 'up', '--detach', '--wait', '--wait-timeout', '180']);
 }
 
-function writeLogs(runDirectory, containers, fromMs, toMs) {
+function writeLogs(runDirectory, containers, fromMs, toMs, logsFor = containerLogs) {
     const directory = path.join(runDirectory, 'logs');
     fs.mkdirSync(directory, {recursive: true});
     const since = new Date(fromMs - LOG_MARGIN_MS).toISOString();
     const until = new Date(toMs + LOG_MARGIN_MS).toISOString();
     const events = {};
     for (const container of containers) {
-        const logs = containerLogs(container, {since, until});
+        const logs = logsFor(container, {since, until});
         fs.writeFileSync(path.join(directory, `${container}.log`), logs, {mode: 0o600});
         const pattern = container.startsWith('orderer.') ? RAFT_EVENT : PEER_EVENT;
         events[container] = eventLines(logs, pattern, fromMs - LOG_MARGIN_MS, toMs + LOG_MARGIN_MS);
@@ -292,6 +292,117 @@ function sourceStatistics(operations, observedSeconds) {
     };
 }
 
+// Restaura la red despues de la carga. Si el componente no vuelve sano, el
+// error queda registrado en lugar de abortar antes de guardar la evidencia.
+async function restoreNetwork(repoRoot, definition, faultEvents, operations = {ensureNetworkRunning, electedLeader}) {
+    let restoration;
+    try {
+        operations.ensureNetworkRunning(repoRoot);
+        restoration = {status: 'restored', checkedAt: new Date().toISOString()};
+    } catch (error) {
+        const lines = error.message.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
+        restoration = {status: 'failed', reason: lines.at(-1) ?? error.message, checkedAt: new Date().toISOString()};
+    }
+    if (definition.kind === 'orderer') {
+        faultEvents.leaderAfter = await operations.electedLeader(restoration.status === 'failed' ? 10_000 : undefined);
+    }
+    faultEvents.restoration = restoration;
+    return restoration;
+}
+
+// Primeras lineas de panico de los componentes detenidos despues de
+// restaurarlos: explican por que no volvieron sanos.
+function restorationEvidence(containers, sinceIso, logsFor, limit = 3) {
+    const lines = [];
+    for (const container of containers) {
+        const logs = logsFor(container, {since: sinceIso}).replace(/\u001b\[[0-9;]*m/gu, '');
+        for (const line of logs.split(/\r?\n/u)) {
+            if (/\bPANI\b|^\S*\s*panic:/u.test(line)) lines.push(`${container}: ${line.trim()}`);
+            if (lines.length >= limit) return lines;
+        }
+    }
+    return lines;
+}
+
+// Cierre de una ronda con la carga terminada: crudo clasificado, resumen,
+// logs, fault-events y metadata validada. Lo usan la ronda y la
+// reconstruccion de una ronda cuya evidencia no llego a escribirse.
+function finalizeRound({
+    runDirectory, profile, definition, plan, probeUnits = [], probeRecords = [], containers, kill, recovery,
+    faultEvents, restoration, caliperCode = 0, repositoryCommit, bundle, host, environment,
+    logsFor = containerLogs, notes = [],
+}) {
+    const aggregated = aggregateResults(runDirectory, profile);
+    const summaryWindow = {startedAt: aggregated.summary.startedAt, endedAt: aggregated.summary.endedAt};
+    const windows = faultWindows({
+        ...summaryWindow,
+        injectedAt: kill.issuedAt,
+        recoveredAt: recovery?.issuedAt,
+        durationSeconds: profile.durationSeconds,
+    });
+    const probeByKey = new Map(probeUnits.map((unit, ordinal) => [`${profile.workers}:${ordinal}`, [unit.invocation]]));
+    const operations = definition.kind === 'peer'
+        ? classifyOperations([...aggregated.operations, ...probeRecords], plan, definition.mspId, probeByKey)
+        : aggregated.operations;
+    // El resumen cubre todos los intentos observados, sonda incluida
+    // (DES-20, seccion 9.3); el desglose conserva la carga mixta de
+    // referencia por separado.
+    const complete = summarizeOperations(operations, profile, summaryWindow);
+    const summary = availabilitySummary(complete, operations, windows, definition);
+    if (caliperCode !== 0 && !summary.discardReason) summary.discardReason = `Caliper terminó con código ${caliperCode}`;
+    summary.availability.load = {
+        mixed: sourceStatistics(aggregated.operations, complete.observedDurationSeconds),
+        probe: sourceStatistics(probeRecords, complete.observedDurationSeconds),
+    };
+    if (restoration.status === 'failed') {
+        restoration.evidence = restorationEvidence(containers, recovery?.issuedAt ?? kill.issuedAt, logsFor);
+    }
+    summary.availability.restoration = restoration;
+    writeJSONAtomic(path.join(runDirectory, 'raw.json'), operations);
+    writeJSONAtomic(path.join(runDirectory, 'summary.json'), summary);
+
+    const logContainers = [...new Set([
+        ...ORDERERS.map((orderer) => orderer.container),
+        ...(definition.kind === 'peer' ? [PEERS[definition.mspId]] : []),
+        PEERS.LabMSP,
+    ])];
+    faultEvents.logEvents = writeLogs(runDirectory, logContainers, Date.parse(summaryWindow.startedAt),
+        Date.parse(summaryWindow.endedAt), logsFor);
+    faultEvents.windows = windows;
+    writeJSONAtomic(path.join(runDirectory, 'fault-events.json'), faultEvents);
+
+    const metadata = buildRoundMetadata({
+        profile: {...profile, scenario: definition.name},
+        repositoryCommit,
+        startedAt: summaryWindow.startedAt,
+        endedAt: summaryWindow.endedAt,
+        dataset: {
+            seed: bundle.manifest.seed, sha256: bundle.manifest.dataset.sha256,
+            manifestSHA256: bundle.manifestSHA256, units: bundle.manifest.dataset.units,
+        },
+        host,
+        environment,
+    }, summary);
+    metadata.faultInjection = {target: `${definition.target} (${containers.join(', ')})`, ...windows};
+    metadata.notes = [
+        `Escenario de disponibilidad ${definition.name}: carga mixta de referencia (20 operaciones conceptuales/s, ciclo 2/11/2/5) extendida a 180 s.`,
+        SIMULATION,
+        definition.probe ? `Desviacion declarada: sonda regulatoria de ${PROBE_RATE} cuarentena/s de ANMAT sobre unidades filler, fuera de la carga mixta.` : undefined,
+        restoration.status === 'failed'
+            ? `Restauracion fallida: el componente no volvio sano despues de la ronda (${restoration.reason}).`
+            : undefined,
+        ...notes,
+        'No se incorpora a las estadisticas de rendimiento estable.',
+    ].filter(Boolean).join(' ');
+    const metadataPath = path.join(runDirectory, 'metadata.json');
+    writeJSONAtomic(metadataPath, metadata);
+    const validation = spawnSync('go', ['run', './cmd/runmeta', metadataPath], {
+        cwd: path.join(path.resolve(__dirname, '..', '..', '..'), 'client'), stdio: 'inherit',
+    });
+    if (validation.status !== 0) throw new Error('availability metadata does not validate');
+    return {summary, metadataPath};
+}
+
 async function main() {
     const options = parseArguments(process.argv.slice(2));
     const definition = scenarioDefinition(options.scenario);
@@ -326,7 +437,6 @@ async function main() {
         benchmarkConfigPath: path.join(runDirectory, 'benchmark-config.json'),
         workPlanPath: path.join(runDirectory, 'work-plan.json'),
         reportPath: path.join(runDirectory, 'report.html'),
-        metadataPath: path.join(runDirectory, 'metadata.json'),
         probePath: path.join(runDirectory, 'probe.jsonl'),
         partPaths: Array.from({length: profile.workers}, (_, index) => path.join(runDirectory, `raw-worker-${index}.jsonl`)),
     };
@@ -395,70 +505,19 @@ async function main() {
             faultEvents.actions.push({...startContainers(killed), outsideMeasurement: true});
             killed = [];
         }
-        ensureNetworkRunning(repoRoot);
-        if (definition.kind === 'orderer') faultEvents.leaderAfter = await electedLeader();
-
-        const aggregated = aggregateResults(runDirectory, profile);
-        const summaryWindow = {startedAt: aggregated.summary.startedAt, endedAt: aggregated.summary.endedAt};
-        const windows = faultWindows({
-            ...summaryWindow,
-            injectedAt: kill.issuedAt,
-            recoveredAt: recovery?.issuedAt,
-            durationSeconds: profile.durationSeconds,
-        });
-        const probeByKey = new Map(probeUnits.map((unit, ordinal) => [`${profile.workers}:${ordinal}`, [unit.invocation]]));
-        const operations = definition.kind === 'peer'
-            ? classifyOperations([...aggregated.operations, ...probeRecords], plan, definition.mspId, probeByKey)
-            : aggregated.operations;
-        // El resumen cubre todos los intentos observados, sonda incluida
-        // (DES-20, seccion 9.3); el desglose conserva la carga mixta de
-        // referencia por separado.
-        const complete = summarizeOperations(operations, profile, summaryWindow);
-        const summary = availabilitySummary(complete, operations, windows, definition);
-        if (caliperCode !== 0 && !summary.discardReason) summary.discardReason = `Caliper terminó con código ${caliperCode}`;
-        summary.availability.load = {
-            mixed: sourceStatistics(aggregated.operations, complete.observedDurationSeconds),
-            probe: sourceStatistics(probeRecords, complete.observedDurationSeconds),
-        };
-        writeJSONAtomic(path.join(runDirectory, 'raw.json'), operations);
-        writeJSONAtomic(path.join(runDirectory, 'summary.json'), summary);
-
-        const logContainers = [...new Set([
-            ...ORDERERS.map((orderer) => orderer.container),
-            ...(definition.kind === 'peer' ? [PEERS[definition.mspId]] : []),
-            PEERS.LabMSP,
-        ])];
-        faultEvents.logEvents = writeLogs(runDirectory, logContainers, Date.parse(summaryWindow.startedAt), Date.parse(summaryWindow.endedAt));
-        faultEvents.windows = windows;
-        writeJSONAtomic(path.join(runDirectory, 'fault-events.json'), faultEvents);
-
-        const metadata = buildRoundMetadata({
-            profile: {...profile, scenario: definition.name},
-            repositoryCommit,
-            startedAt: summaryWindow.startedAt,
-            endedAt: summaryWindow.endedAt,
-            dataset: {
-                seed: bundle.manifest.seed, sha256: bundle.manifest.dataset.sha256,
-                manifestSHA256: bundle.manifestSHA256, units: bundle.manifest.dataset.units,
-            },
+        // La evidencia de la carga ya terminada se conserva aunque el componente
+        // no vuelva sano: una restauracion fallida es un resultado del escenario.
+        const restoration = await restoreNetwork(repoRoot, definition, faultEvents);
+        const {summary} = finalizeRound({
+            runDirectory, profile, definition, plan, probeUnits, probeRecords, containers, kill, recovery,
+            faultEvents, restoration, caliperCode, repositoryCommit, bundle,
             host: buildHostMetadata(),
             environment: {
                 docker: runtime.docker, dockerCompose: runtime.dockerCompose, contractVersion: sourceTruth.contractVersion,
                 packageID: sourceTruth.chaincode.packageID, fabric: runtime.fabric, fabricCA: runtime.fabricCA, caliper: CALIPER_VERSION,
             },
-        }, summary);
-        metadata.faultInjection = {target: `${definition.target} (${containers.join(', ')})`, ...windows};
-        metadata.notes = [
-            `Escenario de disponibilidad ${definition.name}: carga mixta de referencia (20 operaciones conceptuales/s, ciclo 2/11/2/5) extendida a 180 s.`,
-            SIMULATION,
-            definition.probe ? `Desviacion declarada: sonda regulatoria de ${PROBE_RATE} cuarentena/s de ANMAT sobre unidades filler, fuera de la carga mixta.` : undefined,
-            'No se incorpora a las estadisticas de rendimiento estable.',
-        ].filter(Boolean).join(' ');
-        writeJSONAtomic(paths.metadataPath, metadata);
-        const validation = spawnSync('go', ['run', './cmd/runmeta', paths.metadataPath], {
-            cwd: path.join(repoRoot, 'client'), stdio: 'inherit',
         });
-        if (validation.status !== 0) throw new Error('availability metadata does not validate');
+        if (restoration.status === 'failed') throw new Error(`restauracion fallida: ${restoration.reason}`);
         if (summary.discardReason) throw new Error(summary.discardReason);
         process.stdout.write(`Fabric availability round completed: ${runDirectory}\n`);
     } finally {
@@ -489,4 +548,7 @@ if (require.main === module) {
     });
 }
 
-module.exports = {availabilityProfile, availabilitySummary, fillerSequences, parseArguments, probeInvocation, sourceStatistics};
+module.exports = {
+    availabilityProfile, availabilitySummary, fillerSequences, finalizeRound, parseArguments, probeInvocation, restorationEvidence,
+    restoreNetwork, sourceStatistics,
+};

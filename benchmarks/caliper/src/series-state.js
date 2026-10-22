@@ -1,4 +1,5 @@
 'use strict';
+const fs = require('node:fs');
 const path = require('node:path');
 const {coefficientOfVariation} = require('./series-policy');
 const {SERIES_SCHEMA_ID, sha256File, validateDocument} = require('./artifacts');
@@ -18,8 +19,12 @@ function attemptRecord(seriesDirectory, kind, repetition, tryNumber, attemptDire
         startedAt,
         endedAt,
         directory: path.relative(seriesDirectory, attemptDirectory).split(path.sep).join('/'),
-        resources: path.relative(seriesDirectory, path.join(attemptDirectory, 'resources.txt')).split(path.sep).join('/'),
     };
+    // Preserve the executor-specific path and omit resources not reached after a failure.
+    const resourcesPath = result.resourcesPath ?? path.join(attemptDirectory, 'resources.txt');
+    if (fs.existsSync(resourcesPath)) {
+        record.resources = path.relative(seriesDirectory, resourcesPath).split(path.sep).join('/');
+    }
     if (result.reason) record.reason = result.reason;
     if (result.summaryPath) record.summary = path.relative(seriesDirectory, result.summaryPath).split(path.sep).join('/');
     return record;

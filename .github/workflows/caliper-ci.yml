@@ -25,6 +25,7 @@ on:
       - "network/chaincode-package.lock"
       - "network/compose.yaml"
       - "network/organizations-manifest.json"
+      - "scripts/coverage/**"
       - ".github/workflows/caliper-ci.yml"
 
 permissions:
@@ -74,9 +75,11 @@ jobs:
         working-directory: client
         run: go run ./cmd/datasetgen --units 50000 --output-dir ../build/dataset
 
-      - name: Test
+      # Corre los tests y exige 85 % de cobertura de lineas sobre la logica
+      # declarada en coverage.include del package.json.
+      - name: Test with coverage gate
         working-directory: benchmarks/caliper
-        run: npm test
+        run: npm run test:coverage
 
       - name: Validate run metadata contract
         working-directory: benchmarks/caliper

@@ -153,6 +153,12 @@ function executeAttempt(repoRoot, options) {
         const summaryPath = path.join(attemptDirectory, 'round', 'summary.json');
         if (fs.existsSync(summaryPath)) {
             const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+            // Una restauracion fallida no descarta la carga medida: el intento
+            // falla, pero conserva su resumen como resultado del escenario.
+            const restoration = summary.availability?.restoration;
+            if (restoration?.status === 'failed') {
+                return {status: 'failed', reason: `restauracion fallida: ${restoration.reason}`, summaryPath, summary};
+            }
             return {status: 'discarded', reason: summary.discardReason ?? error.message, summaryPath, summary};
         }
         return {status: 'failed', reason: error.message};

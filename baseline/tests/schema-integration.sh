@@ -39,7 +39,12 @@ test "$("${BASELINE_DIR}/scripts/migrate.sh" version)" = "4"
 database_address="$(compose port postgres 5432)"
 database_port="${database_address##*:}"
 export SNT_BASELINE_TEST_DSN="postgres://${SNT_BASELINE_DB_USER}:${SNT_BASELINE_DB_PASSWORD}@127.0.0.1:${database_port}/${SNT_BASELINE_DB_NAME}?sslmode=disable"
-(cd "${BASELINE_DIR}" && go test -p 1 ./...)
+coverage_profile="$(mktemp)"
+(cd "${BASELINE_DIR}" && go test -p 1 -coverpkg=./internal/... -coverprofile="${coverage_profile}" ./...)
+# La logica de la baseline (internal/...) debe mantener el minimo de cobertura
+# con los tests de integracion contra PostgreSQL incluidos.
+(cd "${BASELINE_DIR}" && ../scripts/coverage/check-go.sh "${coverage_profile}" "${SNT_BASELINE_COVERAGE_MIN:-85}")
+rm -f "${coverage_profile}"
 
 psql_in_container --file - < "${SCRIPT_DIR}/schema_test.sql"
 
