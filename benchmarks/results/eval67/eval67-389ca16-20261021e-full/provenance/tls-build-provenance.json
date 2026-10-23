@@ -1,7 +1,0 @@
-{
-  "purpose": "Windows trusted Norton HTTPS inspection root, build-stage trust only",
-  "rootSHA256": "3d77b4ef4d248d854ab1696294c0a33a0c092ea183a99c05b476be2573dbc945",
-  "dockerfileSHA256": "a894135c8d42e1f932d77213c99cd5f2fe63f200ed20b12775b537a961ceb67c",
-  "repositoryDockerfileUnchanged": true,
-  "tlsVerificationEnabled": true
-}
