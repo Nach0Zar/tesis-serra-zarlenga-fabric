@@ -1,1 +1,0 @@
-completed: measurements and strict processing
