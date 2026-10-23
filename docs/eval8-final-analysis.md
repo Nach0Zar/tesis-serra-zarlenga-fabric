@@ -15,13 +15,15 @@ Se distinguen tres clases de afirmación: **observación** de las campañas; **p
 | Fuente | Identidad y uso | Límite |
 |---|---|---|
 | EVAL-6/7, rendimiento final | Campaña `eval67-389ca16-20261021e-full`; commit medido `389ca160b2a490cd66bb0194f012e2b75b3598e8`, etiqueta `eval67-20261021T0020Z`; contrato 2.11.2; [entrega y reproducción][R67]. | Un host y tasas fijas; sin presupuesto agregado equivalente demostrado. |
-| Evidencia versionada de EVAL-6/7 | Commit `18d0d950817e38451953e056b418d49751b384ce`; [CSV finales][CSV67], crudos, metadata, campaña, índices, manifiestos, auditorías y SVG. Publicación mediante [#156](https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/pull/156) y [#157](https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/pull/157). | El commit de evidencia y los HEAD de integración son posteriores al artefacto medido. |
+| Evidencia archivada y resultados versionados de EVAL-6/7 | [Release completo][RELEASE67], copia exacta del paquete de `18d0d950817e38451953e056b418d49751b384ce`; [CSV finales][CSV67], reporte, SVG, checksums y helper se conservan en Git mediante la [migración #159](https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/pull/159). #156/#157 ya se integraron. | Los commits de evidencia/integración son posteriores al medido. La migración quita crudos del árbol actual, no del historial ya integrado. |
 | EVAL-4/5, disponibilidad | [Release y complemento del 22/10][AV]; JSON y reporte del [análisis complementado][AVFILE]. PRs #153/#154 integradas. | Otra campaña/host respecto de rendimiento. `raft-1` sigue incomplete; se conserva una restauración fallida con evidencia reconstruida. #44/#45 siguen abiertas al elaborar este análisis. |
 | Integridad, auditabilidad y privacidad | [NET-5](../network/evidence/NET-5.md), [NET-6](../network/evidence/NET-6.md), [NET-9](../network/evidence/NET-9.md); CC-5/9/10, ADR-006/007/012 y código enlazado en las secciones siguientes. | Pruebas estructurales previas con sus propios paquetes y fechas, no nuevas pruebas adversariales del commit de rendimiento. |
 
 Dataset compartido de rendimiento: 50.000 identidades, seed `20260727`, SHA-256 `de523ee8fafeed0a39f8518b501fce4692192869030762816de353654385163d`. El estado golden contiene 46.920 unidades presentes y 3.080 ausentes; 22.103 preparadas y 24.817 de relleno. El mismo plan lógico acreditado rige ambos SUT; cada intento restaura y verifica, y los SUT alternan sin solaparse. Ryzen 7 7800X3D, WSL2 Ubuntu 24.04, 6 CPU visibles, memoria efectiva 8.327.917.568 bytes y swap 4 GiB; recursos individuales y versiones en [R67].
 
 El procesamiento estricto incluyó 224 mediciones (112 por SUT), sin pares faltantes, y excluyó sólo 264 smoke y 40 warm-ups. La campaña terminó con 264 intentos completed y cero failed. Son 16 escenarios con cinco pares y cuatro con ocho: registro 10/20, unidad 50 e historial 25. Se conservan originales 1–5 y extensiones 1–8. El procesamiento con el código integrado volvió a reproducir sus ocho salidas normalizando únicamente prefijos de rutas; SHA-256 de comparison.csv: `d233ef6d3d1c820b3ca082a2e50bba274c06fbc1b11641a158d75c59dd4a5dd0`.
+
+El asset EVAL-6/7 `eval67-389ca16-20261021e-full-evidence.tar.gz` conserva los 3.471 archivos originales (406.153.189 bytes antes de comprimir). Su SHA-256 fijado es `10f536db0205ac8547abcfc43235685c30a33782deef6267c7a7b0baaa6d1dfc`. Se descargó nuevamente desde GitHub, se verificaron 3.470 hashes internos y se reprodujeron las ocho salidas desde esa extracción. El helper actual recibe `--evidence-dir`; el [README vigente][R67] explica descarga, comprobación y reproducción. El README/helper internos del archivo permanecen como copias históricas exactas.
 
 La reproducción estricta depende de los bundles originales de snapshots fuera de Git; un manifiesto solo no los sustituye. No se publican claves, dumps, volúmenes ni planes privados. El análisis complementado de disponibilidad se cotejó con su SHA-256 publicado: `87c1b99c054bc6997198866ff2164835005fdd9ff21a7185ffedd62c854b5be7`. No se presenta ese cotejo como una nueva ejecución de disponibilidad.
 
@@ -210,8 +212,10 @@ Para extrapolar haría falta evidencia adicional sobre presupuesto de recursos c
 
 ## Fuentes de las tablas finales
 
-[R67]: https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/blob/18d0d950817e38451953e056b418d49751b384ce/benchmarks/results/eval67/eval67-389ca16-20261021e-full/README.md
-[CSV67]: https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/blob/18d0d950817e38451953e056b418d49751b384ce/benchmarks/results/eval67/eval67-389ca16-20261021e-full/analysis/aggregate.csv
-[REPORT67]: https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/blob/18d0d950817e38451953e056b418d49751b384ce/benchmarks/results/eval67/eval67-389ca16-20261021e-full/analysis/report.md
+[R67]: https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/blob/e3c1f795be26b150b2a68247a7dadb1d773d9d2d/benchmarks/results/eval67/eval67-389ca16-20261021e-full/README.md
+[CSV67]: https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/blob/e3c1f795be26b150b2a68247a7dadb1d773d9d2d/benchmarks/results/eval67/eval67-389ca16-20261021e-full/analysis/aggregate.csv
+[REPORT67]: https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/blob/e3c1f795be26b150b2a68247a7dadb1d773d9d2d/benchmarks/results/eval67/eval67-389ca16-20261021e-full/analysis/report.md
 [AV]: https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/releases/tag/evidence-eval4-eval5-citable
 [AVFILE]: https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/releases/download/evidence-eval4-eval5-citable/analysis-eval4-eval5-citable-complement.tar.gz
+
+[RELEASE67]: https://github.com/Nach0Zar/tesis-serra-zarlenga-fabric/releases/tag/evidence-eval6-eval7-citable
