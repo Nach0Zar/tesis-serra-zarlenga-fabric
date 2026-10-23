@@ -1,0 +1,90 @@
+{
+  "scenario": "mixed",
+  "operationCount": 2400,
+  "successfulOperations": 2400,
+  "expectedRejections": 0,
+  "unexpectedFailures": 0,
+  "transactionCount": 3720,
+  "successfulTransactions": 3720,
+  "failedTransactions": 0,
+  "retryAttempts": 0,
+  "retryTimeMs": 0,
+  "retryByCause": {},
+  "transferPairs": 1320,
+  "retriedTransferPairs": 0,
+  "retriedTransferPairRate": 0,
+  "observedErrorCodes": {},
+  "rate": {
+    "operation": "mixed",
+    "targetOperationsPerSecond": 20,
+    "targetTransactionsPerSecond": 31,
+    "offeredOperationsPerSecond": 20,
+    "effectiveOperationsPerSecond": 20,
+    "effectiveTransactionsPerSecond": 31
+  },
+  "operationLatency": {
+    "count": 2400,
+    "minimumMs": 0,
+    "maximumMs": 60,
+    "meanMs": 5.647916666666666,
+    "standardDeviationMs": 3.777647503370612,
+    "p50Ms": 7,
+    "p95Ms": 10,
+    "p99Ms": 14
+  },
+  "transactionLatencyByFunction": {
+    "ReadUnit": {
+      "count": 600,
+      "minimumMs": 0,
+      "maximumMs": 5,
+      "meanMs": 0.9833333333333333,
+      "standardDeviationMs": 0.48619840486049487,
+      "p50Ms": 1,
+      "p95Ms": 2,
+      "p99Ms": 2
+    },
+    "DispatchTransfer": {
+      "count": 1320,
+      "minimumMs": 3,
+      "maximumMs": 27,
+      "meanMs": 4.46439393939394,
+      "standardDeviationMs": 1.7629019024151538,
+      "p50Ms": 4,
+      "p95Ms": 6,
+      "p99Ms": 12
+    },
+    "ReceiveTransfer": {
+      "count": 1320,
+      "minimumMs": 3,
+      "maximumMs": 32,
+      "meanMs": 3.8848484848484848,
+      "standardDeviationMs": 1.1980087549943828,
+      "p50Ms": 4,
+      "p95Ms": 5,
+      "p99Ms": 7
+    },
+    "RegisterUnit": {
+      "count": 240,
+      "minimumMs": 2,
+      "maximumMs": 26,
+      "meanMs": 3.941666666666667,
+      "standardDeviationMs": 2.0157539256786445,
+      "p50Ms": 4,
+      "p95Ms": 7,
+      "p99Ms": 11
+    },
+    "Dispense": {
+      "count": 240,
+      "minimumMs": 2,
+      "maximumMs": 16,
+      "meanMs": 3.9125,
+      "standardDeviationMs": 1.286407303306386,
+      "p50Ms": 4,
+      "p95Ms": 6,
+      "p99Ms": 9
+    }
+  },
+  "startedAt": "2026-10-22T07:39:50.801Z",
+  "endedAt": "2026-10-22T07:41:50.801Z",
+  "observedDurationSeconds": 120
+}

@@ -1,0 +1,173 @@
+{
+  "$schema": "urn:pfi-snt:fabric-snapshot-manifest:schema:1.0.0",
+  "schemaVersion": "1.0.0",
+  "snapshotId": "178e51e9ab43094d3cefa076828d032d6c55b576f35eb2a2b2d54fe9889d6fde",
+  "createdAt": "2026-10-21T01:47:11.749Z",
+  "dataset": {
+    "seed": 20260727,
+    "sha256": "de523ee8fafeed0a39f8518b501fce4692192869030762816de353654385163d",
+    "manifestSHA256": "e316f7f64148c919680a0edaec8b7bf881a58ea85602edeb0c9f1e3c301a6887",
+    "units": 50000
+  },
+  "counts": {
+    "total": 50000,
+    "participating": 25183,
+    "unregistered": 3080,
+    "prepared": 22103,
+    "filler": 24817,
+    "registered": 46920
+  },
+  "preparation": {
+    "durationSeconds": 5288.053,
+    "successfulWriteTransactions": 129878,
+    "concurrency": 64,
+    "markers": {
+      "expected": 46924,
+      "observed": 46924,
+      "fromRegistrations": 46920,
+      "fromRegulatoryEvents": 4
+    }
+  },
+  "artifacts": {
+    "repositoryCommit": "389ca160b2a490cd66bb0194f012e2b75b3598e8",
+    "contractVersion": "2.11.2",
+    "packageID": "snt_1.0:a4d9315a304ac10b467c096f37f4960f86e4ce2d828310aed58d5ad34082d9a9",
+    "fabric": "2.5.16",
+    "fabricCA": "1.5.17",
+    "docker": "29.7.2",
+    "dockerCompose": "5.4.0",
+    "composeProject": "snt-fabric",
+    "networkConfigSHA256": "ac347faf798681437b309ed3bf63fe31f04f8ad2a48ec73b5fa46b8c12072002",
+    "sourceSHA256": "a4f8b879e3e50c342a1fca2fbd673a4543cef70c576bf86dcabfe94bfeee30b1"
+  },
+  "smokeSequence": 2824,
+  "files": {
+    "logicalPlan": {
+      "name": "logical-plan.json",
+      "sha256": "de887e31483b8bb3d1a214172054e6f457f1179bcb77284b1a3dc567abeda820",
+      "bytes": 77438620
+    },
+    "preconditions": {
+      "name": "preconditions.json",
+      "sha256": "986ffb4605d31c0892b52d06945db52f02ef8d35f046d4d029187b5b414c9503",
+      "bytes": 65818647
+    },
+    "semanticVerification": {
+      "name": "semantic-verification.json",
+      "sha256": "0e2c31518a25c356326a336bd34b78ec475699042bc944c0a648dd5f79cec6e9",
+      "bytes": 273
+    },
+    "preparationMetadata": {
+      "name": "metadata.json",
+      "sha256": "ae00b09f8f7205d795f7b0de14abc0822eab7aab8655bcea5314f0a21270ada6",
+      "bytes": 1773
+    },
+    "journal": {
+      "name": "preparation-journal.jsonl",
+      "sha256": "74980cb3537dab5f05de34cb7f3630f0f65a8a9c91ea1409ac3e8075f4f57f47",
+      "bytes": 156423125
+    }
+  },
+  "volumes": [
+    {
+      "name": "orderer-anmat-data",
+      "service": "orderer.anmat.snt.local",
+      "containerPath": "/var/hyperledger/production/orderer",
+      "archive": "volumes/orderer-anmat-data.tar",
+      "sha256": "d6153a707434713ffde15571a802c155ff1d5cd67e49025dfd3434557f8b3cb3",
+      "treeSHA256": "583454252da44f3a1679d031e805c751a338b11e0cf441e6ac42bd08b6340ceb",
+      "bytes": 923453440,
+      "fileCount": 23
+    },
+    {
+      "name": "orderer-lab-data",
+      "service": "orderer.lab.snt.local",
+      "containerPath": "/var/hyperledger/production/orderer",
+      "archive": "volumes/orderer-lab-data.tar",
+      "sha256": "3615a1248f7351e250414e87044e6c12fb893367c0c66305d36a7f959a46c8ce",
+      "treeSHA256": "c1321135ffaa597d57ef0018611a731dbc21e48559ab9c39c9b76354159717fd",
+      "bytes": 923422720,
+      "fileCount": 23
+    },
+    {
+      "name": "orderer-drogueria-data",
+      "service": "orderer.drogueria.snt.local",
+      "containerPath": "/var/hyperledger/production/orderer",
+      "archive": "volumes/orderer-drogueria-data.tar",
+      "sha256": "f9e050cc643dabcf8993694f5e6e5effd4e4b4335c324c2b6fb63c0f4e743644",
+      "treeSHA256": "57a6c89e51700bbcc076dd686d11146701ca6ef03efa085a1c31680a60136f6c",
+      "bytes": 923494400,
+      "fileCount": 23
+    },
+    {
+      "name": "peer-anmat-data",
+      "service": "peer0.anmat.snt.local",
+      "containerPath": "/var/hyperledger/production",
+      "archive": "volumes/peer-anmat-data.tar",
+      "sha256": "604e2c40cd47cd6c5a9261eda5904130019d85e62c98e2545d6e9c860cef885e",
+      "treeSHA256": "cc359fc9f068d02ddbf4fde4cf614db2ccd033b696347bdba1a273191d403c9f",
+      "bytes": 806369280,
+      "fileCount": 97
+    },
+    {
+      "name": "peer-lab-data",
+      "service": "peer0.lab.snt.local",
+      "containerPath": "/var/hyperledger/production",
+      "archive": "volumes/peer-lab-data.tar",
+      "sha256": "45f8a0ac7a914a5c0fcac3e9c1dfab95b8ec7f0fc8ce7933b4e091c8c83925f1",
+      "treeSHA256": "ecfa6f6fdb14ae395c0c10e42d1ca225c4e7cdc378e197e6088994a75eae86b1",
+      "bytes": 802805760,
+      "fileCount": 97
+    },
+    {
+      "name": "peer-drogueria-data",
+      "service": "peer0.drogueria.snt.local",
+      "containerPath": "/var/hyperledger/production",
+      "archive": "volumes/peer-drogueria-data.tar",
+      "sha256": "fdac31289bf7e2184ff306eab12affd806e52c7508e13b6b00b997636f9d7859",
+      "treeSHA256": "3fcead3e1961fba46a5037689093c7cc2b6603b30a3df4e3e01cfceaceba91bc",
+      "bytes": 788817920,
+      "fileCount": 90
+    },
+    {
+      "name": "peer-distribuidor-data",
+      "service": "peer0.distribuidor.snt.local",
+      "containerPath": "/var/hyperledger/production",
+      "archive": "volumes/peer-distribuidor-data.tar",
+      "sha256": "d8854cf396c265135fadeb121dfd2f3b9644d812ee4d2128fa7c851db4405bfd",
+      "treeSHA256": "5a9f58172207c7a9bf0d2b97254b678c3979042ce0ad6aceb2fd18a0ff0c599d",
+      "bytes": 788633600,
+      "fileCount": 90
+    },
+    {
+      "name": "peer-farmacia-data",
+      "service": "peer0.farmacia.snt.local",
+      "containerPath": "/var/hyperledger/production",
+      "archive": "volumes/peer-farmacia-data.tar",
+      "sha256": "1b5821697cac9e88a05452318eb6886ac455d08a96ff49f60f4d82278f3fe7f3",
+      "treeSHA256": "83ab1bba4f9360fa028c04660e3f9850e276e3bcb2b595183edb9762e2e1ed7a",
+      "bytes": 781527040,
+      "fileCount": 87
+    },
+    {
+      "name": "peer-centromedico-data",
+      "service": "peer0.centromedico.snt.local",
+      "containerPath": "/var/hyperledger/production",
+      "archive": "volumes/peer-centromedico-data.tar",
+      "sha256": "60c3d32f609e628fd09d6c3b16a572ee37fe61fbc1e737247aab44018bbd6765",
+      "treeSHA256": "efcee48ef2204a085c37ea9cd0bde71b696fee322ce0f1394ea9fd67b0a7f84b",
+      "bytes": 779202560,
+      "fileCount": 85
+    },
+    {
+      "name": "peer-financiador-data",
+      "service": "peer0.financiador.snt.local",
+      "containerPath": "/var/hyperledger/production",
+      "archive": "volumes/peer-financiador-data.tar",
+      "sha256": "a945839c55780546be96e98d00dcae491e5f46b1fc6f0f1e9cc20f3a2e1bd5df",
+      "treeSHA256": "802122db0fe99aa9cbf51a7854b2a1a091f2aed04a267c303f020383942f9fcf",
+      "bytes": 766812160,
+      "fileCount": 78
+    }
+  ]
+}

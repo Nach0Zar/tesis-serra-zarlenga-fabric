@@ -1,0 +1,34 @@
+{
+  "snapshotId": "178e51e9ab43094d3cefa076828d032d6c55b576f35eb2a2b2d54fe9889d6fde",
+  "manifestSHA256": "975f9ac77e59309d4ac6b66ddd14d1563253a58476a9cac1f3dd9d23c6eb9483",
+  "verifiedPreconditions": [
+    {
+      "sequence": 12,
+      "present": true
+    },
+    {
+      "sequence": 14,
+      "present": true
+    },
+    {
+      "sequence": 16,
+      "present": true
+    },
+    {
+      "sequence": 18,
+      "present": true
+    },
+    {
+      "sequence": 20,
+      "present": true
+    },
+    {
+      "sequence": 22,
+      "present": true
+    },
+    {
+      "sequence": 2824,
+      "present": true
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+[
+  {
+    "name": "transfer_CentroMedicoMSP_DistribuidorMSP",
+    "policy": "OR('CentroMedicoMSP.member','DistribuidorMSP.member','AnmatMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('CentroMedicoMSP.peer','DistribuidorMSP.peer')"
+    }
+  },
+  {
+    "name": "transfer_CentroMedicoMSP_DrogueriaMSP",
+    "policy": "OR('CentroMedicoMSP.member','DrogueriaMSP.member','AnmatMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('CentroMedicoMSP.peer','DrogueriaMSP.peer')"
+    }
+  },
+  {
+    "name": "transfer_CentroMedicoMSP_FarmaciaMSP",
+    "policy": "OR('CentroMedicoMSP.member','FarmaciaMSP.member','AnmatMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('CentroMedicoMSP.peer','FarmaciaMSP.peer')"
+    }
+  },
+  {
+    "name": "transfer_CentroMedicoMSP_LabMSP",
+    "policy": "OR('CentroMedicoMSP.member','LabMSP.member','AnmatMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('CentroMedicoMSP.peer','LabMSP.peer')"
+    }
+  },
+  {
+    "name": "transfer_DistribuidorMSP_DrogueriaMSP",
+    "policy": "OR('DistribuidorMSP.member','DrogueriaMSP.member','AnmatMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('DistribuidorMSP.peer','DrogueriaMSP.peer')"
+    }
+  },
+  {
+    "name": "transfer_DistribuidorMSP_FarmaciaMSP",
+    "policy": "OR('DistribuidorMSP.member','FarmaciaMSP.member','AnmatMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('DistribuidorMSP.peer','FarmaciaMSP.peer')"
+    }
+  },
+  {
+    "name": "transfer_DistribuidorMSP_LabMSP",
+    "policy": "OR('DistribuidorMSP.member','LabMSP.member','AnmatMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('DistribuidorMSP.peer','LabMSP.peer')"
+    }
+  },
+  {
+    "name": "transfer_DrogueriaMSP_FarmaciaMSP",
+    "policy": "OR('DrogueriaMSP.member','FarmaciaMSP.member','AnmatMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('DrogueriaMSP.peer','FarmaciaMSP.peer')"
+    }
+  },
+  {
+    "name": "transfer_DrogueriaMSP_LabMSP",
+    "policy": "OR('DrogueriaMSP.member','LabMSP.member','AnmatMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('DrogueriaMSP.peer','LabMSP.peer')"
+    }
+  },
+  {
+    "name": "transfer_FarmaciaMSP_LabMSP",
+    "policy": "OR('FarmaciaMSP.member','LabMSP.member','AnmatMSP.member')",
+    "requiredPeerCount": 1,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('FarmaciaMSP.peer','LabMSP.peer')"
+    }
+  }
+]

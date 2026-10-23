@@ -1,0 +1,28 @@
+{
+  "runs": 528,
+  "included": 224,
+  "excluded": 304,
+  "aggregates": 40,
+  "comparisons": 24,
+  "unpaired": 0,
+  "nonCitable": false,
+  "figures": [
+    "throughput.svg",
+    "latency.svg"
+  ],
+  "output": "/home/nacho/pfi/tesis-serra-zarlenga-fabric/build/analysis/eval67-389ca16-20261021e-full-versioned-reproduction"
+}
+{
+  "status": "passed",
+  "outputsCompared": [
+    "aggregate.csv",
+    "comparison.csv",
+    "excluded.csv",
+    "figures/latency.svg",
+    "figures/throughput.svg",
+    "repetitions.csv",
+    "report.md",
+    "unexpected.csv"
+  ],
+  "comparisonSHA256": "d233ef6d3d1c820b3ca082a2e50bba274c06fbc1b11641a158d75c59dd4a5dd0"
+}

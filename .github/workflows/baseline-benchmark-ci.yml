@@ -1,0 +1,114 @@
+name: Baseline benchmark CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+    paths:
+      - "benchmarks/caliper/src/series-state.js"
+      - "benchmarks/caliper/src/series-policy.js"
+      - "benchmarks/baseline/**"
+      - "scripts/coverage/**"
+      # El orquestador de series y la disponibilidad de la baseline reutilizan
+      # estos modulos de Caliper y sus dependencias (#45).
+      - "benchmarks/caliper/package.json"
+      - "benchmarks/caliper/package-lock.json"
+      - "benchmarks/caliper/src/artifacts.js"
+      - "benchmarks/caliper/src/availability.js"
+      - "benchmarks/caliper/src/run-series.js"
+      - "benchmarks/caliper/src/metadata.js"
+      - "benchmarks/caliper/src/planner.js"
+      - "benchmarks/caliper/src/profiles.js"
+      - "benchmarks/caliper/src/raw-results.js"
+      - "benchmarks/caliper/src/requests.js"
+      - "benchmarks/caliper/src/sources.js"
+      - "benchmarks/caliper/src/snapshot-plan.js"
+      - "benchmarks/schema/**"
+      - "benchmarks/README.md"
+      - "baseline/cmd/snt-seed/**"
+      - "baseline/internal/seed/**"
+      - "baseline/README.md"
+      - "client/cmd/datasetgen/**"
+      - "client/cmd/runmeta/**"
+      - "client/internal/datasetgen/**"
+      - "client/internal/runmeta/**"
+      - "client/go.mod"
+      - "client/go.sum"
+      - "docs/api-contract.md"
+      - "network/chaincode-package.lock"
+      - "network/compose.yaml"
+      - "network/organizations-manifest.json"
+      - ".github/workflows/baseline-benchmark-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baseline-benchmark-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Validate baseline benchmark tooling
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            benchmarks/baseline/package-lock.json
+            benchmarks/caliper/package-lock.json
+
+      - name: Set up pinned npm
+        run: npm install --global npm@11.6.2
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: baseline/go.mod
+          cache: true
+          cache-dependency-path: |
+            baseline/go.sum
+            client/go.sum
+
+      - name: Install locked dependencies
+        working-directory: benchmarks/baseline
+        run: npm ci
+
+      - name: Install shared Caliper dependencies
+        working-directory: benchmarks/caliper
+        run: npm ci
+
+      - name: Generate canonical dataset
+        run: make -C client generate-dataset
+
+      - name: Check sources
+        working-directory: benchmarks/baseline
+        run: npm run check
+
+      # Exige 85 % de cobertura de lineas sobre la logica declarada en
+      # coverage.include del package.json.
+      - name: Test benchmark tooling with coverage gate
+        working-directory: benchmarks/baseline
+        run: npm run test:coverage
+
+      - name: Validate metadata variants
+        working-directory: benchmarks/baseline
+        run: npm run test:metadata
+
+      - name: Test selective seed
+        working-directory: baseline
+        run: go test ./internal/seed ./cmd/snt-seed

@@ -1,0 +1,52 @@
+OK: /home/nacho/pfi/tesis-serra-zarlenga-fabric/network/organizations-manifest.json validates against schema and /home/nacho/pfi/tesis-serra-zarlenga-fabric/network/configtx.yaml
+OK: verified 7 independent organization MSPs and 3 orderers
+OK: perfil homogéneo WSL2: processors=6 memory_bytes=8327917568 swap_bytes=4294967296
+OK: material NET-1 verificado y Compose NET-3 válido con 11 servicios.
+timestamp_utc=2026-10-21T17:38:50Z
+repository_commit=389ca160b2a490cd66bb0194f012e2b75b3598e8
+kernel=Linux 6.18.33.2-microsoft-standard-WSL2 x86_64 GNU/Linux
+processors=6
+memory_bytes=8327917568
+swap_bytes=4294967296
+docker_version=29.7.2
+compose_version=5.4.0
+service_count=11
+
+container,health,restart_count,oom_killed
+fabric-ca.snt.local,healthy,0,false
+peer0.anmat.snt.local,healthy,0,false
+peer0.drogueria.snt.local,healthy,0,false
+peer0.farmacia.snt.local,healthy,0,false
+peer0.financiador.snt.local,healthy,0,false
+peer0.lab.snt.local,healthy,0,false
+orderer.anmat.snt.local,healthy,0,false
+orderer.drogueria.snt.local,healthy,0,false
+orderer.lab.snt.local,healthy,0,false
+peer0.centromedico.snt.local,healthy,0,false
+peer0.distribuidor.snt.local,healthy,0,false
+
+container,cpu_percent,memory_usage,memory_percent,pids
+fabric-ca.snt.local,11.26%,58.39MiB / 128MiB,45.61%,9
+peer0.anmat.snt.local,1.04%,185.3MiB / 384MiB,48.25%,12
+peer0.drogueria.snt.local,1.92%,174.7MiB / 384MiB,45.49%,12
+peer0.farmacia.snt.local,0.77%,187MiB / 384MiB,48.71%,11
+peer0.financiador.snt.local,1.07%,163.4MiB / 384MiB,42.56%,13
+peer0.lab.snt.local,1.04%,177.7MiB / 384MiB,46.28%,12
+orderer.anmat.snt.local,0.13%,58.61MiB / 192MiB,30.52%,7
+orderer.drogueria.snt.local,0.13%,37.23MiB / 192MiB,19.39%,8
+orderer.lab.snt.local,0.20%,43.8MiB / 192MiB,22.81%,9
+peer0.centromedico.snt.local,1.29%,171.1MiB / 384MiB,44.55%,11
+peer0.distribuidor.snt.local,0.98%,171.9MiB / 384MiB,44.77%,11
+
+container,persistent_kib
+fabric-ca.snt.local,872
+peer0.anmat.snt.local,780560
+peer0.drogueria.snt.local,759352
+peer0.farmacia.snt.local,758260
+peer0.financiador.snt.local,744240
+peer0.lab.snt.local,774920
+orderer.anmat.snt.local,964192
+orderer.drogueria.snt.local,964228
+orderer.lab.snt.local,964164
+peer0.centromedico.snt.local,755696
+peer0.distribuidor.snt.local,759136

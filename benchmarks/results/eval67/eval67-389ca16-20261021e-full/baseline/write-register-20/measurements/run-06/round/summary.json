@@ -1,0 +1,50 @@
+{
+  "scenario": "write-register",
+  "operationCount": 2400,
+  "successfulOperations": 2400,
+  "expectedRejections": 0,
+  "unexpectedFailures": 0,
+  "transactionCount": 2400,
+  "successfulTransactions": 2400,
+  "failedTransactions": 0,
+  "retryAttempts": 0,
+  "retryTimeMs": 0,
+  "retryByCause": {},
+  "transferPairs": 0,
+  "retriedTransferPairs": 0,
+  "retriedTransferPairRate": 0,
+  "observedErrorCodes": {},
+  "rate": {
+    "operation": "register",
+    "targetOperationsPerSecond": 20,
+    "targetTransactionsPerSecond": 20,
+    "offeredOperationsPerSecond": 20,
+    "effectiveOperationsPerSecond": 19.99983333472221,
+    "effectiveTransactionsPerSecond": 19.99983333472221
+  },
+  "operationLatency": {
+    "count": 2400,
+    "minimumMs": 2,
+    "maximumMs": 46,
+    "meanMs": 3.955416666666667,
+    "standardDeviationMs": 2.451889542044902,
+    "p50Ms": 4,
+    "p95Ms": 6,
+    "p99Ms": 17
+  },
+  "transactionLatencyByFunction": {
+    "RegisterUnit": {
+      "count": 2400,
+      "minimumMs": 2,
+      "maximumMs": 46,
+      "meanMs": 3.9379166666666667,
+      "standardDeviationMs": 2.452868183655346,
+      "p50Ms": 4,
+      "p95Ms": 5,
+      "p99Ms": 17
+    }
+  },
+  "startedAt": "2026-10-21T18:32:26.703Z",
+  "endedAt": "2026-10-21T18:34:26.704Z",
+  "observedDurationSeconds": 120.001
+}

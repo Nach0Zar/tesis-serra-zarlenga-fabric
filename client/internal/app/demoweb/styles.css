@@ -1,0 +1,442 @@
+/* Pantalla de la demo de la defensa (DEMO-3, #145). Pensada para proyectar:
+   fondo claro, texto oscuro y cada color con un único significado, siempre
+   acompañado de un ícono y un texto. */
+
+:root {
+  --bg: #eef1f5;
+  --panel: #ffffff;
+  --ink: #15191e;
+  --muted: #56606b;
+  --line: #d3d9e0;
+  --accent: #1f5fd1;        /* firma: organizaciones que endosan */
+  --accent-soft: #e3ecfc;
+  --ok: #17703a;            /* confirmado */
+  --ok-soft: #e2f3e8;
+  --bad: #b3261e;           /* rechazado */
+  --bad-soft: #fbe6e4;
+  --warn: #8a5300;          /* alerta a ANMAT */
+  --warn-mark: #e08a00;
+  --warn-soft: #fff1d6;
+  --radius: 12px;
+  /* Ningún texto baja de 1rem = 18 px y los títulos de panel pasan los 28 px,
+     en cualquier resolución: crece en pantallas grandes, nunca se achica. */
+  font-size: max(18px, 0.9375vw);
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.3;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.mono { font-family: ui-monospace, "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace; }
+
+svg.icon { width: 1.1em; height: 1.1em; flex: none; vertical-align: -0.18em; }
+
+/* --- Encabezado ------------------------------------------------------------ */
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.8rem 1.2rem 0.4rem;
+}
+
+h1 { font-size: 1.9rem; margin: 0; }
+
+.caption {
+  margin: 0.25rem 0 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--accent);
+  min-height: 1.7rem;
+}
+
+.connection {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+  color: var(--muted);
+  font-weight: 600;
+  padding-top: 0.3rem;
+}
+.connection .dot { width: 0.8rem; height: 0.8rem; border-radius: 50%; background: var(--muted); }
+.connection.online { color: var(--ok); }
+.connection.online .dot { background: var(--ok); }
+.connection.offline { color: var(--bad); }
+.connection.offline .dot { background: var(--bad); }
+
+/* --- Grilla ----------------------------------------------------------------- */
+
+.grid {
+  flex: 1;
+  display: grid;
+  gap: 0.8rem;
+  padding: 0.4rem 1.2rem;
+  grid-template-columns: 1.15fr 1fr;
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
+    "network unit"
+    "chain chain"
+    "privacy anmat";
+  min-height: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.7rem 0.9rem;
+  min-width: 0;
+}
+.network { grid-area: network; }
+.unit { grid-area: unit; }
+.chain { grid-area: chain; }
+.privacy { grid-area: privacy; }
+.anmat { grid-area: anmat; }
+
+h2 {
+  font-size: 1.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.6rem;
+}
+h2 .hint {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  color: var(--muted);
+  margin-left: 0.5rem;
+}
+
+.empty { color: var(--muted); margin: 0.3rem 0; }
+
+/* --- Red -------------------------------------------------------------------- */
+
+.orgs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+.org {
+  position: relative;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  padding: 0.45rem 0.55rem;
+  transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
+}
+.org .name { font-weight: 700; font-size: 1.25rem; }
+.org .role { color: var(--muted); font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.org .badges { display: flex; gap: 0.3rem; margin-top: 0.3rem; min-height: 1.5rem; }
+.org.custodian { border-color: var(--ink); border-width: 3px; padding: calc(0.45rem - 1px) calc(0.55rem - 1px); }
+.org.custodian .role { color: var(--ink); font-weight: 600; display: flex; align-items: center; gap: 0.2rem; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.badge.signed { background: var(--accent); color: #fff; }
+
+.org.signing {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.orderers {
+  margin-top: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.orderers-label { color: var(--muted); font-size: 1rem; }
+.orderer-list { display: flex; gap: 0.4rem; }
+.orderer {
+  border: 2px dashed var(--line);
+  border-radius: 8px;
+  padding: 0.1rem 0.5rem;
+  font-size: 1rem;
+  transition: border-color 0.3s, background 0.3s;
+}
+.orderer.pulse { border-color: var(--ok); background: var(--ok-soft); border-style: solid; }
+
+/* --- Unidad ----------------------------------------------------------------- */
+
+.route {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin: 0.6rem 0 0.4rem;
+}
+.route::before {
+  content: "";
+  position: absolute;
+  left: 12.5%;
+  right: 12.5%;
+  top: 1rem;
+  height: 4px;
+  background: var(--line);
+}
+.stop { position: relative; text-align: center; }
+.stop .node {
+  width: 2rem;
+  height: 2rem;
+  margin: 0 auto 0.3rem;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  background: var(--panel);
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+.stop.visited .node { border-color: var(--ok); background: var(--ok); }
+.stop.here .node { border-color: var(--ink); background: var(--ink); transform: scale(1.25); }
+.stop.transit-to .node { border-color: var(--accent); border-style: dashed; }
+.stop .label { font-weight: 600; }
+
+.unit-status { font-size: 1.5rem; font-weight: 700; margin: 0.4rem 0 0; }
+.unit-status .sub { display: block; font-size: 1rem; font-weight: 500; color: var(--muted); }
+
+.trace { margin-top: 0.6rem; border-top: 1px solid var(--line); padding-top: 0.5rem; }
+.trace .verdict { font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; }
+.trace .verdict.ok { color: var(--ok); }
+.trace .verdict.bad { color: var(--bad); }
+.trace ul { list-style: none; margin: 0.3rem 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0.15rem 0.8rem; }
+.trace li { display: flex; align-items: center; gap: 0.35rem; font-size: 1.1rem; }
+.trace li.ok { color: var(--ok); }
+.trace li.bad { color: var(--bad); }
+
+/* --- Cadena ----------------------------------------------------------------- */
+
+.chain-row { display: flex; align-items: flex-start; gap: 0.8rem; min-height: 5.6rem; }
+
+.blocks {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0.2rem;
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  flex: 1;
+  align-items: stretch;
+  scroll-behavior: smooth;
+}
+.block {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 8.6rem;
+  max-width: 13rem;
+  border: 2px solid var(--ok);
+  border-radius: 10px;
+  background: var(--ok-soft);
+  padding: 0.35rem 0.6rem;
+}
+.block + .block::before {
+  content: "";
+  position: absolute;
+  left: -1rem;
+  top: 50%;
+  width: 1rem;
+  height: 3px;
+  background: var(--ok);
+}
+.block .number { font-size: 1rem; color: var(--muted); font-weight: 600; }
+.block .operation { font-size: 1.3rem; font-weight: 700; }
+.block .signers { display: flex; flex-direction: column; align-items: flex-start; gap: 0.2rem; margin-top: 0.25rem; }
+.block .signers .badge { font-size: 1rem; }
+.block.invalid { border-color: var(--bad); background: var(--bad-soft); }
+.block.new { animation: arrive 0.6s ease-out; }
+
+@keyframes arrive {
+  from { transform: translateY(-0.8rem); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+.rejection {
+  flex: none;
+  width: 17rem;
+  border: 3px solid var(--bad);
+  border-radius: 10px;
+  background: var(--bad-soft);
+  color: var(--bad);
+  padding: 0.4rem 0.7rem;
+  animation: arrive 0.6s ease-out;
+}
+.rejection .title { font-weight: 800; font-size: 1.3rem; display: flex; align-items: center; gap: 0.35rem; }
+.rejection .detail { color: var(--ink); font-size: 1rem; }
+.rejection .code { font-size: 1rem; color: var(--bad); }
+
+/* --- Privacidad ------------------------------------------------------------- */
+
+.privacy-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+.privacy-list li { display: flex; align-items: center; gap: 0.45rem; white-space: nowrap; font-size: 1.1rem; line-height: 1.25; }
+.privacy-list .who { font-weight: 700; min-width: 8.8rem; }
+.privacy-list .sees { color: var(--ok); }
+.privacy-list .hidden-data { color: var(--muted); }
+.privacy-list .hash { font-size: 1rem; }
+
+/* --- ANMAT ------------------------------------------------------------------ */
+
+.alert {
+  border: 3px solid var(--warn-mark);
+  background: var(--warn-soft);
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 0.4rem;
+  animation: flash 1.2s ease-out 2;
+}
+.alert .title { color: var(--warn); font-weight: 800; font-size: 1.45rem; display: flex; align-items: center; gap: 0.4rem; }
+.alert .title .icon { color: var(--warn-mark); width: 1.4em; height: 1.4em; }
+.alert .detail { margin-top: 0.2rem; }
+
+@keyframes flash {
+  0% { box-shadow: 0 0 0 0 rgba(224, 138, 0, 0.7); }
+  100% { box-shadow: 0 0 0 1.2rem rgba(224, 138, 0, 0); }
+}
+
+/* --- Controles -------------------------------------------------------------- */
+
+.controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 1.2rem 0.9rem;
+}
+.steps { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+button {
+  font: inherit;
+  font-weight: 700;
+  font-size: 1.15rem;
+  border-radius: 10px;
+  padding: 0.55rem 0.9rem;
+  border: 2px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+button:disabled { cursor: default; }
+button.done { color: var(--ok); border-color: var(--ok-soft); background: var(--ok-soft); }
+button.next { color: #fff; background: var(--accent); border-color: var(--accent); }
+button.next:disabled { opacity: 0.7; }
+button.running { color: #fff; background: var(--accent); border-color: var(--accent); }
+button:focus-visible { outline: 4px solid var(--ink); outline-offset: 2px; }
+button.reset { color: var(--ink); }
+
+/* --- Superposición ---------------------------------------------------------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(21, 25, 30, 0.45);
+  display: grid;
+  place-items: center;
+}
+.overlay[hidden] { display: none; }
+.overlay-box {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 1.2rem 1.6rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  max-width: 40rem;
+  text-align: center;
+}
+.overlay-box .detail { display: block; font-size: 1rem; font-weight: 500; color: var(--bad); margin-top: 0.4rem; }
+
+/* Versiones largas y cortas de un mismo texto: la corta es la de la pantalla
+   compacta. */
+.short, .privacy-groups { display: none; }
+
+/* Pantalla compacta: con menos de 950 px de alto (una notebook de 13" a
+   1366 × 768) la letra no se achica; se reorganiza el contenido para que la
+   vista completa entre sin scroll. */
+@media (max-height: 949px) {
+  .top { padding: 0.35rem 1rem 0.15rem; }
+  .top h1 { display: none; }
+  .caption { margin: 0; font-size: 1.35rem; min-height: 0; }
+  .grid { gap: 0.5rem; padding: 0.25rem 1rem; }
+  .panel { padding: 0.4rem 0.7rem; }
+  h2 { margin-bottom: 0.3rem; }
+  h2 .hint:not([id]) { display: none; }
+  h2 .hint { font-size: 1.2rem; }
+  #unit-id { font-size: 1rem; white-space: nowrap; }
+  .long { display: none; }
+  .short { display: inline; }
+  .rejection .detail.short { display: block; }
+
+  .orgs { gap: 0.35rem; }
+  .org { padding: 0.25rem 0.45rem; }
+  .org.custodian { padding: calc(0.25rem - 1px) calc(0.45rem - 1px); }
+  .org .name { font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .org .badges { display: none; }
+  .orderers { margin-top: 0.35rem; }
+
+  .route { margin: 0.2rem 0; }
+  .route::before { top: 0.75rem; }
+  .stop .node { width: 1.5rem; height: 1.5rem; margin-bottom: 0.15rem; }
+  .unit-status { font-size: 1.3rem; margin-top: 0.2rem; }
+  .trace { margin-top: 0.3rem; padding-top: 0.3rem; }
+  .trace .verdict { font-size: 1.15rem; }
+  .trace ul { display: flex; flex-wrap: wrap; gap: 0 0.8rem; }
+  .trace li { font-size: 1rem; }
+
+  .chain-row { min-height: 0; }
+  .blocks { gap: 0.5rem; }
+  .block { padding: 0.2rem 0.35rem; min-width: 0; }
+  .block + .block::before { left: -0.5rem; width: 0.5rem; }
+  .block .signers .badge { padding: 0.05rem 0.35rem; }
+  .block .signers .badge .icon { display: none; }
+  .block .operation { font-size: 1.1rem; }
+  .rejection { width: 12rem; padding: 0.25rem 0.5rem; }
+  .rejection .code { display: none; }
+  .rejection .title { font-size: 1.15rem; }
+
+  .privacy-list { display: none; }
+  .privacy-groups { display: grid; list-style: none; margin: 0; padding: 0; gap: 0.2rem; }
+  .privacy-groups li { line-height: 1.3; }
+  .privacy-groups .sees { color: var(--ok); }
+  .privacy-groups .hidden-data { color: var(--muted); }
+
+  .alert { padding: 0.3rem 0.6rem; }
+  .alert .title { font-size: 1.25rem; }
+
+  .controls { padding: 0.35rem 1rem 0.5rem; }
+  .steps { gap: 0.35rem; flex-wrap: nowrap; }
+  button { font-size: 1rem; padding: 0.4rem 0.7rem; }
+  .steps button:not(.next):not(.running) .label { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+@media (max-width: 900px) {
+  .grid { grid-template-columns: 1fr; grid-template-areas: "network" "unit" "chain" "privacy" "anmat"; }
+  .orgs { grid-template-columns: repeat(2, 1fr); }
+}

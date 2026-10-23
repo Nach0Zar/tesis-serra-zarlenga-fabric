@@ -1,0 +1,31 @@
+{
+  "name": "snt-benchmark-analysis",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Procesamiento reproducible de los crudos de Fabric y baseline: tablas, figuras y reporte comparativo",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "scripts": {
+    "check": "node --check src/*.js test/*.js",
+    "test": "node --test test/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude='test/**' --test-coverage-exclude='../**' --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage.lcov test/*.test.js && node ../../scripts/coverage/check-lcov.js coverage.lcov",
+    "process": "node src/process.js"
+  },
+  "dependencies": {
+    "ajv": "8.17.1"
+  },
+  "coverage": {
+    "minimum": 85,
+    "include": [
+      "src/availability.js",
+      "src/charts.js",
+      "src/evidence.js",
+      "src/metrics.js",
+      "src/process.js",
+      "src/report.js",
+      "src/runs.js",
+      "src/stats.js"
+    ]
+  }
+}

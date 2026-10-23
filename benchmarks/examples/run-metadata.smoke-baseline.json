@@ -1,0 +1,43 @@
+{
+  "$schema": "urn:pfi-snt:run-metadata:schema:1.0.0",
+  "schemaVersion": "1.0.0",
+  "protocol": "measurement-protocol",
+  "repositoryCommit": "ccb58f46a08d2ff4789d51f6f79a43203991ce5e",
+  "sut": "baseline",
+  "scenario": "smoke",
+  "phase": "measurement",
+  "repetition": 1,
+  "dataset": {
+    "seed": 20260727,
+    "sha256": "de523ee8fafeed0a39f8518b501fce4692192869030762816de353654385163d",
+    "units": 50000
+  },
+  "workers": 1,
+  "transactions": 30,
+  "rate": {
+    "operation": "query-unit",
+    "transactionsPerOperation": 1,
+    "targetOperationsPerSecond": 1,
+    "targetTransactionsPerSecond": 1,
+    "effectiveTransactionsPerSecond": 0.98,
+    "rateController": "fixed-rate"
+  },
+  "startedAt": "2026-10-05T12:40:00Z",
+  "endedAt": "2026-10-05T12:40:31Z",
+  "host": {
+    "cpu": "AMD Ryzen 7 5800H",
+    "cpuCores": 8,
+    "memoryGB": 16,
+    "os": "Ubuntu 22.04.4 LTS",
+    "kernel": "5.15.167.4-microsoft-standard-WSL2",
+    "wsl": "WSL2 2.2.4.0"
+  },
+  "environment": {
+    "docker": "27.1.1",
+    "dockerCompose": "2.29.1",
+    "baselineCommit": "ccb58f46a08d2ff4789d51f6f79a43203991ce5e",
+    "baselineImage": "snt-baseline:alpine-3.21-go1.23.5",
+    "postgres": "16.4"
+  },
+  "notes": "Un documento por operacion core; este cubre la consulta puntual."
+}

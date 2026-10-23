@@ -1,0 +1,65 @@
+{
+  "scenario": "write-transfer",
+  "operationCount": 2402,
+  "successfulOperations": 2402,
+  "expectedRejections": 0,
+  "unexpectedFailures": 0,
+  "transactionCount": 4908,
+  "successfulTransactions": 4804,
+  "failedTransactions": 104,
+  "retryAttempts": 104,
+  "retryTimeMs": 92853,
+  "retryByCause": {
+    "NOT_IN_TRANSIT": {
+      "attempts": 104,
+      "accumulatedTimeMs": 92853
+    }
+  },
+  "transferPairs": 2402,
+  "retriedTransferPairs": 104,
+  "retriedTransferPairRate": 0.04329725228975854,
+  "observedErrorCodes": {},
+  "rate": {
+    "operation": "transfer",
+    "targetOperationsPerSecond": 20,
+    "targetTransactionsPerSecond": 40,
+    "offeredOperationsPerSecond": 20.016666666666666,
+    "effectiveOperationsPerSecond": 19.431927579260744,
+    "effectiveTransactionsPerSecond": 39.70520422939706
+  },
+  "operationLatency": {
+    "count": 2402,
+    "minimumMs": 2441,
+    "maximumMs": 6927,
+    "meanMs": 3836.983347210658,
+    "standardDeviationMs": 757.2653332232393,
+    "p50Ms": 3795,
+    "p95Ms": 5010,
+    "p99Ms": 6277
+  },
+  "transactionLatencyByFunction": {
+    "DispatchTransfer": {
+      "count": 2402,
+      "minimumMs": 382,
+      "maximumMs": 4641,
+      "meanMs": 1669.109492089925,
+      "standardDeviationMs": 691.2859567669083,
+      "p50Ms": 1658,
+      "p95Ms": 2691,
+      "p99Ms": 3536
+    },
+    "ReceiveTransfer": {
+      "count": 2506,
+      "minimumMs": 165,
+      "maximumMs": 3452,
+      "meanMs": 2056.7841181165204,
+      "standardDeviationMs": 464.7789819668846,
+      "p50Ms": 2122,
+      "p95Ms": 2447,
+      "p99Ms": 3368
+    }
+  },
+  "startedAt": "2026-10-21T21:03:45.254Z",
+  "endedAt": "2026-10-21T21:05:48.865Z",
+  "observedDurationSeconds": 123.611
+}
