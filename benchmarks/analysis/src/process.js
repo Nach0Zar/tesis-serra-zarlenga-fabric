@@ -6,6 +6,7 @@ const path = require('node:path');
 const {spawnSync} = require('node:child_process');
 
 const {availabilityWindows, successTimeline} = require('./availability');
+const {validateCampaign} = require('./campaign');
 const {CLASS_SERIES, availabilityChart, latencyChart, throughputChart} = require('./charts');
 const {accreditRun, loadSnapshotManifests} = require('./evidence');
 const {aggregate, compare, runMetrics} = require('./metrics');
@@ -30,6 +31,7 @@ function parseArguments(arguments_) {
         if (name === '--input') options.inputs.push(value);
         else if (name === '--snapshot') options.snapshots.push(value);
         else if (name === '--output') options.output = value;
+        else if (name === '--campaign') options.campaign = value;
         else throw new Error(`unsupported argument ${name}`);
     }
     if (options.inputs.length === 0) throw new Error('at least one --input directory is required');
@@ -211,9 +213,20 @@ function processResults(options) {
     if (runs.length === 0) throw new Error('no metadata.json found under the inputs');
     if (options.validate) validateMetadata(runs);
     accredit(runs, {snapshots: [], allowNonCitable: false, ...options});
+    const campaign = options.campaign ? validateCampaign(options.campaign, runs, options) : undefined;
     const included = runs.filter((run) => !stableExclusion(run));
     const excluded = runs.filter((run) => stableExclusion(run)).map((run) => ({...run, exclusion: stableExclusion(run)}));
     const aggregates = aggregate(included);
+    if (campaign) {
+        for (const entry of aggregates) {
+            const matrix = require('../../caliper/src/series-policy').fullScenarioMatrix();
+            const scenario = matrix.find((item) => item.scenario === entry.scenario && item.rate === entry.targetOperationsPerSecond
+                && (item.family ?? '') === (entry.variant.split('/')[0] ?? '')
+                && (!item.operation || entry.operation === item.operation));
+            const extension = campaign.extensionRows.find((row) => row.sut === entry.sut && row.scenarioKey === scenario?.key);
+            if (extension && extension.reason === 'mantener pares con el otro SUT') entry.extendedBy = [extension.reason];
+        }
+    }
     const {comparisons, unpaired} = compare(aggregates);
     const repetitions = included.map(runMetrics);
     const failures = failureRows(runs);
@@ -279,11 +292,16 @@ function processResults(options) {
             availabilityChart(`Disponibilidad ${entry.scenario}, repetición ${entry.repetition}`, availabilityTimelines(entry, run),
                 {nonCitable: Boolean(entry.nonCitable), sut: entry.byClass ? entry.sut : undefined}));
     }
+    const campaignReport = campaign ? '\n## Campaña alternada verificada\n\nCommit experimental: ' + campaign.campaign.repositoryCommit
+        + '. Orden y repeticiones pareadas validados.\n\n'
+        + campaign.extensionRows.map((row) => '- ' + row.scenarioKey + ', ' + row.sut + ': ' + row.reason
+            + '; activadores: ' + row.triggers.map((trigger) => trigger.sut + '/' + trigger.metric + ' CV=' + trigger.cv).join(', ')).join('\n')
+        + '\n\nMismo host, sin presupuesto agregado equivalente demostrado; se conservan las cuotas originales y los recursos efectivos de cada SUT.\n' : '';
     write('report.md', buildReport({
         aggregates, comparisons, unpaired, excluded, failures, preparation,
         availability: availability.map(({entry}) => entry), inputs: options.inputs,
         nonCitable,
-    }));
+    }) + campaignReport);
     return {runs: runs.length, included: included.length, excluded: excluded.length, aggregates: aggregates.length,
         comparisons: comparisons.length, unpaired: unpaired.length, nonCitable, figures, output};
 }

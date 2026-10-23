@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pfi-snt:paired-campaign:schema:1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "const": "urn:pfi-snt:paired-campaign:schema:1.0.0"
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "campaignToken": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$"
+    },
+    "plan": {
+      "enum": [
+        "trial",
+        "full"
+      ]
+    },
+    "repositoryCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "startedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d{3})?Z$"
+    },
+    "endedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d{3})?Z$"
+    },
+    "status": {
+      "enum": [
+        "running",
+        "completed",
+        "failed"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "snapshots": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fabric": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "directory",
+            "manifestSHA256"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "directory": {
+              "type": "string",
+              "minLength": 1
+            },
+            "manifestSHA256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "baseline": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "directory",
+            "manifestSHA256"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "directory": {
+              "type": "string",
+              "minLength": 1
+            },
+            "manifestSHA256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      },
+      "required": [
+        "fabric",
+        "baseline"
+      ]
+    },
+    "series": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fabric": {
+          "type": "string",
+          "minLength": 1
+        },
+        "baseline": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "fabric",
+        "baseline"
+      ]
+    },
+    "attempts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "repetition",
+          "try",
+          "status",
+          "startedAt",
+          "endedAt",
+          "directory",
+          "sut",
+          "scenarioKey"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "warmup",
+              "measurement"
+            ]
+          },
+          "repetition": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "try": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "discarded",
+              "failed"
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "minLength": 20
+          },
+          "endedAt": {
+            "type": "string",
+            "minLength": 20
+          },
+          "directory": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "resources": {
+            "type": "string",
+            "minLength": 1
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sut": {
+            "enum": [
+              "fabric",
+              "baseline"
+            ]
+          },
+          "scenarioKey": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "warmup"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "repetition": {
+                  "type": "integer",
+                  "const": 0
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "repetition": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "extensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scenarioKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "triggers": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sut": {
+                  "enum": [
+                    "fabric",
+                    "baseline"
+                  ]
+                },
+                "metric": {
+                  "enum": [
+                    "throughput",
+                    "p95"
+                  ]
+                },
+                "cv": {
+                  "type": "number",
+                  "exclusiveMinimum": 0.15
+                }
+              },
+              "required": [
+                "sut",
+                "metric",
+                "cv"
+              ]
+            }
+          }
+        },
+        "required": [
+          "scenarioKey",
+          "triggers"
+        ]
+      }
+    }
+  },
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "campaignToken",
+    "plan",
+    "repositoryCommit",
+    "startedAt",
+    "status",
+    "snapshots",
+    "series",
+    "attempts",
+    "extensions"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "completed",
+              "failed"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "endedAt"
+        ],
+        "properties": {
+          "endedAt": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d{3})?Z$"
+          }
+        }
+      }
+    }
+  ]
+}

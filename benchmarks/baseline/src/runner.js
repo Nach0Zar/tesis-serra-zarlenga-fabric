@@ -200,6 +200,13 @@ async function runRound(options) {
         process.stdout.write(`Baseline round completed: ${runDirectory}\n`);
         return runDirectory;
     } catch (error) {
+        try {
+            const logs = compose(repoRoot, ['logs', '--no-color', 'api', 'postgres'],
+                {env: restored.environment, allowFailure: true});
+            fs.writeFileSync(path.join(runDirectory, 'sut.log'), String(logs.stdout ?? '') + String(logs.stderr ?? ''), {mode: 0o600});
+        } catch (captureError) {
+            fs.writeFileSync(path.join(runDirectory, 'log-capture-error.txt'), captureError.message, {mode: 0o600});
+        }
         const metadataPath = path.join(runDirectory, 'metadata.json');
         if (!fs.existsSync(metadataPath)) {
             const ended = Math.max(Date.now(), attemptStarted + 1);

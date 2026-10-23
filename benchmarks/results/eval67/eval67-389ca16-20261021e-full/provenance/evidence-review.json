@@ -1,0 +1,70 @@
+{
+  "status": "passed",
+  "experimentalCommit": "389ca160b2a490cd66bb0194f012e2b75b3598e8",
+  "originalFilesCompared": 3462,
+  "secretScan": "passed by collect-evidence.py against runtime API keys/DB password, private-key PEM and privateData",
+  "strictProcessing": {
+    "runsDiscovered": 528,
+    "measuredIncluded": 224,
+    "excludedSmoke": 264,
+    "excludedWarmup": 40,
+    "unpaired": 0,
+    "nonCitable": false
+  },
+  "candidateReproduction": "all CSV, SVG and report identical after normalizing source-directory strings",
+  "comparisonSHA256": "d233ef6d3d1c820b3ca082a2e50bba274c06fbc1b11641a158d75c59dd4a5dd0",
+  "retainedVariability": [
+    {
+      "sut": "baseline",
+      "scenario": "read-history",
+      "rate": "25",
+      "p95CV": 0.19245008972987523
+    },
+    {
+      "sut": "fabric",
+      "scenario": "read-history",
+      "rate": "25",
+      "p95CV": 0.16537350080388685
+    },
+    {
+      "sut": "fabric",
+      "scenario": "read-unit",
+      "rate": "50",
+      "p95CV": 0.18181818181818182
+    },
+    {
+      "sut": "baseline",
+      "scenario": "write-register",
+      "rate": "10",
+      "p95CV": 0.16363822900155817
+    },
+    {
+      "sut": "baseline",
+      "scenario": "write-register",
+      "rate": "20",
+      "p95CV": 0.15384615384615385
+    }
+  ],
+  "totals": {
+    "fabric": {
+      "measuredRounds": 112,
+      "unexpectedFailures": 0,
+      "retryAttempts": 1863,
+      "observedMarkers": 33042,
+      "expectedRejections": 6040
+    },
+    "baseline": {
+      "measuredRounds": 112,
+      "unexpectedFailures": 0,
+      "retryAttempts": 0,
+      "observedMarkers": 0,
+      "expectedRejections": 6000
+    }
+  },
+  "versionedReproduction": "passed: all 8 outputs match after source-directory normalization",
+  "partial13Comparison": {
+    "rows": 32,
+    "metricsPerRow": 10,
+    "allUnchanged": true
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "transactions": 30,
+  "successfulTransactions": 30,
+  "failedTransactions": 0,
+  "startedAt": "2026-10-22T07:58:26.235Z",
+  "endedAt": "2026-10-22T07:58:55.237Z",
+  "observedDurationSeconds": 29.002,
+  "effectiveTransactionsPerSecond": 1.0344114199020757,
+  "latency": {
+    "count": 30,
+    "minimumMs": 1,
+    "maximumMs": 14,
+    "meanMs": 1.9,
+    "standardDeviationMs": 2.3144473782453265,
+    "p50Ms": 1,
+    "p95Ms": 3,
+    "p99Ms": 14
+  }
+}

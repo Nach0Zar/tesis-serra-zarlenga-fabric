@@ -11,6 +11,7 @@ on:
       - reopened
       - ready_for_review
     paths:
+      - "benchmarks/baseline/src/**"
       - "benchmarks/caliper/**"
       - "benchmarks/schema/**"
       - "benchmarks/README.md"

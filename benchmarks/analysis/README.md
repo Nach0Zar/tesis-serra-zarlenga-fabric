@@ -180,3 +180,32 @@ registro sigue excluido.
 Las figuras son SVG estáticos para el documento del PFI. Usan la paleta
 categórica validada para daltonismo y distinguen además Fabric y baseline por
 forma de marcador y trazo, de modo que se leen también en escala de grises.
+
+## Validar una campaña alternada completa (#47)
+
+```bash
+npm run process -- \
+  --input "$CAMPAIGN_DIR/fabric" --input "$CAMPAIGN_DIR/baseline" \
+  --snapshot "$FABRIC_SNAPSHOT" --snapshot "$BASELINE_SNAPSHOT" \
+  --campaign "$CAMPAIGN_DIR/campaign.json" --output "$ANALYSIS_DIR"
+```
+
+`--campaign` es opcional para entradas históricas. En las campañas nuevas
+exige finalización, matriz canónica, los dos índices completos, warm-ups,
+orden alternado, ausencia de solapamientos, perfiles/host/commit coherentes,
+acreditación previa y cinco u ocho repeticiones pareadas. Recalcula los
+activadores del CV a partir de los summaries originales. Rechaza mediciones
+no enumeradas y marcadores Fabric ausentes o inconsistentes.
+
+El reporte distingue extensión por variabilidad propia de extensión para
+conservar pares. El trial sólo puede procesarse con `--allow-noncitable` y
+se rotula NO CITABLE. No usar ese flag ni `--no-validate` para evidencia final.
+Los recursos efectivos se conservan: compartir host no acredita igualdad de
+presupuesto agregado entre SUT.
+
+Las copias versionadas conservan crudos, índices, contextos y manifiestos sin
+reescribir hashes. La acreditación actual de baseline también comprueba el
+dump original: al reproducir hay que proporcionar mediante `--snapshot` el
+bundle original preservado fuera de Git. Los volúmenes y dumps no se incluyen
+en el repositorio; su ubicación local y hashes quedan documentados con la
+evidencia. Reubicar los crudos no requiere modificar sus índices.

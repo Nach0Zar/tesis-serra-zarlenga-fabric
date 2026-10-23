@@ -598,3 +598,161 @@ test('aggregate and compare keep both SUT apart and report ratios on paired repe
     assert.equal(comparisons.length, 1);
     assert.equal(comparisons[0].p95Ratio, 300);
 });
+
+// Campaña completa sintética: los helpers anteriores mantienen la acreditación
+// real de manifiestos, precondiciones e índices, sin dependencias de Caliper.
+function pairedFixture(root, plan = 'trial', variable = false) {
+    const {fullScenarioMatrix, trialScenarioMatrix, repetitionOrder, extensionTriggers} = require('../../caliper/src/series-policy');
+    const {buildProfile} = require('../../caliper/src/profiles');
+    const commit = 'c'.repeat(40);
+    const snapshots = Object.fromEntries(['fabric', 'baseline'].map((sut) => [sut, writeSnapshot(root, {sut,
+        edit: (manifest) => {
+            manifest.artifacts.repositoryCommit = commit;
+            if (sut === 'baseline') manifest.artifacts.baselineCommit = commit;
+        }})]));
+    const directory = path.join(root, 'paired');
+    const matrix = plan === 'full' ? fullScenarioMatrix() : trialScenarioMatrix();
+    let tick = 0;
+    const now = () => new Date(1_800_000_000_000 + tick++ * 1000).toISOString();
+    const campaign = {$schema: 'urn:pfi-snt:paired-campaign:schema:1.0.0', schemaVersion: '1.0.0',
+        campaignToken: 'fixture', plan, repositoryCommit: commit, startedAt: now(), status: 'completed',
+        snapshots: {}, series: {}, attempts: [], extensions: []};
+    const indices = {};
+    for (const sut of ['fabric', 'baseline']) {
+        const snapshot = snapshots[sut];
+        const reference = {id: snapshot.id, directory: path.relative(root, snapshot.directory), manifestSHA256: snapshot.manifestSHA256};
+        campaign.snapshots[sut] = reference;
+        campaign.series[sut] = sut + '/series-index.json';
+        indices[sut] = {$schema: 'urn:pfi-snt:fabric-series-index:schema:1.0.0', schemaVersion: '1.0.0',
+            seriesToken: 'fixture-' + sut, plan, citable: plan === 'full', snapshot: reference,
+            startedAt: campaign.startedAt, status: 'completed',
+            scenarios: matrix.map((item) => ({...item, status: 'completed', extended: false, attempts: []}))};
+    }
+    function add(sut, index, phase, repetition) {
+        const scenario = indices[sut].scenarios[index];
+        const profile = buildProfile({...matrix[index], phase, repetition});
+        const relative = scenario.key + (phase === 'warmup' ? '/warmup/try-1'
+            : '/measurements/run-' + String(repetition).padStart(2, '0'));
+        const runDirectory = path.join(directory, sut, relative, 'round');
+        const startedAt = now();
+        const endedAt = now();
+        const markers = {expected: 0, observed: 0, fromRegistrations: 0, fromRegulatoryEvents: 0,
+            successfulWriteTransactions: 0, perSecond: 0, shareOfSuccessfulWrites: 0};
+        const doc = metadata({sut, scenario: scenario.scenario, rate: scenario.rate, phase, repetition,
+            workers: profile.workers, duration: profile.durationSeconds, operation: profile.operation,
+            family: profile.rejectionFamily, markers: sut === 'fabric' ? markers : undefined});
+        doc.repositoryCommit = commit;
+        doc.startedAt = startedAt;
+        doc.endedAt = endedAt;
+        doc.rate.transactionsPerOperation = profile.transactionsPerOperation;
+        doc.rate.mix = profile.mix;
+        doc.host = {cpu: 'fixture', cpuCores: 6, memoryGB: 8, os: 'fixture', kernel: 'fixture'};
+        const operations = scenario.scenario === 'mixed'
+            ? MIX_PATTERN.map((type, ordinal) => raw(1, {type, ordinal})[0]) : raw();
+        const throughput = variable && index === 0 && sut === 'baseline' && repetition === 5 ? 50 : 10;
+        const sum = summary({throughput, rejections: scenario.scenario === 'expected-rejections'});
+        sum.rate.effectiveOperationsPerSecond = throughput;
+        writeJSON(path.join(runDirectory, 'metadata.json'), doc);
+        writeJSON(path.join(runDirectory, 'summary.json'), sum);
+        writeJSON(path.join(runDirectory, 'raw.json'), operations);
+        writeJSON(path.join(runDirectory, 'snapshot-context.json'), contextFor(sut, snapshots[sut], operations));
+        const attempt = {kind: phase, repetition, try: 1, status: 'completed', startedAt, endedAt,
+            directory: relative, summary: relative + '/round/summary.json'};
+        scenario.attempts.push(attempt);
+        campaign.attempts.push({sut, scenarioKey: scenario.key, ...attempt, directory: sut + '/' + relative});
+        return sum;
+    }
+    for (let index = 0; index < matrix.length; index += 1) {
+        for (const sut of ['fabric', 'baseline']) add(sut, index, 'warmup', 0);
+        const summaries = {fabric: [], baseline: []};
+        for (let repetition = 1; repetition <= (plan === 'full' ? 5 : 2); repetition += 1) {
+            for (const sut of repetitionOrder(repetition)) summaries[sut].push(add(sut, index, 'measurement', repetition));
+        }
+        const {coefficientOfVariation: cv} = require('../../caliper/src/series-policy');
+        for (const sut of ['fabric', 'baseline']) {
+            indices[sut].scenarios[index].throughputCV = cv(summaries[sut].map((item) => item.rate.effectiveOperationsPerSecond));
+            indices[sut].scenarios[index].p95CV = cv(summaries[sut].map((item) => item.operationLatency.p95Ms));
+        }
+        const triggers = plan === 'full' ? extensionTriggers(summaries) : [];
+        if (triggers.length) {
+            campaign.extensions.push({scenarioKey: matrix[index].key, triggers});
+            for (const sut of ['fabric', 'baseline']) indices[sut].scenarios[index].extended = true;
+            for (let repetition = 6; repetition <= 8; repetition += 1) {
+                for (const sut of repetitionOrder(repetition)) add(sut, index, 'measurement', repetition);
+            }
+        }
+    }
+    campaign.endedAt = now();
+    for (const sut of ['fabric', 'baseline']) {
+        indices[sut].endedAt = campaign.endedAt;
+        writeJSON(path.join(directory, sut, 'series-index.json'), indices[sut]);
+    }
+    const campaignPath = path.join(directory, 'campaign.json');
+    writeJSON(campaignPath, campaign);
+    return {directory, campaignPath, campaign, snapshots: Object.values(snapshots).map((snapshot) => snapshot.directory)};
+}
+
+test('paired trial processing is noncitable, reproducible after relocation and never silently promoted', () => {
+    const root = temporary('paired-analysis-');
+    try {
+        const fixture = pairedFixture(root);
+        const output = path.join(root, 'output');
+        const options = {inputs: [fixture.directory], snapshots: fixture.snapshots, campaign: fixture.campaignPath,
+            output, validate: false};
+        assert.throws(() => processResults(options), /not citable/u);
+        const result = processResults({...options, allowNonCitable: true});
+        assert.equal(result.included, 12);
+        assert.equal(result.nonCitable, true);
+        assert.match(fs.readFileSync(path.join(output, 'report.md'), 'utf8'), /Campaña alternada verificada/u);
+        const relocated = path.join(root, 'versioned-copy');
+        fs.cpSync(fixture.directory, relocated, {recursive: true});
+        const copied = processResults({...options, inputs: [relocated], campaign: path.join(relocated, 'campaign.json'),
+            output: path.join(root, 'copied-output'), allowNonCitable: true});
+        assert.equal(copied.included, result.included);
+        assert.equal(fs.readFileSync(path.join(output, 'comparison.csv'), 'utf8'),
+            fs.readFileSync(path.join(root, 'copied-output/comparison.csv'), 'utf8'));
+    } finally { fs.rmSync(root, {recursive: true, force: true}); }
+});
+
+test('paired full campaign validates joint extension and reports the stable counterpart reason', () => {
+    const root = temporary('paired-full-analysis-');
+    try {
+        const fixture = pairedFixture(root, 'full', true);
+        const output = path.join(root, 'output');
+        const result = processResults({inputs: [fixture.directory], snapshots: fixture.snapshots,
+            campaign: fixture.campaignPath, output, validate: false});
+        assert.equal(result.included, 206);
+        assert.equal(result.nonCitable, false);
+        assert.match(fs.readFileSync(path.join(output, 'report.md'), 'utf8'), /mantener pares con el otro SUT/u);
+    } finally { fs.rmSync(root, {recursive: true, force: true}); }
+});
+
+test('campaign rejects overlap, incomplete indices, wrong order, missing markers and wrong commit', () => {
+    const {validateCampaign} = require('../src/campaign');
+    const {loadRuns} = require('../src/runs');
+    const root = temporary('paired-invalid-analysis-');
+    try {
+        const fixture = pairedFixture(root);
+        const runs = loadRuns([fixture.directory]);
+        runs.forEach((run) => { run.admission = {ok: true}; });
+        const options = {allowNonCitable: true};
+        validateCampaign(fixture.campaignPath, runs, options);
+        const edit = (change) => {
+            const campaign = structuredClone(fixture.campaign);
+            change(campaign);
+            writeJSON(fixture.campaignPath, campaign);
+            assert.throws(() => validateCampaign(fixture.campaignPath, runs, options));
+        };
+        edit((campaign) => { campaign.attempts[1].startedAt = campaign.attempts[0].startedAt; });
+        edit((campaign) => { campaign.attempts.reverse(); });
+        edit((campaign) => { campaign.status = 'failed'; });
+        writeJSON(fixture.campaignPath, fixture.campaign);
+        const measured = runs.find((run) => run.sut === 'fabric' && run.phase === 'measurement');
+        const original = measured.repositoryCommit;
+        measured.repositoryCommit = 'd'.repeat(40);
+        assert.throws(() => validateCampaign(fixture.campaignPath, runs, options), /inconsistent/u);
+        measured.repositoryCommit = original;
+        delete measured.participationMarkers;
+        assert.throws(() => validateCampaign(fixture.campaignPath, runs, options), /markers/u);
+    } finally { fs.rmSync(root, {recursive: true, force: true}); }
+});

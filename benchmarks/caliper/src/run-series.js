@@ -5,9 +5,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
 
-const {SERIES_SCHEMA_ID, readSnapshot, sha256File, validateDocument} = require('./artifacts');
-const {writeJSONAtomic} = require('./metadata');
-const {PROFILES} = require('./profiles');
+const {readSnapshot} = require('./artifacts');
+const {attemptRecord, coefficientOfVariation, initializeSeries, writeIndex} = require('./series-state');
+const {fullScenarioMatrix, trialScenarioMatrix} = require('./series-policy');
 const {SCENARIOS: AVAILABILITY_SCENARIOS} = require('./availability');
 
 // Planes de serie: la matriz de rendimiento (full/trial) y los escenarios de
@@ -20,32 +20,6 @@ const PLANS = Object.freeze({
     'availability-trial': {citable: false, repetitions: 1, extendByCV: false},
 });
 
-function fullScenarioMatrix() {
-    const matrix = [];
-    for (const scenario of ['write-register', 'write-transfer', 'write-dispense', 'read-unit', 'read-history', 'mixed']) {
-        for (const rate of PROFILES[scenario].rates) matrix.push({key: `${scenario}-${rate}`, scenario, rate});
-    }
-    for (const [family, operation] of [
-        ['UNAUTHORIZED_TRANSFER', undefined],
-        ['DUPLICATE_IDENTITY', undefined],
-        ['BLOCKING_STATE', 'transfer'],
-        ['BLOCKING_STATE', 'dispense'],
-    ]) {
-        const suffix = operation ? `${family.toLowerCase()}-${operation}` : family.toLowerCase();
-        matrix.push({key: `expected-rejections-${suffix}-5`, scenario: 'expected-rejections', rate: 5, family, operation});
-    }
-    if (matrix.length !== 20) throw new Error(`expected 20 full-series scenarios, got ${matrix.length}`);
-    return matrix;
-}
-
-function trialScenarioMatrix() {
-    return [
-        {key: 'read-unit-50', scenario: 'read-unit', rate: 50},
-        {key: 'write-transfer-20', scenario: 'write-transfer', rate: 20},
-        {key: 'mixed-20', scenario: 'mixed', rate: 20},
-    ];
-}
-
 // Cada escenario de disponibilidad es una ronda independiente desde un estado
 // limpio (#44): la falla no se combina con otra en la misma ronda.
 function availabilityScenarioMatrix() {
@@ -56,15 +30,6 @@ function scenarioMatrix(plan) {
     if (plan === 'full') return fullScenarioMatrix();
     if (plan === 'trial') return trialScenarioMatrix();
     return availabilityScenarioMatrix();
-}
-
-function coefficientOfVariation(values) {
-    if (!Array.isArray(values) || values.length === 0) throw new Error('CV requires at least one value');
-    if (values.some((value) => !Number.isFinite(value) || value < 0)) throw new Error('CV values must be finite and non-negative');
-    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-    if (mean === 0) return 0;
-    const variance = values.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / values.length;
-    return Math.sqrt(variance) / mean;
 }
 
 function parseArguments(arguments_) {
@@ -200,61 +165,13 @@ function executeAttempt(repoRoot, options) {
     }
 }
 
-function writeIndex(repoRoot, indexPath, index) {
-    validateDocument(repoRoot, 'fabric-series-index.schema.json', index);
-    writeJSONAtomic(indexPath, index);
-}
-
-function attemptRecord(seriesDirectory, kind, repetition, tryNumber, attemptDirectory, startedAt, endedAt, result) {
-    const record = {
-        kind,
-        repetition,
-        try: tryNumber,
-        status: result.status,
-        startedAt,
-        endedAt,
-        directory: path.relative(seriesDirectory, attemptDirectory).split(path.sep).join('/'),
-    };
-    // Cada ejecutor indica donde dejo los recursos del host; por defecto, el
-    // resources.txt que mide el de Fabric.
-    // Si el intento terminó antes de medirlos, el índice no apunta a un
-    // archivo inexistente.
-    const resourcesPath = result.resourcesPath ?? path.join(attemptDirectory, 'resources.txt');
-    if (fs.existsSync(resourcesPath)) record.resources = path.relative(seriesDirectory, resourcesPath).split(path.sep).join('/');
-    if (result.reason) record.reason = result.reason;
-    if (result.summaryPath) record.summary = path.relative(seriesDirectory, result.summaryPath).split(path.sep).join('/');
-    return record;
-}
-
 async function runSeries(repoRoot, options, dependencies = {}) {
     const snapshot = (dependencies.readSnapshot ?? readSnapshot)(repoRoot, options.snapshotDirectory);
-    const snapshotRelative = path.relative(repoRoot, snapshot.directory);
-    if (snapshotRelative.startsWith('..') || path.isAbsolute(snapshotRelative)) {
-        throw new Error('series snapshot must be stored inside the repository');
-    }
     const created = (dependencies.createSeriesDirectory ?? createSeriesDirectory)(repoRoot, options);
     const planPolicy = PLANS[options.plan];
     const matrix = dependencies.scenarioMatrix ?? scenarioMatrix(options.plan);
-    const scenarios = matrix.map((entry) => ({
-        ...entry, status: 'pending', extended: false, attempts: [],
-    }));
-    const index = {
-        $schema: SERIES_SCHEMA_ID,
-        schemaVersion: '1.0.0',
-        seriesToken: created.token,
-        plan: options.plan,
-        citable: planPolicy.citable,
-        snapshot: {
-            id: snapshot.manifest.snapshotId,
-            directory: snapshotRelative.split(path.sep).join('/'),
-            manifestSHA256: sha256File(snapshot.manifestPath),
-        },
-        startedAt: new Date().toISOString(),
-        status: 'running',
-        scenarios,
-    };
-    const indexPath = path.join(created.directory, 'series-index.json');
-    writeIndex(repoRoot, indexPath, index);
+    const {index, indexPath, scenarios} = initializeSeries(repoRoot, created.directory, created.token,
+        options.plan, planPolicy.citable, snapshot, matrix, new Date().toISOString());
     const execute = dependencies.executeAttempt ?? executeAttempt;
     const now = dependencies.now ?? (() => new Date().toISOString());
     const measuredRepetitions = planPolicy.repetitions;
