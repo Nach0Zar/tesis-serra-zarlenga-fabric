@@ -13,6 +13,10 @@ function decodeTransactionRWSet(transactionBytes) {
     const prepared = protos.gateway.PreparedTransaction.deserializeBinary(transactionBytes);
     const envelope = prepared.getEnvelope();
     if (!envelope) throw new Error('prepared transaction omits its envelope');
+    return decodeEnvelopeRWSet(envelope);
+}
+
+function decodeEnvelopeRWSet(envelope) {
     const payload = protos.common.Payload.deserializeBinary(binary(envelope, 'getPayload_asU8', 'payload'));
     const transaction = protos.peer.Transaction.deserializeBinary(binary(payload, 'getData_asU8', 'data'));
     const collections = [];
@@ -62,4 +66,4 @@ function summarizePrivateWrites(transactionBytes) {
     return summarizeCollections(decodeTransactionRWSet(transactionBytes));
 }
 
-module.exports = {decodeTransactionRWSet, summarizeCollections, summarizePrivateWrites};
+module.exports = {decodeEnvelopeRWSet, decodeTransactionRWSet, summarizeCollections, summarizePrivateWrites};

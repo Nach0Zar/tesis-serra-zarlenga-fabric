@@ -1,0 +1,214 @@
+Discovery ready: {"gateways":["AnmatMSP","CentroMedicoMSP","DistribuidorMSP","DrogueriaMSP","FarmaciaMSP","FinanciadorMSP","LabMSP"],"endorsersPerGateway":7,"successfulSweeps":2,"sweeps":2,"durationSeconds":1.217}
+2026.10.21-21:03:44.796[32m info [39m [caliper] [cli-launch-manager] 	Set workspace path: /home/nacho/pfi/tesis-serra-zarlenga-fabric
+2026.10.21-21:03:44.796[32m info [39m [caliper] [cli-launch-manager] 	Set benchmark configuration path: /home/nacho/pfi/tesis-serra-zarlenga-fabric/build/benchmarks/paired/eval67-389ca16-20261021e-full/fabric/write-transfer-20/measurements/run-01/round/benchmark-config.json
+2026.10.21-21:03:44.796[32m info [39m [caliper] [cli-launch-manager] 	Set network configuration path: /home/nacho/pfi/tesis-serra-zarlenga-fabric/build/benchmarks/paired/eval67-389ca16-20261021e-full/fabric/write-transfer-20/measurements/run-01/round/network-config.json
+2026.10.21-21:03:44.796[32m info [39m [caliper] [cli-launch-manager] 	Set SUT type: fabric
+2026.10.21-21:03:44.810[32m info [39m [caliper] [benchmark-validator] 	No observer specified, will default to `none`
+2026.10.21-21:03:44.810[32m info [39m [caliper] [caliper-engine] 	Starting benchmark flow
+2026.10.21-21:03:44.810[32m info [39m [caliper] [caliper-engine] 	Skipping start commands due to benchmark flow conditioning
+2026.10.21-21:03:44.810[32m info [39m [caliper] [caliper-engine] 	Skipping initialization phase due to benchmark flow conditioning
+2026.10.21-21:03:44.810[32m info [39m [caliper] [caliper-engine] 	Skipping install smart contract phase due to benchmark flow conditioning
+2026.10.21-21:03:44.886[32m info [39m [caliper] [FabricConnectorFactory] 	Initializing peer gateway connector compatible with installed fabric-gateway SDK: 1.7.1
+2026.10.21-21:03:44.898[32m info [39m [caliper] [IdentityManager] 	Adding anmat-user1 (admin=false) as anmat-user1 for organization AnmatMSP
+2026.10.21-21:03:44.899[32m info [39m [caliper] [IdentityManager] 	Adding lab-user1 (admin=false) as _LabMSP_lab-user1 for organization LabMSP
+2026.10.21-21:03:44.900[32m info [39m [caliper] [IdentityManager] 	Adding drogueria-user1 (admin=false) as _DrogueriaMSP_drogueria-user1 for organization DrogueriaMSP
+2026.10.21-21:03:44.901[32m info [39m [caliper] [IdentityManager] 	Adding distribuidor-user1 (admin=false) as _DistribuidorMSP_distribuidor-user1 for organization DistribuidorMSP
+2026.10.21-21:03:44.902[32m info [39m [caliper] [IdentityManager] 	Adding farmacia-user1 (admin=false) as _FarmaciaMSP_farmacia-user1 for organization FarmaciaMSP
+2026.10.21-21:03:44.902[32m info [39m [caliper] [IdentityManager] 	Adding centromedico-user1 (admin=false) as _CentroMedicoMSP_centromedico-user1 for organization CentroMedicoMSP
+2026.10.21-21:03:44.903[32m info [39m [caliper] [IdentityManager] 	Adding financiador-user1 (admin=false) as _FinanciadorMSP_financiador-user1 for organization FinanciadorMSP
+2026.10.21-21:03:44.905[32m info [39m [caliper] [monitor.js] 	No resource monitors specified
+2026.10.21-21:03:44.906[32m info [39m [caliper] [default-observer] 	Observer interval set to 5000 milliseconds
+2026.10.21-21:03:44.908[32m info [39m [caliper] [round-orchestrator] 	Preparing worker connections
+2026.10.21-21:03:44.908[32m info [39m [caliper] [worker-orchestrator] 	Launching worker 1 of 2
+2026.10.21-21:03:44.911[32m info [39m [caliper] [worker-orchestrator] 	Launching worker 2 of 2
+2026.10.21-21:03:44.912[32m info [39m [caliper] [worker-orchestrator] 	Messenger not configured, entering configure phase...
+2026.10.21-21:03:44.912[32m info [39m [caliper] [worker-orchestrator] 	No existing workers detected, entering worker launch phase...
+2026.10.21-21:03:44.913[32m info [39m [caliper] [worker-orchestrator] 	Waiting for 2 workers to be connected...
+2026.10.21-21:03:45.071[32m info [39m [caliper] [cli-launch-worker] 	Set workspace path: /home/nacho/pfi/tesis-serra-zarlenga-fabric
+2026.10.21-21:03:45.072[32m info [39m [caliper] [cli-launch-worker] 	Set benchmark configuration path: /home/nacho/pfi/tesis-serra-zarlenga-fabric/build/benchmarks/paired/eval67-389ca16-20261021e-full/fabric/write-transfer-20/measurements/run-01/round/benchmark-config.json
+2026.10.21-21:03:45.072[32m info [39m [caliper] [cli-launch-worker] 	Set network configuration path: /home/nacho/pfi/tesis-serra-zarlenga-fabric/build/benchmarks/paired/eval67-389ca16-20261021e-full/fabric/write-transfer-20/measurements/run-01/round/network-config.json
+2026.10.21-21:03:45.072[32m info [39m [caliper] [cli-launch-worker] 	Set SUT type: fabric
+2026.10.21-21:03:45.076[32m info [39m [caliper] [cli-launch-worker] 	Set workspace path: /home/nacho/pfi/tesis-serra-zarlenga-fabric
+2026.10.21-21:03:45.077[32m info [39m [caliper] [cli-launch-worker] 	Set benchmark configuration path: /home/nacho/pfi/tesis-serra-zarlenga-fabric/build/benchmarks/paired/eval67-389ca16-20261021e-full/fabric/write-transfer-20/measurements/run-01/round/benchmark-config.json
+2026.10.21-21:03:45.077[32m info [39m [caliper] [cli-launch-worker] 	Set network configuration path: /home/nacho/pfi/tesis-serra-zarlenga-fabric/build/benchmarks/paired/eval67-389ca16-20261021e-full/fabric/write-transfer-20/measurements/run-01/round/network-config.json
+2026.10.21-21:03:45.077[32m info [39m [caliper] [cli-launch-worker] 	Set SUT type: fabric
+2026.10.21-21:03:45.099[32m info [39m [caliper] [worker-orchestrator] 	2 workers connected, progressing to worker assignment phase.
+2026.10.21-21:03:45.099[32m info [39m [caliper] [worker-orchestrator] 	Workers currently unassigned, awaiting index assignment...
+2026.10.21-21:03:45.099[32m info [39m [caliper] [worker-orchestrator] 	Waiting for 2 workers to be assigned...
+2026.10.21-21:03:45.111[32m info [39m [caliper] [worker-orchestrator] 	2 workers assigned, progressing to worker initialization phase.
+2026.10.21-21:03:45.111[32m info [39m [caliper] [worker-orchestrator] 	Waiting for 2 workers to be ready...
+2026.10.21-21:03:45.112[32m info [39m [caliper] [worker-message-handler] 	Initializing Worker#1...
+2026.10.21-21:03:45.113[32m info [39m [caliper] [worker-message-handler] 	Initializing Worker#0...
+2026.10.21-21:03:45.191[32m info [39m [caliper] [FabricConnectorFactory] 	Initializing peer gateway connector compatible with installed fabric-gateway SDK: 1.7.1
+2026.10.21-21:03:45.195[32m info [39m [caliper] [FabricConnectorFactory] 	Initializing peer gateway connector compatible with installed fabric-gateway SDK: 1.7.1
+2026.10.21-21:03:45.195[32m info [39m [caliper] [IdentityManager] 	Adding anmat-user1 (admin=false) as anmat-user1 for organization AnmatMSP
+2026.10.21-21:03:45.196[32m info [39m [caliper] [IdentityManager] 	Adding lab-user1 (admin=false) as _LabMSP_lab-user1 for organization LabMSP
+2026.10.21-21:03:45.197[32m info [39m [caliper] [IdentityManager] 	Adding drogueria-user1 (admin=false) as _DrogueriaMSP_drogueria-user1 for organization DrogueriaMSP
+2026.10.21-21:03:45.197[32m info [39m [caliper] [IdentityManager] 	Adding distribuidor-user1 (admin=false) as _DistribuidorMSP_distribuidor-user1 for organization DistribuidorMSP
+2026.10.21-21:03:45.198[32m info [39m [caliper] [IdentityManager] 	Adding anmat-user1 (admin=false) as anmat-user1 for organization AnmatMSP
+2026.10.21-21:03:45.198[32m info [39m [caliper] [IdentityManager] 	Adding farmacia-user1 (admin=false) as _FarmaciaMSP_farmacia-user1 for organization FarmaciaMSP
+2026.10.21-21:03:45.199[32m info [39m [caliper] [IdentityManager] 	Adding lab-user1 (admin=false) as _LabMSP_lab-user1 for organization LabMSP
+2026.10.21-21:03:45.199[32m info [39m [caliper] [IdentityManager] 	Adding centromedico-user1 (admin=false) as _CentroMedicoMSP_centromedico-user1 for organization CentroMedicoMSP
+2026.10.21-21:03:45.200[32m info [39m [caliper] [IdentityManager] 	Adding drogueria-user1 (admin=false) as _DrogueriaMSP_drogueria-user1 for organization DrogueriaMSP
+2026.10.21-21:03:45.200[32m info [39m [caliper] [IdentityManager] 	Adding financiador-user1 (admin=false) as _FinanciadorMSP_financiador-user1 for organization FinanciadorMSP
+2026.10.21-21:03:45.200[32m info [39m [caliper] [IdentityManager] 	Adding distribuidor-user1 (admin=false) as _DistribuidorMSP_distribuidor-user1 for organization DistribuidorMSP
+2026.10.21-21:03:45.201[32m info [39m [caliper] [worker-message-handler] 	Worker#1 initialized
+2026.10.21-21:03:45.201[32m info [39m [caliper] [IdentityManager] 	Adding farmacia-user1 (admin=false) as _FarmaciaMSP_farmacia-user1 for organization FarmaciaMSP
+2026.10.21-21:03:45.202[32m info [39m [caliper] [IdentityManager] 	Adding centromedico-user1 (admin=false) as _CentroMedicoMSP_centromedico-user1 for organization CentroMedicoMSP
+2026.10.21-21:03:45.203[32m info [39m [caliper] [IdentityManager] 	Adding financiador-user1 (admin=false) as _FinanciadorMSP_financiador-user1 for organization FinanciadorMSP
+2026.10.21-21:03:45.204[32m info [39m [caliper] [worker-message-handler] 	Worker#0 initialized
+2026.10.21-21:03:45.205[32m info [39m [caliper] [worker-orchestrator] 	2 workers ready, progressing to test preparation phase.
+2026.10.21-21:03:45.205[32m info [39m [caliper] [round-orchestrator] 	Started round 1 (write-transfer-20)
+2026.10.21-21:03:45.205[32m info [39m [caliper] [worker-message-handler] 	Preparing Worker#0 for Round#0
+2026.10.21-21:03:45.206[32m info [39m [caliper] [worker-message-handler] 	Preparing Worker#1 for Round#0
+2026.10.21-21:03:45.213[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user anmat-user1
+2026.10.21-21:03:45.214[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user anmat-user1
+2026.10.21-21:03:45.215[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _LabMSP_lab-user1
+2026.10.21-21:03:45.216[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _LabMSP_lab-user1
+2026.10.21-21:03:45.217[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _DrogueriaMSP_drogueria-user1
+2026.10.21-21:03:45.217[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _DrogueriaMSP_drogueria-user1
+2026.10.21-21:03:45.218[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _DistribuidorMSP_distribuidor-user1
+2026.10.21-21:03:45.218[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _DistribuidorMSP_distribuidor-user1
+2026.10.21-21:03:45.219[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _FarmaciaMSP_farmacia-user1
+2026.10.21-21:03:45.219[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _FarmaciaMSP_farmacia-user1
+2026.10.21-21:03:45.220[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _CentroMedicoMSP_centromedico-user1
+2026.10.21-21:03:45.220[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _CentroMedicoMSP_centromedico-user1
+2026.10.21-21:03:45.221[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _FinanciadorMSP_financiador-user1
+2026.10.21-21:03:45.221[32m info [39m [caliper] [caliper-worker] 	Info: worker 0 prepare test phase for round 0 is starting...
+2026.10.21-21:03:45.221[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _FinanciadorMSP_financiador-user1
+2026.10.21-21:03:45.221[32m info [39m [caliper] [caliper-worker] 	Info: worker 1 prepare test phase for round 0 is starting...
+2026.10.21-21:03:45.241[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user anmat-user1
+2026.10.21-21:03:45.241[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _LabMSP_lab-user1
+2026.10.21-21:03:45.241[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _DrogueriaMSP_drogueria-user1
+2026.10.21-21:03:45.241[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _DistribuidorMSP_distribuidor-user1
+2026.10.21-21:03:45.241[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _FarmaciaMSP_farmacia-user1
+2026.10.21-21:03:45.241[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _CentroMedicoMSP_centromedico-user1
+2026.10.21-21:03:45.241[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _FinanciadorMSP_financiador-user1
+2026.10.21-21:03:45.241[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer AnmatMSP_localhost:7051
+2026.10.21-21:03:45.242[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer LabMSP_localhost:8051
+2026.10.21-21:03:45.242[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer DrogueriaMSP_localhost:9051
+2026.10.21-21:03:45.242[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer DistribuidorMSP_localhost:10051
+2026.10.21-21:03:45.242[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer FarmaciaMSP_localhost:11051
+2026.10.21-21:03:45.242[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer CentroMedicoMSP_localhost:12051
+2026.10.21-21:03:45.242[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer FinanciadorMSP_localhost:13051
+2026.10.21-21:03:45.242[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user anmat-user1
+2026.10.21-21:03:45.242[32m info [39m [caliper] [caliper-worker] 	Info: worker 0 prepare test phase for round 0 is completed
+2026.10.21-21:03:45.242[32m info [39m [caliper] [worker-message-handler] 	Worker#0 prepared for Round#0
+2026.10.21-21:03:45.242[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _LabMSP_lab-user1
+2026.10.21-21:03:45.242[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _DrogueriaMSP_drogueria-user1
+2026.10.21-21:03:45.242[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _DistribuidorMSP_distribuidor-user1
+2026.10.21-21:03:45.243[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _FarmaciaMSP_farmacia-user1
+2026.10.21-21:03:45.243[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _CentroMedicoMSP_centromedico-user1
+2026.10.21-21:03:45.243[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _FinanciadorMSP_financiador-user1
+2026.10.21-21:03:45.243[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer AnmatMSP_localhost:7051
+2026.10.21-21:03:45.243[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer LabMSP_localhost:8051
+2026.10.21-21:03:45.243[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer DrogueriaMSP_localhost:9051
+2026.10.21-21:03:45.243[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer DistribuidorMSP_localhost:10051
+2026.10.21-21:03:45.243[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer FarmaciaMSP_localhost:11051
+2026.10.21-21:03:45.243[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer CentroMedicoMSP_localhost:12051
+2026.10.21-21:03:45.243[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer FinanciadorMSP_localhost:13051
+2026.10.21-21:03:45.243[32m info [39m [caliper] [caliper-worker] 	Info: worker 1 prepare test phase for round 0 is completed
+2026.10.21-21:03:45.243[32m info [39m [caliper] [worker-message-handler] 	Worker#1 prepared for Round#0
+2026.10.21-21:03:45.244[32m info [39m [caliper] [worker-orchestrator] 	2 workers prepared, progressing to test phase.
+2026.10.21-21:03:45.244[32m info [39m [caliper] [round-orchestrator] 	Monitors successfully started
+2026.10.21-21:03:45.245[32m info [39m [caliper] [worker-message-handler] 	Worker#0 is starting Round#0
+2026.10.21-21:03:45.245[32m info [39m [caliper] [worker-message-handler] 	Worker#1 is starting Round#0
+2026.10.21-21:03:45.246[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user anmat-user1
+2026.10.21-21:03:45.246[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user anmat-user1
+2026.10.21-21:03:45.247[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _LabMSP_lab-user1
+2026.10.21-21:03:45.247[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _LabMSP_lab-user1
+2026.10.21-21:03:45.248[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _DrogueriaMSP_drogueria-user1
+2026.10.21-21:03:45.249[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _DrogueriaMSP_drogueria-user1
+2026.10.21-21:03:45.249[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _DistribuidorMSP_distribuidor-user1
+2026.10.21-21:03:45.250[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _DistribuidorMSP_distribuidor-user1
+2026.10.21-21:03:45.250[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _FarmaciaMSP_farmacia-user1
+2026.10.21-21:03:45.251[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _FarmaciaMSP_farmacia-user1
+2026.10.21-21:03:45.251[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _CentroMedicoMSP_centromedico-user1
+2026.10.21-21:03:45.252[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _CentroMedicoMSP_centromedico-user1
+2026.10.21-21:03:45.252[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _FinanciadorMSP_financiador-user1
+2026.10.21-21:03:45.252[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	Generating contract map for user _FinanciadorMSP_financiador-user1
+2026.10.21-21:03:45.254[32m info [39m [caliper] [caliper-worker] 	Worker #1 starting workload loop
+2026.10.21-21:03:45.254[32m info [39m [caliper] [caliper-worker] 	Worker #0 starting workload loop
+2026.10.21-21:03:50.250[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 123 Succ: 43 Fail:0 Unfinished:80
+2026.10.21-21:03:55.246[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 305 Succ: 171 Fail:0 Unfinished:134
+2026.10.21-21:04:00.258[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 530 Succ: 455 Fail:0 Unfinished:75
+2026.10.21-21:04:05.259[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 714 Succ: 620 Fail:0 Unfinished:94
+2026.10.21-21:04:10.260[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 940 Succ: 874 Fail:0 Unfinished:66
+2026.10.21-21:04:15.261[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 1124 Succ: 1042 Fail:0 Unfinished:82
+2026.10.21-21:04:20.262[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 1349 Succ: 1289 Fail:2 Unfinished:58
+2026.10.21-21:04:25.263[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 1530 Succ: 1451 Fail:2 Unfinished:77
+2026.10.21-21:04:30.277[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 1714 Succ: 1633 Fail:2 Unfinished:79
+2026.10.21-21:04:35.277[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 1937 Succ: 1865 Fail:2 Unfinished:70
+2026.10.21-21:04:40.278[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 2133 Succ: 2031 Fail:18 Unfinished:84
+2026.10.21-21:04:45.277[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 2370 Succ: 2292 Fail:18 Unfinished:60
+2026.10.21-21:04:50.278[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 2562 Succ: 2476 Fail:18 Unfinished:68
+2026.10.21-21:04:55.277[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 2746 Succ: 2652 Fail:18 Unfinished:76
+2026.10.21-21:05:00.300[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 2934 Succ: 2822 Fail:18 Unfinished:94
+2026.10.21-21:05:05.301[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 3187 Succ: 3088 Fail:39 Unfinished:60
+2026.10.21-21:05:10.302[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 3384 Succ: 3276 Fail:39 Unfinished:69
+2026.10.21-21:05:15.302[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 3580 Succ: 3470 Fail:39 Unfinished:71
+2026.10.21-21:05:20.303[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 3770 Succ: 3650 Fail:39 Unfinished:81
+2026.10.21-21:05:25.304[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 3967 Succ: 3834 Fail:46 Unfinished:87
+2026.10.21-21:05:30.335[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 4160 Succ: 4012 Fail:46 Unfinished:102
+2026.10.21-21:05:35.335[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 4406 Succ: 4282 Fail:58 Unfinished:66
+2026.10.21-21:05:40.336[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 4603 Succ: 4454 Fail:71 Unfinished:78
+2026.10.21-21:05:45.338[32m info [39m [caliper] [default-observer] 	[write-transfer-20 Round 0 Transaction Info] - Submitted: 4824 Succ: 4630 Fail:104 Unfinished:90
+2026.10.21-21:05:49.865[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user anmat-user1
+2026.10.21-21:05:49.865[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _LabMSP_lab-user1
+2026.10.21-21:05:49.865[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _DrogueriaMSP_drogueria-user1
+2026.10.21-21:05:49.865[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _DistribuidorMSP_distribuidor-user1
+2026.10.21-21:05:49.865[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _FarmaciaMSP_farmacia-user1
+2026.10.21-21:05:49.866[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _CentroMedicoMSP_centromedico-user1
+2026.10.21-21:05:49.866[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _FinanciadorMSP_financiador-user1
+2026.10.21-21:05:49.866[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer AnmatMSP_localhost:7051
+2026.10.21-21:05:49.866[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer LabMSP_localhost:8051
+2026.10.21-21:05:49.866[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer DrogueriaMSP_localhost:9051
+2026.10.21-21:05:49.866[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer DistribuidorMSP_localhost:10051
+2026.10.21-21:05:49.866[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer FarmaciaMSP_localhost:11051
+2026.10.21-21:05:49.866[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer CentroMedicoMSP_localhost:12051
+2026.10.21-21:05:49.866[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer FinanciadorMSP_localhost:13051
+2026.10.21-21:05:49.866[32m info [39m [caliper] [worker-message-handler] 	Worker#1 finished Round#0
+2026.10.21-21:05:49.961[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user anmat-user1
+2026.10.21-21:05:49.961[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _LabMSP_lab-user1
+2026.10.21-21:05:49.961[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _DrogueriaMSP_drogueria-user1
+2026.10.21-21:05:49.961[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _DistribuidorMSP_distribuidor-user1
+2026.10.21-21:05:49.961[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _FarmaciaMSP_farmacia-user1
+2026.10.21-21:05:49.961[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _CentroMedicoMSP_centromedico-user1
+2026.10.21-21:05:49.961[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gateway for user _FinanciadorMSP_financiador-user1
+2026.10.21-21:05:49.961[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer AnmatMSP_localhost:7051
+2026.10.21-21:05:49.961[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer LabMSP_localhost:8051
+2026.10.21-21:05:49.962[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer DrogueriaMSP_localhost:9051
+2026.10.21-21:05:49.962[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer DistribuidorMSP_localhost:10051
+2026.10.21-21:05:49.962[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer FarmaciaMSP_localhost:11051
+2026.10.21-21:05:49.962[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer CentroMedicoMSP_localhost:12051
+2026.10.21-21:05:49.962[32m info [39m [caliper] [connectors/peer-gateway/PeerGateway] 	disconnecting gRpc client at peer FinanciadorMSP_localhost:13051
+2026.10.21-21:05:49.962[32m info [39m [caliper] [worker-message-handler] 	Worker#0 finished Round#0
+2026.10.21-21:05:54.967[32m info [39m [caliper] [default-observer] 	Resetting txCount indicator count
+2026.10.21-21:05:54.968[32m info [39m [caliper] [report-builder] 	### Test result ###
+2026.10.21-21:05:54.970[32m info [39m [caliper] [report-builder] 	
++-------------------+------+------+-----------------+-----------------+-----------------+-----------------+------------------+
+| Name              | Succ | Fail | Send Rate (TPS) | Max Latency (s) | Min Latency (s) | Avg Latency (s) | Throughput (TPS) |
+|-------------------|------|------|-----------------|-----------------|-----------------|-----------------|------------------|
+| write-transfer-20 | 4804 | 104  | 40.5            | 4.64            | 0.38            | 1.90            | 39.7             |
++-------------------+------+------+-----------------+-----------------+-----------------+-----------------+------------------+
+
+2026.10.21-21:05:54.970[32m info [39m [caliper] [round-orchestrator] 	Finished round 1 (write-transfer-20) in 123.706 seconds
+2026.10.21-21:05:54.970[32m info [39m [caliper] [monitor.js] 	Stopping all monitors
+2026.10.21-21:05:54.970[32m info [39m [caliper] [report-builder] 	### All test results ###
+2026.10.21-21:05:54.971[32m info [39m [caliper] [report-builder] 	
++-------------------+------+------+-----------------+-----------------+-----------------+-----------------+------------------+
+| Name              | Succ | Fail | Send Rate (TPS) | Max Latency (s) | Min Latency (s) | Avg Latency (s) | Throughput (TPS) |
+|-------------------|------|------|-----------------|-----------------|-----------------|-----------------|------------------|
+| write-transfer-20 | 4804 | 104  | 40.5            | 4.64            | 0.38            | 1.90            | 39.7             |
++-------------------+------+------+-----------------+-----------------+-----------------+-----------------+------------------+
+
+2026.10.21-21:05:54.975[32m info [39m [caliper] [report-builder] 	Generated report with path /home/nacho/pfi/tesis-serra-zarlenga-fabric/build/benchmarks/paired/eval67-389ca16-20261021e-full/fabric/write-transfer-20/measurements/run-01/round/report.html
+2026.10.21-21:05:54.975[32m info [39m [caliper] [monitor.js] 	Stopping all monitors
+2026.10.21-21:05:54.976[32m info [39m [caliper] [worker-orchestrator] 	Sending exit message to connected workers
+2026.10.21-21:05:54.976[32m info [39m [caliper] [round-orchestrator] 	Benchmark finished in 129.771 seconds. Total rounds: 1. Successful rounds: 1. Failed rounds: 0.
+2026.10.21-21:05:54.976[32m info [39m [caliper] [caliper-engine] 	Skipping end command due to benchmark flow conditioning
+2026.10.21-21:05:54.976[32m info [39m [caliper] [cli-launch-manager] 	Benchmark successfully finished!
+2026.10.21-21:05:54.976[32m info [39m [caliper] [worker-message-handler] 	Worker#0 is exiting
+2026.10.21-21:05:54.976[32m info [39m [caliper] [worker-message-handler] 	Worker#1 is exiting
+ok	/home/nacho/pfi/tesis-serra-zarlenga-fabric/build/benchmarks/paired/eval67-389ca16-20261021e-full/fabric/write-transfer-20/measurements/run-01/round/metadata.json
+Fabric round completed: /home/nacho/pfi/tesis-serra-zarlenga-fabric/build/benchmarks/paired/eval67-389ca16-20261021e-full/fabric/write-transfer-20/measurements/run-01/round
